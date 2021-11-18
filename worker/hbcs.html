@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+ <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Handball board</title>
+   <script src="https://code.jquery.com/jquery-1.12.4.js"></script>
+  <script src="https://code.jquery.com/ui/1.12.1/jquery-ui.js"></script>
+  
+  
+    <style>
+       body{
+			
+            background-color: #FFFFFF;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            border-radius: 2px;
+            touch-action: none;
+            background: url(Half_handball_si.svg) no-repeat center center fixed;
+            -webkit-background-size: cover; /* For WebKit*/
+            -moz-background-size: cover; /* Mozilla*/
+            -o-background-size: cover; /* Opera*/
+            background-size: cover; /* Generic*/
+ 
+		}
+		
+		#container {
+      width: 600px;
+      height: 400px;
+      background-color: #EEE;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      border-radius: 7px;
+      touch-action: none;
+    }
+
+
+.divTeamBall {
+			width: 30px;
+            height: 30px;
+            background-color: yellow;
+            border: 5px solid black;
+            border-radius: 50%;
+            touch-action: none;
+            user-select: none;
+			position: relative;
+			top: 450px;
+			left: -347px;
+			
+		}
+		
+	.divTeam1 {
+			 
+			width: 40px;
+            height: 40px;
+            background-color: #074CA4;
+            border: 5px solid #074CA4;
+            border-radius: 50%;
+            touch-action: none;
+            user-select: none;
+			
+			position: relative;
+			top: 550px;
+			left: 200px;
+			
+		}
+		
+	.divTeam2 {
+			width: 40px;
+            height: 40px;
+            background-color: red;
+            border: 5px solid red;
+            border-radius: 50%;
+            touch-action: none;
+            user-select: none;
+			position: relative;
+			top: 620px;
+			left: -150px;
+		}
+ 
+ 
+    </style>
+</head>
+
+<body id="container">
+
+
+<div class="divTeam1"></div>
+<div class="divTeam1"></div>
+<div class="divTeam1"></div>
+<div class="divTeam1"></div>
+<div class="divTeam1"></div>
+<div class="divTeam1"></div>
+<div class="divTeam1"></div>  
+
+<div class="divTeam2"></div>
+<div class="divTeam2"></div>
+<div class="divTeam2"></div>
+<div class="divTeam2"></div>
+<div class="divTeam2"></div>
+<div class="divTeam2"></div>
+<div class="divTeam2"></div> 
+
+<div class="divTeamBall"></div> 
+	
+
+<script>
+
+
+var container = document.querySelector("#container");
+    var activeItem = null;
+
+    var active = false;
+    var dragging = false;
+
+    container.addEventListener("touchstart", dragStart, false);
+    container.addEventListener("touchend", dragEnd, false);
+    container.addEventListener("touchmove", drag, false);
+
+    container.addEventListener("mousedown", dragStart, false);
+    container.addEventListener("mouseup", dragEnd, false);
+    container.addEventListener("mousemove", drag, false);
+
+    container.addEventListener("click", rotateElement, false);
+
+    function dragStart(e) {
+      if (e.target !== e.currentTarget) {
+        active = true;
+        dragging = false;
+
+        // this is the item we are interacting with
+        activeItem = e.target;
+
+        if (activeItem.degrees === undefined) {
+          activeItem.degrees = 0;
+        }
+
+        if (activeItem !== null) {
+          if (!activeItem.xOffset) {
+            activeItem.xOffset = 0;
+          }
+
+          if (!activeItem.yOffset) {
+            activeItem.yOffset = 0;
+          }
+
+          if (e.type === "touchstart") {
+            activeItem.initialX = e.touches[0].clientX - activeItem.xOffset;
+            activeItem.initialY = e.touches[0].clientY - activeItem.yOffset;
+          } else {
+            activeItem.initialX = e.clientX - activeItem.xOffset;
+            activeItem.initialY = e.clientY - activeItem.yOffset;
+          }
+        }
+      }
+    }
+
+    function dragEnd(e) {
+      if (activeItem !== null) {
+        activeItem.initialX = activeItem.currentX;
+        activeItem.initialY = activeItem.currentY;
+      }
+
+      active = false;
+      activeItem = null;
+    }
+
+    function drag(e) {
+      if (active) {
+
+        dragging = true;
+
+        if (e.type === "touchmove") {
+          e.preventDefault();
+
+          activeItem.currentX = e.touches[0].clientX - activeItem.initialX;
+          activeItem.currentY = e.touches[0].clientY - activeItem.initialY;
+        } else {
+          activeItem.currentX = e.clientX - activeItem.initialX;
+          activeItem.currentY = e.clientY - activeItem.initialY;
+        }
+
+        activeItem.xOffset = activeItem.currentX;
+        activeItem.yOffset = activeItem.currentY;
+
+        setTranslate(activeItem.currentX, activeItem.currentY, activeItem);
+      }
+    }
+
+    function rotateElement(e) {
+      if (dragging === false) {
+
+        if (activeItem === null) {
+          activeItem = e.target;
+        }
+
+        console.log(activeItem.degrees);
+
+        activeItem.degrees += 22.5;
+        
+        activeItem.querySelector("img").style.transform = `rotate(${activeItem.degrees}deg)`;
+      }
+    }
+
+    function setTranslate(xPos, yPos, el) {
+      el.style.transform = `translate3d(${xPos}px, ${yPos}px, 0)`;
+      //el.querySelector("img").style.transform = `rotate(${degrees}deg)`;
+    }
+
+    <!-- (function($) { -->
+    <!-- $.fn.drags = function(opt) { -->
+
+        <!-- opt = $.extend({handle:"",cursor:"move"}, opt); -->
+
+        <!-- if(opt.handle === "") { -->
+            <!-- var $el = this; -->
+        <!-- } else { -->
+            <!-- var $el = this.find(opt.handle); -->
+        <!-- } -->
+
+        <!-- return $el.css('cursor', opt.cursor).on("mousedown", function(e) { -->
+            <!-- if(opt.handle === "") { -->
+                <!-- var $drag = $(this).addClass('draggable'); -->
+            <!-- } else { -->
+                <!-- var $drag = $(this).addClass('active-handle').parent().addClass('draggable'); -->
+            <!-- } -->
+            <!-- var z_idx = $drag.css('z-index'), -->
+                <!-- drg_h = $drag.outerHeight(), -->
+                <!-- drg_w = $drag.outerWidth(), -->
+                <!-- pos_y = $drag.offset().top + drg_h - e.pageY, -->
+                <!-- pos_x = $drag.offset().left + drg_w - e.pageX; -->
+            <!-- $drag.css('z-index', 1000).parents().on("mousemove", function(e) { -->
+                <!-- $('.draggable').offset({ -->
+                    <!-- top:e.pageY + pos_y - drg_h, -->
+                    <!-- left:e.pageX + pos_x - drg_w -->
+                <!-- }).on("mouseup", function() { -->
+                    <!-- $(this).removeClass('draggable').css('z-index', z_idx); -->
+                <!-- }); -->
+            <!-- }); -->
+            <!-- e.preventDefault(); // disable selection -->
+        <!-- }).on("mouseup", function() { -->
+            <!-- if(opt.handle === "") { -->
+                <!-- $(this).removeClass('draggable'); -->
+            <!-- } else { -->
+                <!-- $(this).removeClass('active-handle').parent().removeClass('draggable'); -->
+            <!-- } -->
+        <!-- }); -->
+
+    <!-- } -->
+<!-- })(jQuery); -->
+
+<!-- $('div').drags(); -->
+
+
+
+
+ 
+</script>
+</body>
+</html>
