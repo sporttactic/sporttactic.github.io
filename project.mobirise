@@ -63,8 +63,8 @@
     "global_header_custom": "<script async src=\"https://www.googletagmanager.com/gtag/js?id=G-LJ877RPTRJ\"></script>\n<script>\n  window.dataLayer = window.dataLayer || [];\n  function gtag(){dataLayer.push(arguments);}\n  gtag('js', new Date());\n\n  gtag('config', 'G-LJ877RPTRJ');\n</script>\n\n\n\n",
     "witsec-white-label": false,
     "global_after_body": "",
-    "mbrsiteDomain": "6o1qgikv6a",
-    "global_footer_custom": "<script async src=\"https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js\"></script>\n<!-- sporttactic.net -->\n<ins class=\"adsbygoogle\"\n     style=\"display:block\"\n     data-ad-client=\"ca-pub-9180858051840976\"\n     data-ad-slot=\"3039274883\"\n     data-ad-format=\"auto\"\n     data-full-width-responsive=\"true\"></ins>\n<script>\n     (adsbygoogle = window.adsbygoogle || []).push({});\n</script>",
+    "mbrsiteDomain": "2fd86dgrms",
+    "global_footer_custom": "<script async src=\"https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9180858051840976\"\n     crossorigin=\"anonymous\"></script>",
     "witsec-jquery": false
   },
   "pages": {
