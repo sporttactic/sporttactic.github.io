@@ -1,0 +1,4 @@
+* Drawing tools updated
+* Animation tools updated
+* Updated performance
+* Fixed drawing tool while moving players

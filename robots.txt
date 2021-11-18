@@ -1,0 +1,4 @@
+User-agent: *
+Allow:/*.html$
+Disallow: /cgi-bin
+Sitemap: https://sporttactic.eu/sitemap.xml
