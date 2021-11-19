@@ -85,7 +85,7 @@ Produce video clips.">
     </nav>
 </section>
 
-<section class="content4 cid-sgjgzm1VT0" id="content4-x">
+<section data-bs-version="5.1" class="content4 cid-sgjgzm1VT0" id="content4-x">
     
     
     <div class="container">
@@ -100,7 +100,7 @@ Produce video clips.">
     </div>
 </section>
 
-<section class="content7 cid-sglFKwgw6A" id="content7-45">
+<section data-bs-version="5.1" class="content7 cid-sglFKwgw6A" id="content7-45">
     
     <div class="container">
         <div class="row justify-content-center">
@@ -115,7 +115,7 @@ Produce video clips.">
     </div>
 </section>
 
-<section class="content7 cid-sglFQUbBrF" id="content7-46">
+<section data-bs-version="5.1" class="content7 cid-sglFQUbBrF" id="content7-46">
     
     <div class="container">
         <div class="row justify-content-center">
@@ -132,7 +132,7 @@ Produce video clips.">
     </div>
 </section>
 
-<section class="content7 cid-sglFY0s5Bh" id="content7-47">
+<section data-bs-version="5.1" class="content7 cid-sglFY0s5Bh" id="content7-47">
     
     <div class="container">
         <div class="row justify-content-center">
@@ -152,7 +152,7 @@ Produce video clips.">
     </div>
 </section>
 
-<section class="team2 cid-sgjgzn4yj6" xmlns="http://www.w3.org/1999/html" id="team2-z">
+<section data-bs-version="5.1" class="team2 cid-sgjgzn4yj6" xmlns="http://www.w3.org/1999/html" id="team2-z">
     
     
     <div class="container">
@@ -216,7 +216,95 @@ Produce video clips.">
 
 	
 	
-	<div><div class="modal fade" id="videocutter" tabindex="-1" role="dialog" aria-labelledby="videocutterLabel" aria-hidden="true">  <div class="modal-dialog  " style="height:auto" role="document">    <div class="modal-content"><div class="modal-header">  <h5 class="no-anim modal-title" id="videocutterLabel">VideoCutter</h5>  <a href="#" class="no-anim close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">×</span></a></div><div class="modal-body" id="videocutter_body">VideoCutter is a tool for producing videoclips in MP4 format from existing videotracks.<br><br>Read more about the tool in the guide section.</div><div class="modal-footer"><div class="mbr-section-btn"><a href="#" class="no-anim btn btn-secondary display-4" data-dismiss="modal">Close</a></div></div>    </div>  </div></div><script>document.addEventListener("DOMContentLoaded", function() {  $("#videocutter").on("hidden.bs.modal", function () {    var html = $( "#videocutter_body" ).html();    $( "#videocutter_body" ).empty();    $( "#videocutter_body" ).append(html);  })});</script></div>
+	<div><div class="modal fade" id="videocutter" tabindex="-1" role="dialog" aria-labelledby="videocutterLabel" aria-hidden="true">  <div class="modal-dialog  " style="height:auto" role="document">    <div class="modal-content"><div class="modal-header">  <h5 class="no-anim modal-title" id="videocutterLabel">VideoCutter</h5>  <a href="#" class="no-anim close" data-bs-dismiss="modal" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">×</span></a></div><div class="modal-body" id="videocutter_body">VideoCutter is a tool for producing videoclips in MP4 format from existing videotracks.<br><br>Read more about the tool in the guide section.</div><div class="modal-footer"><div class="mbr-section-btn"><a href="#" class="no-anim btn btn-secondary display-4" data-bs-dismiss="modal" data-dismiss="modal">Close</a></div></div>    </div>  </div></div><script> 
+document.addEventListener("DOMContentLoaded", function() { 
+  if(typeof jQuery === "function") {
+    $("#videocutter").on("hidden.bs.modal", function () { 
+      var html = $( "#videocutter_body" ).html(); 
+      $( "#videocutter_body" ).empty(); 
+      $( "#videocutter_body" ).append(html); 
+    }) 
+  } else { 
+      var mdw = document.getElementById("#videocutter") 
+      mdw.addEventListener("hidden.bs.modal", function(event) { 
+        mdw.innerHTML = mdw.innerHTML; 
+      }); 
+  } 
+}); 
+</script></div>
+
+	<script>
+	if (typeof OpenModal === 'undefined') {
+		OpenModal = function(modalName) {
+			if(typeof jQuery === "function") {
+				if ($('#' + modalName).length)
+					$('#' + modalName).modal('show');
+				else
+					alert("Sorry, but there is no modal for " + modalName);
+			} else {
+				let mdw = new bootstrap.Modal(document.getElementById(modalName), {});
+				mdw.show();
+			}
+		}
+	}
+
+	function modalSetCookie(cname, cvalue, exdays) {
+		var d = new Date();
+		d.setTime(d.getTime() + (exdays*24*60*60*1000));
+		var expires = "expires="+ d.toUTCString();
+		document.cookie = cname + "=" + cvalue + ";" + expires + ";path=/";
+	}
+
+	function modalGetCookie(cname) {
+		var name = cname + "=";
+		var decodedCookie = decodeURIComponent(document.cookie);
+		var ca = decodedCookie.split(';');
+		for(var i = 0; i <ca.length; i++) {
+			var c = ca[i];
+			while (c.charAt(0) == ' ') {
+				c = c.substring(1);
+			}
+			if (c.indexOf(name) == 0) {
+				return c.substring(name.length, c.length);
+			}
+		}
+		return "";
+	}
+	</script>
+
+</section>
+
+<section class="mbr-section" id="witsec-modal-window-block-9t" data-rv-view="838">
+
+	<style>
+	/* Let's not animate the contents of modal windows */
+	.no-anim {
+		-webkit-animation: none !important;
+		-moz-animation: none !important;
+		-o-animation: none !important;
+		-ms-animation: none !important;
+		animation: none !important;
+	}
+	</style>
+
+	
+	
+	<div><div class="modal fade" id="screenrecording" tabindex="-1" role="dialog" aria-labelledby="screenrecordingLabel" aria-hidden="true">  <div class="modal-dialog  " style="height:auto" role="document">    <div class="modal-content"><div class="modal-header">  <h5 class="no-anim modal-title" id="screenrecordingLabel">Screen recording</h5>  <a href="#" class="no-anim close" data-bs-dismiss="modal" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">×</span></a></div><div class="modal-body" id="screenrecording_body">1: Click on "App".<br>2: Click on "Setup recording".<br>3: Choose "Entire screen,window or Chrome Tab".<br>4: Choose to share audio.<br>5: Click Share.<br>6: Next you will see the message "Start recording".<br>7: Click on "Start". to start recording.<br><br>8: Click "pause" to pause the recording and click start to resume the recording.<br><br>9: Click "Stop" to save the recording.<br></div><div class="modal-footer"><div class="mbr-section-btn"><a href="#" class="no-anim btn btn-secondary display-4" data-bs-dismiss="modal" data-dismiss="modal">Close</a></div></div>    </div>  </div></div><script> 
+document.addEventListener("DOMContentLoaded", function() { 
+  if(typeof jQuery === "function") {
+    $("#screenrecording").on("hidden.bs.modal", function () { 
+      var html = $( "#screenrecording_body" ).html(); 
+      $( "#screenrecording_body" ).empty(); 
+      $( "#screenrecording_body" ).append(html); 
+    }) 
+  } else { 
+      var mdw = document.getElementById("#screenrecording") 
+      mdw.addEventListener("hidden.bs.modal", function(event) { 
+        mdw.innerHTML = mdw.innerHTML; 
+      }); 
+  } 
+}); 
+</script></div>
 
 	<script>
 	if (typeof OpenModal === 'undefined') {
@@ -274,9 +362,24 @@ Produce video clips.">
 
 	
 	
-	<div><div class="modal fade" id="sporttacticfacebook" tabindex="-1" role="dialog" aria-labelledby="sporttacticfacebookLabel" aria-hidden="true">  <div class="modal-dialog  " style="height:auto" role="document">    <div class="modal-content"><div class="modal-header">  <h5 class="no-anim modal-title" id="sporttacticfacebookLabel">SportTacTic facebook</h5>  <a href="#" class="no-anim close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">×</span></a></div><div class="modal-body" id="sporttacticfacebook_body"><table border="0" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;"><tbody><tr style=""><td height="28" style="line-height:28px;">&nbsp;</td></tr><tr><td style=""><table border="0" width="280" cellspacing="0" cellpadding="0" style="border-collapse:separate;background-color:#ffffff;border:1px solid #dddfe2;border-radius:3px;font-family:Helvetica, Arial, sans-serif;margin:0px auto;"><tbody><tr style="padding-bottom: 8px;"><td style=""> </td></tr><tr><td style="font-size:14px;font-weight:bold;padding:8px 8px 0px 8px;text-align:center;">SportTacTic</td></tr><tr><td style="color:#90949c;font-size:12px;font-weight:normal;text-align:center;">Privat gruppe</td></tr><tr><td style="padding:8px 12px 12px 12px;"><table border="0" cellspacing="0" cellpadding="0" style="border-collapse:collapse;width:100%;"><tbody><tr><td style="background-color:#4267b2;border-radius:3px;text-align:center;"><a style="color:#3b5998;text-decoration:none;cursor:pointer;width:100%;" href="https://www.facebook.com/plugins/group/join/popup/?group_id=3397748480332362&source=email_campaign_plugin" target="_blank" rel="noopener"><table border="0" cellspacing="0" cellpadding="3" align="center" style="border-collapse:collapse;"><tbody><tr><td style="border-bottom:3px solid #4267b2;border-top:3px solid #4267b2;color:#FFF;font-family:Helvetica, Arial, sans-serif;font-size:12px;font-weight:bold;">Become a member of the group</td></tr></tbody></table></a></td></tr></tbody></table></td></tr><tr><td style="border-top:1px solid #dddfe2;font-size:12px;padding:8px 12px;">Share tactical knowledge and experience with other colleagues.
+	<div><div class="modal fade" id="sporttacticfacebook" tabindex="-1" role="dialog" aria-labelledby="sporttacticfacebookLabel" aria-hidden="true">  <div class="modal-dialog  " style="height:auto" role="document">    <div class="modal-content"><div class="modal-header">  <h5 class="no-anim modal-title" id="sporttacticfacebookLabel">SportTacTic facebook</h5>  <a href="#" class="no-anim close" data-bs-dismiss="modal" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">×</span></a></div><div class="modal-body" id="sporttacticfacebook_body"><table border="0" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;"><tbody><tr style=""><td height="28" style="line-height:28px;">&nbsp;</td></tr><tr><td style=""><table border="0" width="280" cellspacing="0" cellpadding="0" style="border-collapse:separate;background-color:#ffffff;border:1px solid #dddfe2;border-radius:3px;font-family:Helvetica, Arial, sans-serif;margin:0px auto;"><tbody><tr style="padding-bottom: 8px;"><td style=""> </td></tr><tr><td style="font-size:14px;font-weight:bold;padding:8px 8px 0px 8px;text-align:center;">SportTacTic</td></tr><tr><td style="color:#90949c;font-size:12px;font-weight:normal;text-align:center;">Privat gruppe</td></tr><tr><td style="padding:8px 12px 12px 12px;"><table border="0" cellspacing="0" cellpadding="0" style="border-collapse:collapse;width:100%;"><tbody><tr><td style="background-color:#4267b2;border-radius:3px;text-align:center;"><a style="color:#3b5998;text-decoration:none;cursor:pointer;width:100%;" href="https://www.facebook.com/plugins/group/join/popup/?group_id=3397748480332362&source=email_campaign_plugin" target="_blank" rel="noopener"><table border="0" cellspacing="0" cellpadding="3" align="center" style="border-collapse:collapse;"><tbody><tr><td style="border-bottom:3px solid #4267b2;border-top:3px solid #4267b2;color:#FFF;font-family:Helvetica, Arial, sans-serif;font-size:12px;font-weight:bold;">Become a member of the group</td></tr></tbody></table></a></td></tr></tbody></table></td></tr><tr><td style="border-top:1px solid #dddfe2;font-size:12px;padding:8px 12px;">Share tactical knowledge and experience with other colleagues.
 
-Relevant and respectful comments. Only use images or video produced by SportTacTic. ...</td></tr></tbody></table></td></tr><tr style=""><td height="28" style="line-height:28px;">&nbsp;</td></tr></tbody></table></div><div class="modal-footer"><div class="mbr-section-btn"><a href="#" class="no-anim btn btn-secondary display-4" data-dismiss="modal">Close</a></div></div>    </div>  </div></div><script>document.addEventListener("DOMContentLoaded", function() {  $("#sporttacticfacebook").on("hidden.bs.modal", function () {    var html = $( "#sporttacticfacebook_body" ).html();    $( "#sporttacticfacebook_body" ).empty();    $( "#sporttacticfacebook_body" ).append(html);  })});</script></div>
+Relevant and respectful comments. Only use images or video produced by SportTacTic. ...</td></tr></tbody></table></td></tr><tr style=""><td height="28" style="line-height:28px;">&nbsp;</td></tr></tbody></table></div><div class="modal-footer"><div class="mbr-section-btn"><a href="#" class="no-anim btn btn-secondary display-4" data-bs-dismiss="modal" data-dismiss="modal">Close</a></div></div>    </div>  </div></div><script> 
+document.addEventListener("DOMContentLoaded", function() { 
+  if(typeof jQuery === "function") {
+    $("#sporttacticfacebook").on("hidden.bs.modal", function () { 
+      var html = $( "#sporttacticfacebook_body" ).html(); 
+      $( "#sporttacticfacebook_body" ).empty(); 
+      $( "#sporttacticfacebook_body" ).append(html); 
+    }) 
+  } else { 
+      var mdw = document.getElementById("#sporttacticfacebook") 
+      mdw.addEventListener("hidden.bs.modal", function(event) { 
+        mdw.innerHTML = mdw.innerHTML; 
+      }); 
+  } 
+}); 
+</script></div>
 
 	<script>
 	if (typeof OpenModal === 'undefined') {
@@ -319,7 +422,7 @@ Relevant and respectful comments. Only use images or video produced by SportTacT
 
 </section>
 
-<section class="footer7 cid-sgjgzo1e5T" once="footers" id="footer7-11">
+<section data-bs-version="5.1" class="footer7 cid-sgjgzo1e5T" once="footers" id="footer7-11">
 
     
 
@@ -334,7 +437,7 @@ Relevant and respectful comments. Only use images or video produced by SportTacT
             </div>
         </div>
     </div>
-</section><section style="background-color: #fff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif; color:#aaa; font-size:12px; padding: 0; align-items: center; display: flex;"><a href="https://mobirise.site/e" style="flex: 1 1; height: 3rem; padding-left: 1rem;"></a><p style="flex: 0 0 auto; margin:0; padding-right:1rem;">Create your own website - <a href="https://mobirise.site/w" style="color:#aaa;">Details here</a></p></section><script src="assets/bootstrap/js/bootstrap.bundle.min.js"></script>  <script src="assets/smoothscroll/smooth-scroll.js"></script>  <script src="assets/ytplayer/index.js"></script>  <script src="assets/dropdown/js/navbar-dropdown.js"></script>  <script src="assets/theme/js/script.js"></script>  
+</section><section style="background-color: #fff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif; color:#aaa; font-size:12px; padding: 0; align-items: center; display: flex;"><a href="https://mobirise.site/z" style="flex: 1 1; height: 3rem; padding-left: 1rem;"></a><p style="flex: 0 0 auto; margin:0; padding-right:1rem;"><a href="https://mobirise.site/i" style="color:#aaa;">Made with Mobirise</a> site software</p></section><script src="assets/bootstrap/js/bootstrap.bundle.min.js"></script>  <script src="assets/smoothscroll/smooth-scroll.js"></script>  <script src="assets/ytplayer/index.js"></script>  <script src="assets/dropdown/js/navbar-dropdown.js"></script>  <script src="assets/theme/js/script.js"></script>  
   <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9180858051840976"
      crossorigin="anonymous"></script>
   
