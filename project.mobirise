@@ -65,7 +65,9 @@
     "global_after_body": "",
     "mbrsiteDomain": "x8jjr9enn5",
     "global_footer_custom": "<script async src=\"https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9180858051840976\"\n     crossorigin=\"anonymous\"></script>",
-    "witsec-jquery": false
+    "witsec-jquery": false,
+    "publishType": "local",
+    "publishPath": "@PROJECT_PATH@"
   },
   "pages": {
     "index.html": {
