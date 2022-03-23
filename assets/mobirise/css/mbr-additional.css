@@ -6017,6 +6017,46 @@ a {
 .cid-smaqNkuBf7 .card:not(:nth-last-child(1)) {
   margin-bottom: 2rem;
 }
+.cid-t0TxqtWi1V {
+  padding-top: 1rem;
+  padding-bottom: 1rem;
+  background-color: #ffffff;
+}
+@media (max-width: 767px) {
+  .cid-t0TxqtWi1V .card-box {
+    padding: 1rem;
+  }
+  .cid-t0TxqtWi1V .mbr-section-btn,
+  .cid-t0TxqtWi1V .price {
+    text-align: center;
+  }
+  .cid-t0TxqtWi1V .mbr-section-btn .btn {
+    width: 100%;
+  }
+}
+@media (min-width: 768px) {
+  .cid-t0TxqtWi1V .card-box {
+    padding-right: 2rem;
+  }
+}
+@media (min-width: 992px) {
+  .cid-t0TxqtWi1V .card-box {
+    padding-left: 2rem;
+    padding-right: 4rem;
+  }
+}
+.cid-t0TxqtWi1V .card-wrapper {
+  border-radius: 4px;
+  background-color: #ffffff;
+  background-color: transparent;
+}
+.cid-t0TxqtWi1V .image-wrapper img {
+  width: 100%;
+  object-fit: cover;
+}
+.cid-t0TxqtWi1V .card:not(:nth-last-child(1)) {
+  margin-bottom: 2rem;
+}
 .cid-sluDW9V5Hv {
   padding-top: 2rem;
   padding-bottom: 2rem;
