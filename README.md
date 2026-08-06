@@ -2,7 +2,7 @@
 
 A fully client-side, offline-first handball coaching platform built with **pure HTML5, CSS and vanilla JavaScript** — no build step, no frameworks, no server. All data is stored locally in the browser using **IndexedDB**.
 
-## ?? Running
+## Running
 
 Just open `index.html` in any modern browser. For full functionality (IndexedDB, video import) it is best served over HTTP:
 
