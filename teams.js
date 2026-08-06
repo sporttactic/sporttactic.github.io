@@ -30,7 +30,7 @@ Views.teams = function (mount) {
             <tr>
               <td><strong>${p.number}</strong></td>
               <td><div style="display:flex;align-items:center;gap:10px"><span class="avatar">${UI.initials(p.firstName, p.lastName)}</span>${UI.esc(p.firstName)} ${UI.esc(p.lastName)}</div></td>
-              <td>${UI.esc(tt('pos', p.position))}</td>
+              <td><span class="pos-badge" aria-hidden="true">${SPORTS.posIcon(sportId, p.position)}</span>${UI.esc(tt('pos', p.position))}</td>
               <td>${p.height || '—'} cm</td>
               <td>
                 <span class="tag ${p.status === 'injured' ? 'red' : p.status === 'suspended' ? 'amber' : 'green'}">${UI.esc(tt('status', p.status || 'active'))}</span>
@@ -69,7 +69,7 @@ Views.teams = function (mount) {
         <div class="row"><label class="field"><span>${T('teams.firstName')}</span><input id="f_first" value="${UI.esc(p.firstName || '')}"></label>
         <label class="field"><span>${T('teams.lastName')}</span><input id="f_last" value="${UI.esc(p.lastName || '')}"></label></div>
         <div class="row"><label class="field"><span>${T('teams.number')}</span><input id="f_num" type="number" value="${p.number || ''}"></label>
-        <label class="field"><span>${T('teams.position')}</span><select id="f_pos">${positions.map(x => `<option value="${x}" ${x === p.position ? 'selected' : ''}>${UI.esc(tt('pos', x))}</option>`).join('')}</select></label></div>
+        <label class="field"><span>${T('teams.position')}</span><select id="f_pos">${positions.map(x => `<option value="${x}" ${x === p.position ? 'selected' : ''}>${SPORTS.posIcon(sportId, x)}\u00A0 ${UI.esc(tt('pos', x))}</option>`).join('')}</select></label></div>
         <div class="row"><label class="field"><span>${T('teams.height')} (cm)</span><input id="f_h" type="number" value="${p.height || ''}"></label>
         <label class="field"><span>${T('teams.status')}</span><select id="f_st"><option value="active" ${p.status === 'active' ? 'selected' : ''}>${UI.esc(tt('status', 'active'))}</option><option value="injured" ${p.status === 'injured' ? 'selected' : ''}>${UI.esc(tt('status', 'injured'))}</option><option value="suspended" ${p.status === 'suspended' ? 'selected' : ''}>${UI.esc(tt('status', 'suspended'))}</option></select></label></div>`,
       footer: `<button class="btn ghost" data-close2>${T('common.cancel')}</button><button class="btn primary" data-save>${T('common.save')}</button>`,

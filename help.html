@@ -8,7 +8,7 @@
   <style>
     /* Palette mirrors styles.css: light is the default, dark is the override. */
     :root{--bg:#dcdcdc;--surface:#f1f1f1;--surface2:#e5e5e5;--border:#c0c0c0;--text:#101010;--soft:#3c3c3c;--muted:#6e6e6e;--primary:#111111;--primary-soft:#d6d6d6;--on-primary:#ffffff;--accent:#12903f;--danger:#c81f36;--warning:#a35b00;--shadow:0 1px 3px rgba(0,0,0,.16),0 1px 2px rgba(0,0,0,.10);--radius:12px;--steel:"Arial Black","Arial Bold","Helvetica Neue",Arial,Gadget,sans-serif}
-    [data-theme="dark"]{--bg:#0b0b0b;--surface:#191919;--surface2:#121212;--border:#303030;--text:#f4f4f4;--soft:#c3c3c3;--muted:#8a8a8a;--primary:#f4f4f4;--primary-soft:#272727;--on-primary:#0b0b0b;--accent:#22e07a;--danger:#ff3b5c;--warning:#ffb020;--shadow:0 4px 18px rgba(0,0,0,.55)}
+    [data-theme="dark"]{--bg:#0b0b0b;--surface:#191919;--surface2:#121212;--border:#303030;--text:#ffffff;--soft:#ffffff;--muted:#e2e2e2;--primary:#ffffff;--primary-soft:#272727;--on-primary:#0b0b0b;--accent:#22e07a;--danger:#ff3b5c;--warning:#ffb020;--shadow:0 4px 18px rgba(0,0,0,.55)}
     *{box-sizing:border-box;margin:0;padding:0}
     body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text);line-height:1.6}
     [data-theme="dark"] body{background:
@@ -424,6 +424,8 @@
       <ul>
         <li data-lang-en><b>Teams &amp; Players:</b> add players with number, position, height and status. Positions follow your chosen sport. Mark a player <b>Injured</b> and it shows on the Dashboard — Injured and Not Active players are also left out of the statistics leaderboard.</li>
         <li data-lang-da><b>Hold &amp; Spillere:</b> tilføj spillere med nummer, position, højde og status. Positionerne følger din valgte sportsgren. Markér en spiller som <b>Skadet</b>, og det vises på Oversigten — skadede og ikke-aktive spillere udelades også fra statistik-ranglisten.</li>
+        <li data-lang-en><b>Position symbols:</b> every position has its own symbol — 🧤 goalkeeper, ⚓ pivot, ⚽ striker, 🗼 center, 🎱 player and so on — shown next to the position in the squad list and in the picker. Each sport has its own set, so the same symbol always means the same role for that sport.</li>
+        <li data-lang-da><b>Positionssymboler:</b> hver position har sit eget symbol — 🧤 målmand, ⚓ streg, ⚽ angriber, 🗼 center, 🎱 spiller og så videre — vist ved siden af positionen i truplisten og i vælgeren. Hver sportsgren har sit eget sæt, så det samme symbol altid betyder den samme rolle i den sportsgren.</li>
         <li data-lang-en><b>Rename your team:</b> the line under the <b>Teams &amp; Players</b> heading is editable — click it (✎) to set the <b>team name</b>, <b>division / league</b> and <b>category</b>. The new name is used across the app and is included in your backup.</li>
         <li data-lang-da><b>Omdøb dit hold:</b> linjen under overskriften <b>Hold &amp; Spillere</b> kan redigeres — klik på den (✎) for at sætte <b>holdnavn</b>, <b>division / liga</b> og <b>kategori</b>. Det nye navn bruges i hele appen og kommer med i din backup.</li>
         <li data-lang-en><b>Staff:</b> add coaches, physios and analysts under the same view, each with a role — and start a <b>💬 chat</b> with any player or staff member straight from the list.</li>

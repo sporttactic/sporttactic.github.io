@@ -876,6 +876,35 @@ const SPORTS = (() => {
   };
   function positions(id) { return POSITIONS[id] || POSITIONS.handball; }
 
+  // One symbol per playing position, so a squad list reads at a glance.
+  // Keyed per sport because the same name means different things elsewhere
+  // (basketball "Center" vs ice-hockey "Center").
+  const POS_ICONS = {
+    handball: { 'Goalkeeper': '\uD83E\uDDE4', 'Left Wing': '\u2196', 'Left Back': '\u25C0', 'Center Back': '\uD83C\uDFAF', 'Right Back': '\u25B6', 'Right Wing': '\u2197', 'Pivot': '\u2693' },
+    soccer: { 'Goalkeeper': '\uD83E\uDDE4', 'Centre Back': '\uD83D\uDEE1', 'Left Back': '\u25C0', 'Right Back': '\u25B6', 'Defensive Midfield': '\u2699', 'Central Midfield': '\uD83C\uDFAF', 'Winger': '\u26A1', 'Striker': '\u26BD' },
+    basketball: { 'Point Guard': '\uD83C\uDFAF', 'Shooting Guard': '\uD83C\uDFF9', 'Small Forward': '\u26A1', 'Power Forward': '\uD83D\uDCAA', 'Center': '\uD83D\uDDFC' },
+    volleyball: { 'Setter': '\uD83D\uDD90', 'Outside Hitter': '\uD83D\uDCA5', 'Opposite': '\u2194', 'Middle Blocker': '\uD83E\uDDF1', 'Libero': '\uD83D\uDEE1' },
+    baseball: { 'Pitcher': '\u26BE', 'Catcher': '\uD83E\uDDE4', 'First Base': '1\uFE0F\u20E3', 'Second Base': '2\uFE0F\u20E3', 'Third Base': '3\uFE0F\u20E3', 'Shortstop': '\u26A1', 'Left Field': '\u2196', 'Center Field': '\u2191', 'Right Field': '\u2197' },
+    rugby: { 'Prop': '\uD83E\uDDF1', 'Hooker': '\uD83C\uDFA3', 'Lock': '\uD83D\uDD12', 'Flanker': '\u26A1', 'Number 8': '8\uFE0F\u20E3', 'Scrum-half': '\uD83C\uDF00', 'Fly-half': '\uD83C\uDFAF', 'Centre': '\u25CF', 'Wing': '\u2197', 'Fullback': '\uD83D\uDEE1' },
+    football: { 'Quarterback': '\uD83C\uDFAF', 'Running Back': '\uD83C\uDFC3', 'Wide Receiver': '\uD83D\uDE4C', 'Tight End': '\uD83E\uDDF2', 'Offensive Line': '\uD83E\uDDF1', 'Defensive Line': '\uD83D\uDEE1', 'Linebacker': '\u2694', 'Cornerback': '\uD83D\uDEA7', 'Safety': '\uD83D\uDD30' },
+    badminton: { 'Singles': '\uD83D\uDC64', 'Doubles': '\uD83D\uDC65', 'Mixed Doubles': '\uD83D\uDC6B' },
+    tennis: { 'Singles': '\uD83D\uDC64', 'Doubles': '\uD83D\uDC65', 'Mixed Doubles': '\uD83D\uDC6B' },
+    snooker: { 'Player': '\uD83C\uDFB1' },
+    pool: { 'Player': '\uD83C\uDFB1' },
+    darts: { 'Player': '\uD83C\uDFAF' },
+    icehockey: { 'Goalkeeper': '\uD83E\uDDE4', 'Left Defense': '\uD83D\uDEE1', 'Right Defense': '\uD83D\uDEE1', 'Left Wing': '\u2196', 'Center': '\u25CF', 'Right Wing': '\u2197' },
+    floorball: { 'Goalkeeper': '\uD83E\uDDE4', 'Defender': '\uD83D\uDEE1', 'Left Wing': '\u2196', 'Center': '\u25CF', 'Right Wing': '\u2197' },
+    chess: { 'Player': '\u265F' },
+    bridge: { 'North': '\u2191', 'East': '\u2192', 'South': '\u2193', 'West': '\u2190' },
+    poker: { 'Button': '\uD83D\uDD18', 'Small Blind': '\uD83D\uDD39', 'Big Blind': '\uD83D\uDD37', 'Under the Gun': '\u23F3', 'Middle': '\u25CF', 'Cutoff': '\u2702' },
+    backgammon: { 'Player': '\u26C0' }
+  };
+  // Symbol for a position; '\u2022' when the position is unknown or unset.
+  function posIcon(id, pos) {
+    const map = POS_ICONS[id] || POS_ICONS.handball;
+    return (pos && map[pos]) || '\u2022';
+  }
+
   // Exercise/training categories per sport (translated via i18n 'cat.*').
   const EXCATS = {
     handball: ['Attack', 'Defense', 'Goalkeeper', 'Passing', 'Shooting', 'Transition', 'Conditioning'],
@@ -962,6 +991,6 @@ const SPORTS = (() => {
     return list.map(t => ({ type: t, name: PROP_TYPES[t] || { en: t, da: t } }));
   }
 
-  return { LIST, get, name, positions, exerciseCategories, oppFormations, isTeam, halfFormation, halfCourt, props };
+  return { LIST, get, name, positions, posIcon, exerciseCategories, oppFormations, isTeam, halfFormation, halfCourt, props };
 })();
 if (typeof window !== 'undefined') window.SPORTS = SPORTS;
