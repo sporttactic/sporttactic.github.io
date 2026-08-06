@@ -1,3 +1,15 @@
+/* Logo face for the SportTactic wordmark (.brand-text strong + splash .sp-name).
+   Race Sport is licensed, so no copy is shipped and no url() source is listed —
+   a missing file would 404 on every single page load. It is used when installed
+   on the machine, otherwise the heavy condensed stack below stands in.
+   TO BUNDLE IT: drop RaceSport.woff2 next to this file and add
+   url("RaceSport.woff2") format("woff2"),  as the FIRST src entry. */
+@font-face {
+  font-family: 'Race Sport';
+  src: local('Race Sport'), local('RaceSport'), local('Race Sport Regular');
+  font-display: swap;
+}
+
 :root {
   color-scheme: light;
   --bg: #dcdcdc;
@@ -16,7 +28,7 @@
   --shadow: 0 1px 3px rgba(0,0,0,.16), 0 1px 2px rgba(0,0,0,.10);
   --radius: 12px;
   --sidebar-w: 250px;
-  --steel: "Arial Black", "Arial Bold", "Helvetica Neue", Arial, Gadget, sans-serif;
+  --steel: 'Race Sport', "Arial Black", "Arial Bold", "Helvetica Neue", Arial, Gadget, sans-serif;
 }
 [data-theme="dark"] {
   color-scheme: dark;
@@ -76,13 +88,7 @@ body {
 [data-theme="light"] .brand-text strong { background: linear-gradient(180deg,#3a424c,#1a1f26 42%,#05070a 54%,#222932 70%,#0a0e12); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; color: #0a0e12; filter: drop-shadow(0 1px .5px rgba(255,255,255,.55)); }
 .brand-text span { font-size: 11px; color: var(--muted); }
 .brand-title { display: flex; align-items: center; gap: 6px; }
-.runner { color: var(--primary); flex: none; animation: runnerBob .32s ease-in-out infinite; }
-.runner .run-a { animation: runnerFrameA .32s steps(1, end) infinite; }
-.runner .run-b { animation: runnerFrameB .32s steps(1, end) infinite; }
-@keyframes runnerFrameA { 0%, 49.9% { opacity: 1; } 50%, 100% { opacity: 0; } }
-@keyframes runnerFrameB { 0%, 49.9% { opacity: 0; } 50%, 100% { opacity: 1; } }
-@keyframes runnerBob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-1.5px); } }
-@media (prefers-reduced-motion: reduce) { .runner, .runner .run-a, .runner .run-b { animation: none; } .runner .run-b { opacity: 0; } }
+.runner { color: var(--primary); flex: none; }
 .nav { display: flex; flex-direction: column; padding: 10px; gap: 2px; overflow-y: auto; flex: 1; }
 .nav-item {
   display: flex; align-items: center; gap: 12px;
@@ -138,6 +144,10 @@ body {
 /* Sidebar sport picker */
 .sport-picker { padding: 10px 16px; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 6px; }
 .sport-picker label { font-size: 11px; text-transform: uppercase; letter-spacing: .4px; color: var(--muted); font-weight: 600; }
+/* Active-team switcher — scopes squad, matches, opponents and training. */
+.team-picker { padding: 10px 16px; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 6px; }
+.team-picker label { font-size: 11px; text-transform: uppercase; letter-spacing: .4px; color: var(--muted); font-weight: 600; }
+.team-picker select { width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text); font-size: 13px; }
 
 /* Custom sport dropdown — a native <option> can't render an SVG, so this
    listbox shows each sport's inline symbol beside its translated name. */
@@ -363,25 +373,62 @@ body {
 .page-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; flex-wrap: wrap; gap: 12px; }
 .page-head h1 { font-size: 22px; }
 .page-head p { color: var(--muted); font-size: 13px; }
+/* Buttons in a toolbar stretch to the tallest one, so a wrapped label does not
+   leave its neighbours looking short. */
+.head-acts { display: flex; gap: 8px; flex-wrap: wrap; align-items: stretch; }
 .inline-edit { display: inline-flex; align-items: center; gap: 6px; background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; border-bottom: 1px dashed transparent; }
 .inline-edit:hover, .inline-edit:focus-visible { color: var(--text); border-bottom-color: var(--border); }
 .inline-edit .pen { opacity: .55; font-size: 12px; }
 .inline-edit:hover .pen { opacity: 1; }
-.grid { display: grid; gap: 16px; }
+.grid { display: grid; gap: 16px; align-items: stretch; }
 .cols-2 { grid-template-columns: repeat(2, 1fr); }
 .cols-3 { grid-template-columns: repeat(3, 1fr); }
 .cols-4 { grid-template-columns: repeat(4, 1fr); }
 @media (max-width: 900px) { .cols-3, .cols-4 { grid-template-columns: repeat(2,1fr); } }
 @media (max-width: 640px) { .cols-2, .cols-3, .cols-4 { grid-template-columns: 1fr; } }
+/* A long translated label must grow the whole row, not just its own box, so
+   neighbouring cards keep a shared baseline instead of stair-stepping. */
+.grid > .card, .grid > .acc { height: 100%; }
+.grid > .card { display: flex; flex-direction: column; min-width: 0; }
 
 .card {
   background: var(--surface); border: 1px solid var(--border);
   border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow);
+  min-width: 0; overflow-wrap: break-word;
 }
-.card h3 { font-size: 14px; margin-bottom: 10px; }
+.card h3 { font-size: 14px; margin-bottom: 10px; overflow-wrap: break-word; }
+
+/* Accordion: every big area folds away. */
+.acc {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); box-shadow: var(--shadow); margin-bottom: 16px;
+}
+.acc > .acc-head {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 12px 16px; cursor: pointer; list-style: none; user-select: none;
+}
+.acc > .acc-head::-webkit-details-marker { display: none; }
+.acc > .acc-head:hover { background: var(--surface-2); border-radius: var(--radius); }
+.acc[open] > .acc-head:hover { border-radius: var(--radius) var(--radius) 0 0; }
+.acc-chev {
+  flex: 0 0 auto; width: 8px; height: 8px; margin-left: 2px;
+  border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted);
+  transform: rotate(-45deg); transition: transform .15s ease;
+}
+.acc[open] > .acc-head .acc-chev { transform: rotate(45deg); }
+.acc-titles { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 auto; }
+.acc-title { font-size: 16px; font-weight: 700; }
+.acc-sub { color: var(--muted); font-size: 12px; }
+.acc-acts { display: flex; gap: 8px; flex-wrap: wrap; align-items: stretch; }
+.acc-body { padding: 0 16px 16px; }
+.acc-body > .page-head:first-child { margin-top: 0; }
+/* Inside a grid the accordion is a normal cell, so it keeps the grid gap only. */
+.grid > .acc, .scout-grid > .acc { margin-bottom: 0; }
 .stat-card { display: flex; flex-direction: column; gap: 4px; }
-.stat-card .val { font-size: 28px; font-weight: 700; }
-.stat-card .lbl { color: var(--muted); font-size: 12px; }
+.stat-card .val { font-size: 28px; font-weight: 700; line-height: 1.15; }
+/* The label sits at the bottom of the box, so a one-line and a two-line card
+   still line their big numbers up with each other. */
+.stat-card .lbl { color: var(--muted); font-size: 12px; line-height: 1.3; margin-top: auto; overflow-wrap: break-word; hyphens: auto; }
 .stat-card .trend { font-size: 12px; }
 .trend.up { color: var(--accent); } .trend.down { color: var(--danger); }
 
@@ -390,6 +437,8 @@ body {
   padding: 9px 14px; border-radius: 10px; border: 1px solid var(--border);
   background: var(--surface-2); color: var(--text); cursor: pointer;
   font-weight: 600; font-size: 13px; line-height: 1.25; text-align: center;
+  /* A longer translation wraps inside the button instead of overflowing it. */
+  white-space: normal; overflow-wrap: break-word; max-width: 100%; min-width: 0;
 }
 .btn:hover { background: var(--border); }
 .btn.primary { background: var(--primary); color: var(--on-primary); border-color: var(--primary); }
@@ -407,7 +456,7 @@ th { font-size: 12px; text-transform: uppercase; color: var(--muted); font-weigh
 tr:hover td { background: var(--surface-2); }
 .table-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
 
-.tag { display: inline-flex; align-items: center; justify-content: center; padding: 2px 8px; border-radius: 12px; font-size: 11px; line-height: 1.45; background: var(--surface-2); border: 1px solid var(--border); }
+.tag { display: inline-flex; align-items: center; justify-content: center; padding: 2px 8px; border-radius: 12px; font-size: 11px; line-height: 1.45; background: var(--surface-2); border: 1px solid var(--border); white-space: normal; overflow-wrap: break-word; text-align: center; max-width: 100%; }
 .tag.green { color: var(--accent); border-color: var(--accent); }
 .tag.red { color: var(--danger); border-color: var(--danger); }
 .tag.blue { color: var(--primary); border-color: var(--primary); }
@@ -424,6 +473,9 @@ select option { background: var(--surface); color: var(--text); }
 input:focus, select:focus, textarea:focus { border-color: var(--primary); }
 .row { display: flex; gap: 12px; flex-wrap: wrap; }
 .row > * { flex: 1; min-width: 120px; }
+/* A row of buttons is a toolbar, not a form row: keep them at their own width
+   and the same height rather than stretching one long label across the card. */
+.row > .btn, .row > label.btn { flex: 0 0 auto; min-width: 0; }
 
 /* Staff list (Teams & Players) */
 .staff-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); }
@@ -478,6 +530,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--primary); }
 .event-btn { display: flex; align-items: center; justify-content: center; min-height: 52px; padding: 14px 8px; text-align: center; border-radius: 10px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text); cursor: pointer; font-weight: 600; font-size: 13px; line-height: 1.25; }
 .event-btn:hover { border-color: var(--primary); transform: translateY(-1px); }
 .event-btn.goal { border-color: var(--accent); }
+.event-btn.neutral { border-color: var(--accent); }
 .event-btn.foul { border-color: var(--warning); }
 .event-btn.turnover { border-color: var(--danger); }
 /* Live scouting — each player gets their own quick-log button set */
@@ -599,11 +652,22 @@ body.board-fs { overflow: hidden; }
 #magnetWrap .hint, #facingWrap .hint { margin: 4px 0 0; font-size: 11px; }
 #rotWrap .tool-group.anim-acts { margin-top: 4px; }
 #rotWrap .tool-group.anim-acts .btn { flex: 1; min-width: 0; }
+/* Frame strip, docked as a vertical list to the LEFT of the court. */
+.stage-row > .timeline { flex: 0 0 148px; width: 148px; margin-top: 0; align-self: stretch; display: flex; flex-direction: column; min-height: 0; }
+.stage-row > .timeline .tl-head { flex-direction: column; align-items: stretch; gap: 6px; }
+.stage-row > .timeline .tl-actions { flex-direction: column; }
+.stage-row > .timeline .tl-grid { grid-template-columns: 1fr; max-height: none; flex: 1 1 auto; min-height: 60px; align-content: start; }
 @media (max-width: 900px) {
   .stage-row { flex-wrap: wrap; }
-  .frames-anim { flex: 1 1 100%; width: 100%; flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: center; margin-top: 10px; }
+  .stage-row #tacticalCanvas { order: 1; }
+  .frames-anim { flex: 1 1 100%; width: 100%; flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: center; margin-top: 10px; order: 2; }
   .frames-anim .tool-group { flex-direction: row; }
   .anim-select { flex: 1 1 240px; width: auto; max-width: 320px; }
+  /* Back to a wide strip under the board when the columns wrap. */
+  .stage-row > .timeline { order: 3; flex: 1 1 100%; width: 100%; margin-top: 10px; align-self: auto; }
+  .stage-row > .timeline .tl-head { flex-direction: row; align-items: center; }
+  .stage-row > .timeline .tl-actions { flex-direction: row; }
+  .stage-row > .timeline .tl-grid { grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); max-height: 104px; }
 }
 
 /* Playbook — tactical systems */
@@ -620,8 +684,26 @@ body.board-fs { overflow: hidden; }
 .empty .big { font-size: 40px; margin-bottom: 10px; }
 
 .pill-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
-.pill { display: inline-flex; align-items: center; justify-content: center; padding: 7px 14px; border-radius: 20px; border: 1px solid var(--border); background: var(--surface); color: var(--text); cursor: pointer; font-size: 13px; line-height: 1.25; }
+.pill { display: inline-flex; align-items: center; justify-content: center; padding: 7px 14px; border-radius: 20px; border: 1px solid var(--border); background: var(--surface); color: var(--text); cursor: pointer; font-size: 13px; line-height: 1.25; white-space: normal; overflow-wrap: break-word; text-align: center; max-width: 100%; }
 .pill.active { background: var(--primary); color: var(--on-primary); border-color: var(--primary); }
+
+/* Exercise Library: muscle map beside the drill list. */
+.ex-layout { display: grid; grid-template-columns: 300px 1fr; gap: 16px; align-items: start; }
+.body-card { position: sticky; top: 12px; }
+.body-map { display: block; width: 100%; max-width: 340px; height: auto; margin: 0 auto; }
+.body-map .sil { fill: var(--surface-2); stroke: var(--border); stroke-width: 1; }
+.body-map .mus > * { fill: var(--surface-2); stroke: var(--border); stroke-width: 1; transition: fill .15s ease; }
+.body-map .mus { cursor: pointer; }
+.body-map .mus:hover > * { fill: var(--primary-soft); }
+.body-map .mus.on > * { fill: var(--primary); stroke: var(--primary); }
+.body-map .blbl { fill: var(--muted); font-size: 12px; font-family: inherit; }
+.mus-tag { cursor: pointer; }
+.mus-picker { display: flex; flex-wrap: wrap; gap: 12px; }
+.mus-group { min-width: 130px; }
+.mus-group-h { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin-bottom: 4px; }
+.mus-pick { display: flex; align-items: center; gap: 6px; font-size: 13px; padding: 2px 0; cursor: pointer; }
+.mus-pick input { width: auto; margin: 0; }
+@media (max-width: 900px) { .ex-layout { grid-template-columns: 1fr; } .body-card { position: static; } }
 
 .avatar { width: 34px; height: 34px; border-radius: 50%; background: var(--primary-soft); color: var(--primary); display: inline-flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; line-height: 1; flex: 0 0 auto; }
 /* Player marker: shirt abbreviation on the position's role colour. */
@@ -669,6 +751,36 @@ body.board-fs { overflow: hidden; }
 .page-head h1 { text-transform: uppercase; letter-spacing: .5px; }
 
 .hint { font-size: 12px; color: var(--muted); margin: 8px 0; line-height: 1.5; }
+
+/* ============ AI assistant panel (ai.js) ============ */
+.ai-card { margin-bottom: 16px; }
+.ai-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.ai-title { display: flex; align-items: center; gap: 10px; }
+.ai-title h3 { margin: 0; font-size: 15px; }
+.ai-title p { margin: 2px 0 0; font-size: 12px; color: var(--muted); }
+.ai-ico { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; flex: none; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--border); font-size: 18px; line-height: 1; }
+.ai-head-acts { display: flex; gap: 6px; flex-wrap: wrap; }
+.ai-topics { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0; }
+.ai-topics .pill { font-size: 12px; padding: 6px 12px; }
+.ai-log { max-height: 300px; overflow-y: auto; color: var(--text); border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); padding: 10px 12px; }
+.ai-empty { color: var(--muted); font-size: 13px; margin: 0; }
+.ai-msg { padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13px; line-height: 1.5; }
+.ai-msg:last-child { border-bottom: 0; }
+.ai-who { display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin-bottom: 4px; }
+.ai-msg.me .ai-who { color: var(--primary); }
+.ai-text p { margin: 0 0 6px; }
+.ai-text ul { margin: 0 0 6px; padding-left: 18px; }
+.ai-text li { margin: 0 0 3px; }
+.ai-dots { color: var(--muted); }
+.ai-ask { display: flex; gap: 8px; align-items: stretch; margin-top: 10px; }
+.ai-ask textarea { flex: 1; resize: vertical; min-height: 44px; font-size: 13px; }
+.ai-ask .btn { flex: none; align-self: stretch; }
+@media (max-width: 640px) { .ai-ask { flex-direction: column; } }
+.ai-guide { margin: 6px 0 12px; padding-left: 20px; color: var(--text); font-size: 13px; line-height: 1.5; }
+.ai-guide li { margin-bottom: 6px; }
+.ai-fig { margin: 8px 0; padding: 8px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+.ai-fig svg { display: block; width: 100%; max-height: 320px; height: auto; }
+.injury-note { margin-top: 6px; max-width: 240px; font-size: 12px; line-height: 1.4; color: var(--muted); white-space: normal; }
 .rec-dot { display: inline-block; margin-top: 8px; color: var(--danger); font-weight: 700; font-size: 12px; animation: blink 1s steps(2) infinite; }
 @keyframes blink { 50% { opacity: .3; } }
 
@@ -742,4 +854,50 @@ body { overscroll-behavior-y: contain; }
   .tool-panel { max-height: none; overflow: visible; }
   .board-wrap.fs { overflow: auto; }
   .play-list { max-height: 220px; }
+}
+
+/* ---- Inline squad editing (Teams & Players) ---- */
+/* The squad table swaps its cells for inputs in place, so a coach can fix a
+   whole roster without opening a dialog per player. */
+table.squad-edit td { padding: 6px 8px; vertical-align: middle; }
+table.squad-edit tr.row-edit:hover { background: transparent; }
+.cell {
+  width: 100%; min-width: 0; padding: 7px 8px; font-size: 14px;
+  border: 1px solid var(--border); border-radius: 8px;
+  background: var(--surface); color: var(--text); font-family: inherit;
+}
+.cell:focus { outline: 2px solid var(--primary); outline-offset: -1px; }
+.cell-pair { display: flex; gap: 6px; }
+.cell-pair .cell { flex: 1 1 0; }
+td.col-num .cell, td.col-h .cell, td.col-w .cell { max-width: 92px; }
+
+/* ---- Max-test rows (Personal training) ---- */
+.test-row { display: grid; grid-template-columns: 2fr 1fr 1fr .8fr auto; gap: 6px; margin-bottom: 6px; align-items: center; }
+
+/* ---- SMS dialog ---- */
+.sms-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.sms-list {
+  max-height: 230px; overflow: auto; border: 1px solid var(--border);
+  border-radius: 10px; padding: 6px; margin-bottom: 12px; background: var(--surface-2);
+}
+.sms-row { display: flex; align-items: center; gap: 10px; padding: 7px 8px; border-radius: 8px; cursor: pointer; }
+.sms-row:hover { background: var(--surface); }
+.sms-row + .sms-row { border-top: 1px solid var(--border); }
+.sms-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sms-num { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+
+/* ---- Mail dialog ---- */
+.mail-picker { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 4px 12px; margin-bottom: 12px; }
+.mail-picker .check-row { margin: 0; }
+
+/* ---- Team switcher (Teams & Players) ---- */
+.team-bar { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; }
+.team-bar .field { flex: 1 1 220px; margin: 0; }
+.contact-cell { display: flex; flex-direction: column; line-height: 1.35; }
+.contact-mail { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; }
+
+@media (pointer: coarse) {
+  .cell { font-size: 16px; }  /* iOS won't zoom the page at >=16px */
+  .test-row { grid-template-columns: 1fr 1fr; }
+  .sms-row { padding: 11px 8px; }
 }

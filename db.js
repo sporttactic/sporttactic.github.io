@@ -1,11 +1,12 @@
 /* db.js — lightweight IndexedDB wrapper for offline-first storage */
 const DB = (() => {
   const DB_NAME = 'handballtactix';
-  const DB_VERSION = 1;
+  // v2 added the 'personal' store (personal training plans & max tests).
+  const DB_VERSION = 2;
   const STORES = [
     'clubs', 'teams', 'players', 'coaches', 'seasons',
     'matches', 'events', 'videos', 'exercises', 'reports',
-    'tactics', 'opponents', 'training', 'settings'
+    'tactics', 'opponents', 'training', 'personal', 'settings'
   ];
   let dbp = null;
 

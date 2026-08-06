@@ -3,7 +3,7 @@ const App = (() => {
   let currentRoute = 'dashboard';
   let cleanup = null;
   let currentSport = 'handball';
-  const ROUTES = ['dashboard', 'teams', 'matches', 'scouting', 'statistics', 'tactics', 'video', 'training', 'exercises', 'opponents', 'reports', 'settings'];
+  const ROUTES = ['dashboard', 'teams', 'matches', 'scouting', 'statistics', 'tactics', 'video', 'training', 'opponents', 'reports', 'settings'];
 
   // ---- Donations -------------------------------------------------------
   const PAYPAL_SDK = 'https://www.paypalobjects.com/donate/sdk/donate-sdk.js';
@@ -82,6 +82,7 @@ const App = (() => {
     Store.setSetting('lang', l);
     document.querySelectorAll('#langSwitch button').forEach(b => b.classList.toggle('active', b.dataset.lang === l));
     populateSportPicker();
+    populateTeamPicker();
     Store.getSetting('role', 'Coach').then(role => {
       const rb = document.getElementById('roleBadge'); if (rb) rb.textContent = T('role.' + role) || role;
     });
@@ -93,7 +94,28 @@ const App = (() => {
     currentSport = id;
     Store.setSetting('sport', id);
     updateSportPickerSelection();
+    populateTeamPicker();
     if (!silent) { render(); UI.toast(T('sport.changed') + ': ' + SPORTS.name(id, I18N.getLang()), 'success'); }
+  }
+
+  // ---- Active team ----
+  // Every squad-bound view reads Store.players()/matches(), which are scoped to
+  // this selection, so switching team switches the whole app over.
+  function populateTeamPicker() {
+    const host = document.getElementById('teamPicker');
+    if (!host) return;
+    const list = Store.teams();
+    const active = Store.activeTeamId();
+    host.classList.toggle('hidden', list.length < 1);
+    host.innerHTML = `<label for="teamSelect">${T('teams.activeTeam')}</label>
+      <select id="teamSelect">${list.map(t => `<option value="${UI.esc(t.id)}" ${t.id === active ? 'selected' : ''}>${UI.esc(t.name)}</option>`).join('') || `<option value="">${UI.esc(T('teams.noTeam'))}</option>`}</select>`;
+    const sel = host.querySelector('#teamSelect');
+    sel.onchange = () => {
+      Store.setActiveTeam(sel.value);
+      render();
+      const t = Store.activeTeam();
+      if (t) UI.toast(T('teams.teamChanged') + ': ' + t.name, 'success');
+    };
   }
   // Chevron for the custom sport dropdown trigger.
   const SPORT_CHEV = '<svg class="sport-select-chev" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';
@@ -153,11 +175,11 @@ const App = (() => {
     if (!q) { box.classList.add('hidden'); return; }
     const results = [];
     const add = (cat, label, route, params) => results.push({ cat, label, route, params });
-    Store.all('players').forEach(p => { if ((p.firstName + ' ' + p.lastName).toLowerCase().includes(q)) add('Player', `#${p.number} ${p.firstName} ${p.lastName}`, 'teams'); });
-    Store.all('matches').forEach(m => { if (m.opponent.toLowerCase().includes(q)) add('Match', `${m.opponent} · ${UI.fmtDate(m.date)}`, 'matches'); });
-    Store.all('exercises').forEach(e => { if (e.title.toLowerCase().includes(q) || (e.tags || []).join(' ').toLowerCase().includes(q)) add('Drill', e.title, 'exercises'); });
-    Store.all('training').forEach(t => { if (t.title.toLowerCase().includes(q)) add('Training', t.title, 'training'); });
-    Store.all('opponents').forEach(o => { if (o.name.toLowerCase().includes(q)) add('Opponent', o.name, 'opponents'); });
+    Store.players().forEach(p => { if ((p.firstName + ' ' + p.lastName).toLowerCase().includes(q)) add('Player', `#${p.number} ${p.firstName} ${p.lastName}`, 'teams'); });
+    Store.matches().forEach(m => { if (m.opponent.toLowerCase().includes(q)) add('Match', `${m.opponent} · ${UI.fmtDate(m.date)}`, 'matches'); });
+    Store.all('exercises').forEach(e => { if (e.title.toLowerCase().includes(q) || (e.tags || []).join(' ').toLowerCase().includes(q)) add('Exercise', e.title, 'training'); });
+    Store.scoped('training').forEach(t => { if (t.title.toLowerCase().includes(q)) add('Training', t.title, 'training'); });
+    Store.scoped('opponents').forEach(o => { if (o.name.toLowerCase().includes(q)) add('Opponent', o.name, 'opponents'); });
     Store.all('tactics').forEach(t => { if ((t.name || '').toLowerCase().includes(q)) add('Tactic', t.name, 'tactics'); });
 
     box.innerHTML = results.length ? results.slice(0, 12).map((r, i) =>
@@ -218,6 +240,8 @@ const App = (() => {
     await Store.loadAll();
     await Store.seedIfEmpty();
     await Store.purgeDemoPlayers();
+    await Store.installDefaultDrills();
+    await Store.repairDrillLinks();
     const theme = await Store.getSetting('theme', 'dark');
     setTheme(theme);
     const lang = await Store.getSetting('lang', 'en');
@@ -226,13 +250,18 @@ const App = (() => {
     document.getElementById('roleBadge').textContent = T('role.' + role) || role;
     setSound(await Store.getSetting('sound', true));
     currentSport = await Store.getSetting('sport', 'handball');
+    // Players registered before squads became sport-bound keep the sport in use.
+    await Store.stampSquadSport(currentSport);
+    // Rows made before teams were separated are handed to the first team.
+    await Store.stampTeamScope();
     populateSportPicker();
+    populateTeamPicker();
     bindChrome();
     startAutosave();
     go('dashboard');
   }
 
-  return { go, render, setTheme, setLang, getSport, setSport, boot };
+  return { go, render, setTheme, setLang, getSport, setSport, populateTeamPicker, boot };
 })();
 
 // Expose globally so view modules (tactics, matches, …) can read/switch the

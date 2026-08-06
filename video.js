@@ -51,12 +51,7 @@ Views.video = function (mount) {
     } catch (e) { return null; }
   }
 
-  mount.innerHTML = `
-    <div class="page-head"><div><h1>${T('video.title')}</h1><p>${T('video.subtitle')}</p></div>
-      <label class="btn primary" style="cursor:pointer">${T('video.import')}<input id="vfile" type="file" accept="video/*" hidden></label>
-    </div>
-    <div class="card" style="margin-bottom:16px">
-      <h3>${T('video.stream')}</h3>
+  const streamCard = `
       <p style="color:var(--muted);font-size:13px;margin-bottom:8px">${T('video.streamHint')}</p>
       <div class="row" style="flex:0">
         <input id="streamUrl" type="url" placeholder="https://youtube.com/watch?v=… , twitch.tv/… , vimeo.com/…" style="min-width:260px">
@@ -65,9 +60,10 @@ Views.video = function (mount) {
       <div class="stream-services">
         <span class="tag">YouTube</span><span class="tag">Twitch</span><span class="tag">Vimeo</span>
         <span class="tag">Dailymotion</span><span class="tag">Facebook</span>
-      </div>
-    </div>
-    <div class="card video-panel" id="videoPanel">
+      </div>`;
+
+  const playerPanel = `
+    <div class="video-panel" id="videoPanel">
       <div class="video-head">
         <h3 style="margin:0">${T('video.title')}</h3>
         <button class="btn sm" id="videoFs" title="${T('video.fullscreen')}">⛶ ${T('video.fullscreen')}</button>
@@ -96,6 +92,15 @@ Views.video = function (mount) {
         <div id="bmList" class="bm-list"></div>
       </div>
     </div>`;
+
+  mount.innerHTML = `
+    <div class="page-head"><div><h1>${T('video.title')}</h1><p>${T('video.subtitle')}</p></div>
+      <label class="btn primary" style="cursor:pointer">${T('video.import')}<input id="vfile" type="file" accept="video/*" hidden></label>
+    </div>
+    ${UI.acc('videoStream', T('video.stream'), streamCard)}
+    ${UI.acc('videoPlayer', T('video.player'), playerPanel)}`;
+
+  UI.bindAcc(mount);
 
   const wrap = mount.querySelector('#mediaWrap');
   const localControls = mount.querySelector('#localControls');

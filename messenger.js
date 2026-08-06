@@ -347,10 +347,10 @@ Views.messenger = function (mount, params) {
   // key ever leaves this device.
   function rosterMembers() {
     if (typeof Store === 'undefined') return [];
-    const team = Store.all('teams')[0];
+    const team = Store.activeTeam();
     const mine = (rows, f) => (team ? rows.filter(r => r.teamId === team.id) : rows).map(f);
     const staff = mine(Store.all('coaches'), c => ({ store: 'coaches', id: c.id, name: c.name || '', role: c.role || '', key: c.chatKey || '' }));
-    const players = mine(Store.all('players'), p => ({
+    const players = mine(Store.players(), p => ({
       store: 'players', id: p.id, name: ((p.firstName || '') + ' ' + (p.lastName || '')).trim(),
       role: p.position || '', key: p.chatKey || ''
     }));

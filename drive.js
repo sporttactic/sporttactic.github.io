@@ -4,10 +4,16 @@
    in Settings; nothing is hard-coded. The whole feature loads lazily, so the app
    keeps working offline (old iPads) until the user chooses to connect. */
 const Drive = (() => {
-  const SCOPE = 'https://www.googleapis.com/auth/drive';
+  // drive.file only reaches files this app created, which is all the backup and
+  // the team folder need. The full `drive` scope is a RESTRICTED scope: Google
+  // blocks unverified apps that ask for it, which is what produced the bare
+  // "400 — the request is malformed" page.
+  const SCOPE = 'https://www.googleapis.com/auth/drive.file';
   const GIS_SRC = 'https://accounts.google.com/gsi/client';
   const BACKUP_NAME = 'sporttactic-backup.json';
   const ROOT_FOLDER = 'SportTactic';
+  // A real client id looks like 1234567890-abcdef.apps.googleusercontent.com.
+  const CLIENT_ID_RE = /[0-9]+-[a-z0-9_.-]+\.apps\.googleusercontent\.com/i;
 
   let token = null;          // { access_token, expires }
   let tokenClient = null;
@@ -16,12 +22,20 @@ const Drive = (() => {
   function now() { return Date.now(); }
 
   // ---- Configuration (persisted in the settings store) ----
+  // Coaches paste whole lines out of the Cloud Console ("Client ID: 123-abc…",
+  // quotes, a stray newline), and any of those make Google answer with a 400
+  // instead of the sign-in screen — so only the id itself is ever kept.
+  function normClientId(v) {
+    const m = CLIENT_ID_RE.exec(String(v == null ? '' : v));
+    return m ? m[0] : '';
+  }
   async function getClientId() {
     const id = await Store.getSetting('driveClientId', '');
     return (id || '').trim();
   }
   async function setClientId(id) {
-    await Store.setSetting('driveClientId', (id || '').trim());
+    const raw = String(id == null ? '' : id).trim();
+    await Store.setSetting('driveClientId', raw ? (normClientId(raw) || raw) : '');
     token = null; tokenClient = null;
   }
   async function isConfigured() { return !!(await getClientId()); }
@@ -42,8 +56,13 @@ const Drive = (() => {
   }
 
   async function connect() {
-    const clientId = await getClientId();
-    if (!clientId) throw new Error('No Google Client ID configured.');
+    const clientId = normClientId(await getClientId());
+    // Everything below is checked BEFORE Google is opened: a malformed request
+    // only earns a blank "400 That's an error" page with nothing to act on.
+    if (!clientId) throw new Error(tr('drive.errNoId', 'No valid Google OAuth Client ID. It must look like 1234567890-abc.apps.googleusercontent.com — see the guide next to the field.'));
+    if (location.protocol !== 'http:' && location.protocol !== 'https:') {
+      throw new Error(tr('drive.errOrigin', 'Google sign-in needs the app to be served over http:// or https://. Opening the file directly from disk cannot work.'));
+    }
     await loadGis();
     return new Promise((resolve, reject) => {
       try {
@@ -58,14 +77,24 @@ const Drive = (() => {
               };
               resolve(token);
             } else {
-              reject(new Error(resp && resp.error ? resp.error : 'Authorization failed'));
+              reject(new Error(explain(resp && resp.error)));
             }
           },
-          error_callback: (err) => reject(new Error(err && err.message ? err.message : 'Authorization cancelled'))
+          error_callback: (err) => reject(new Error(explain(err && (err.type || err.message))))
         });
-        tokenClient.requestAccessToken({ prompt: token ? '' : 'consent' });
+        tokenClient.requestAccessToken(token ? {} : { prompt: 'consent' });
       } catch (e) { reject(e); }
     });
+  }
+
+  const tr = (k, fallback) => (typeof T === 'function' && T(k) !== k) ? T(k) : fallback;
+  // Google's own codes say nothing useful to a coach.
+  function explain(code) {
+    const c = String(code || '');
+    if (c.indexOf('popup_closed') >= 0 || c.indexOf('popup_failed') >= 0) return tr('drive.errPopup', 'The Google sign-in window was closed or blocked. Allow pop-ups for this site and try again.');
+    if (c.indexOf('access_denied') >= 0) return tr('drive.errDenied', 'Google refused access. Add your own e-mail under Test users on the OAuth consent screen.');
+    if (c.indexOf('idpiframe') >= 0 || c.indexOf('origin') >= 0) return tr('drive.errOriginList', 'This address is not listed under Authorised JavaScript origins for that Client ID.');
+    return c || tr('drive.errGeneric', 'Google did not complete the sign-in.');
   }
 
   function disconnect() {
@@ -192,6 +221,23 @@ const Drive = (() => {
     return true;
   }
   async function lastBackupAt() { return await Store.getSetting('driveBackupAt', 0); }
+
+  // The same file, but in a VISIBLE /SportTactic folder instead of the hidden
+  // appDataFolder, so the coach can open, share and download it from Drive
+  // themselves. The caller supplies the dump, so the full-fidelity backup built
+  // by settings.js (Blobs base64-encoded) is what lands on Drive.
+  async function uploadBackup(dump) {
+    const root = await ensureFolder(ROOT_FOLDER, null);
+    const existing = await findFile(BACKUP_NAME, root);
+    const res = await uploadJson(BACKUP_NAME, dump, existing ? { fileId: existing.id } : { parent: root });
+    await Store.setSetting('driveBackupAt', now());
+    return res;
+  }
+  async function downloadBackup() {
+    const root = await ensureFolder(ROOT_FOLDER, null);
+    const existing = await findFile(BACKUP_NAME, root);
+    return existing ? await downloadJson(existing.id) : null;
+  }
 
   // ---- Team sync (shared folder) ----
   async function ensureTeamFolder(teamName) {
@@ -323,9 +369,9 @@ const Drive = (() => {
   }
 
   return {
-    getClientId, setClientId, isConfigured, isConnected,
+    getClientId, setClientId, normClientId, isConfigured, isConnected,
     connect, disconnect,
-    backupNow, restoreNow, lastBackupAt,
+    backupNow, restoreNow, lastBackupAt, uploadBackup, downloadBackup,
     ensureTeamFolder, getTeamFolderId, setTeamFolderId, shareWith,
     channelName, ensureChannel, readChannel, updateChannel,
     setupTeam, coachSend, coachReadAll, findMyChannels, playerSend, playerPushTraining

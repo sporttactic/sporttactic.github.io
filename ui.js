@@ -163,8 +163,81 @@ const UI = (() => {
     return `<div class="card stat-card"><div class="val">${esc(val)}</div><div class="lbl">${esc(lbl)}</div>${trend ? `<div class="trend ${trend.dir}">${icon(trend.dir === 'up' ? 'up' : 'down', 14)} ${esc(trend.text)}</div>` : ''}</div>`;
   }
 
-  function initials(a, b) { return ((a || '?')[0] + (b || '')[0]).toUpperCase(); }
+  function initials(a, b) { return (((a || '?')[0] || '?') + ((b || '')[0] || '')).toUpperCase(); }
 
-  return { esc, el, toast, modal, confirm, fmtDate, fmtClock, statCard, initials, icon };
+  // ---- Share bar ---------------------------------------------------------
+  // Export / import for a single module (drills, training plan, tactical board)
+  // so a coach can hand one file to a teammate instead of a whole backup.
+  function shareBar(kind) {
+    return `<button class="btn sm" data-pack-exp="${esc(kind)}">${icon('download', 14)} ${esc(tr('share.export', 'Export'))}</button>`
+      + `<label class="btn sm" style="cursor:pointer">${icon('upload', 14)} ${esc(tr('share.import', 'Import'))}`
+      + `<input type="file" accept="application/json" data-pack-imp="${esc(kind)}" hidden></label>`;
+  }
+  function bindShare(host, kind, onDone) {
+    const exp = host.querySelector(`[data-pack-exp="${kind}"]`);
+    if (exp) exp.onclick = async () => {
+      try {
+        const json = JSON.stringify(await Store.exportPack(kind), null, 2);
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(new Blob([json], { type: 'application/json' }));
+        a.download = `sporttactic-${kind}-${new Date().toISOString().slice(0, 10)}.json`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 20000);
+        toast(tr('share.exported', 'Exported'), 'success');
+      } catch { toast(tr('share.exportFailed', 'Export failed'), 'error'); }
+    };
+    const imp = host.querySelector(`[data-pack-imp="${kind}"]`);
+    if (imp) imp.onchange = e => {
+      const f = e.target.files[0];
+      e.target.value = '';
+      if (!f) return;
+      const r = new FileReader();
+      r.onload = async () => {
+        try {
+          const n = await Store.importPack(kind, JSON.parse(r.result));
+          toast(tr('share.imported', 'Imported') + ' (' + n + ')', 'success');
+          if (onDone) onDone();
+        } catch { toast(tr('share.badFile', 'That file is not a SportTactic share file'), 'error'); }
+      };
+      r.readAsText(f);
+    };
+  }
+
+  // ---- Accordion ---------------------------------------------------------
+  // Every big area of the app is a collapsible card, so a coach can fold away
+  // what is not in use. The open/closed state is remembered per key.
+  function accOpen(key, def) {
+    try {
+      const v = localStorage.getItem('stx_acc_' + key);
+      return v === null ? def !== false : v === '1';
+    } catch { return def !== false; }
+  }
+  // acc(key, title, innerHtml, { sub, actions, open })
+  function acc(key, title, inner, o) {
+    o = o || {};
+    return `<details class="acc" data-acc="${esc(key)}" ${accOpen(key, o.open) ? 'open' : ''}>
+      <summary class="acc-head">
+        <span class="acc-chev" aria-hidden="true"></span>
+        <span class="acc-titles"><span class="acc-title">${esc(title)}</span>${o.sub ? `<span class="acc-sub">${esc(o.sub)}</span>` : ''}</span>
+        ${o.actions ? `<span class="acc-acts">${o.actions}</span>` : ''}
+      </summary>
+      <div class="acc-body">${inner}</div>
+    </details>`;
+  }
+  function bindAcc(host) {
+    host.querySelectorAll('details[data-acc]').forEach(d => {
+      d.addEventListener('toggle', () => {
+        try { localStorage.setItem('stx_acc_' + d.dataset.acc, d.open ? '1' : '0'); } catch { /* private mode */ }
+      });
+      const acts = d.querySelector('.acc-acts');
+      // Buttons live in the header — using one must not fold the card, so the
+      // click never reaches the <summary> that owns the toggle.
+      if (acts) acts.addEventListener('click', e => e.stopPropagation());
+    });
+  }
+
+  return { esc, el, toast, modal, confirm, fmtDate, fmtClock, statCard, initials, icon, shareBar, bindShare, acc, bindAcc };
 })();
 if (typeof window !== 'undefined') window.UI = UI;

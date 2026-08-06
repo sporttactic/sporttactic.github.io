@@ -1,14 +1,10 @@
 /* Matches view */
 window.Views = window.Views || {};
 Views.matches = function (mount) {
-  const team = Store.all('teams')[0];
-  const matches = Store.all('matches').slice().sort((a, b) => b.date - a.date);
+  const team = Store.activeTeam();
+  const matches = Store.matches().slice().sort((a, b) => b.date - a.date);
 
-  mount.innerHTML = `
-    <div class="page-head">
-      <div><h1>${T('matches.title')}</h1><p>${T('matches.subtitle') || ''}</p></div>
-      <button class="btn primary" id="addMatch">+ ${T('matches.newMatch')}</button>
-    </div>
+  const table = `
     <div class="table-wrap">
       <table>
         <thead><tr><th>${T('matches.date')}</th><th>${T('matches.opponent')}</th><th>${T('matches.sport')}</th><th>${T('matches.type')}</th><th>${T('matches.venue')}</th><th>${T('matches.score')}</th><th>${T('matches.status')}</th><th></th></tr></thead>
@@ -31,6 +27,15 @@ Views.matches = function (mount) {
         </tbody>
       </table>
     </div>`;
+
+  mount.innerHTML = `
+    <div class="page-head">
+      <div><h1>${T('matches.title')}</h1><p>${T('matches.subtitle') || ''}</p></div>
+    </div>
+    ${UI.acc('matchList', T('matches.schedule'), table, {
+    actions: `<button class="btn primary" id="addMatch">+ ${T('matches.newMatch')}</button>`
+  })}`;
+  UI.bindAcc(mount);
 
   function form(mt = {}) {
     const d = mt.date ? new Date(mt.date) : new Date();

@@ -1,11 +1,11 @@
 /* Live Scouting view */
 window.Views = window.Views || {};
 Views.scouting = function (mount, params) {
-  const team = Store.all('teams')[0];
-  const matches = Store.all('matches');
+  const team = Store.activeTeam();
+  const matches = Store.matches();
   let matchId = (params && params.matchId) || (matches[0] && matches[0].id);
   // Not Active players are excluded — they cannot take part in the match.
-  const players = Store.all('players').filter(p => p.teamId === (team && team.id) && p.status !== 'suspended');
+  const players = Store.players(team && team.id).filter(p => p.status !== 'suspended');
   const sport = (window.App && App.getSport && App.getSport()) || 'handball';
 
   // Per-sport event catalogue. Each category: {id, en, da, ev:[[en, da, result, cls], …]}.
@@ -138,22 +138,21 @@ Views.scouting = function (mount, params) {
               <div class="player-row">
                 <span class="player-tag">${posBadgeHtml(p.position)}#${p.number} ${UI.esc(p.lastName)}</span>
                 <div class="pev">
-                  ${curCat().ev.map((e, i) => `<button class="event-btn ${e[3]}" data-ev="${i}" data-player="${p.id}">${UI.esc(I18N.getLang() === 'da' ? e[1] : e[0])}</button>`).join('')}
+                  ${curCat().ev.map((e, i) => `<button class="event-btn ${e[3] || 'neutral'}" data-ev="${i}" data-player="${p.id}">${UI.esc(I18N.getLang() === 'da' ? e[1] : e[0])}</button>`).join('')}
                 </div>
               </div>`).join('') : `<p style="color:var(--muted)">${activeCat === 'keeper' ? T('scout.noKeepers') : T('scout.noPlayers')}</p>`}
           </div>
         </div>
-        <div class="card">
-          <h3>${T('scout.eventLog')} <span class="tag">${events.length}</span></h3>
+        ${UI.acc('scoutLog', T('scout.eventLog'), `
           <div class="event-log">
             ${events.map(e => {
-              const p = Store.find('players', e.playerId);
-              return `<div class="log-item"><span><span class="log-time">${UI.fmtClock((e.minute || 0) * 60)}</span> ${UI.esc(evLabel(e.type))} ${e.result === 'goal' ? '&#9917;' : ''} — ${p ? '#' + p.number + ' ' + UI.esc(p.lastName) : ''}</span><button class="btn sm danger" data-rmev="${e.id}">${T('scout.remove')}</button></div>`;
-            }).join('') || `<p style="color:var(--muted)">${T('scout.noEvents')}</p>`}
-          </div>
-        </div>
+      const p = Store.find('players', e.playerId);
+      return `<div class="log-item"><span><span class="log-time">${UI.fmtClock((e.minute || 0) * 60)}</span> ${UI.esc(evLabel(e.type))} ${e.result === 'goal' ? '&#9917;' : ''} — ${p ? '#' + p.number + ' ' + UI.esc(p.lastName) : ''}</span><button class="btn sm danger" data-rmev="${e.id}">${T('scout.remove')}</button></div>`;
+    }).join('') || `<p style="color:var(--muted)">${T('scout.noEvents')}</p>`}
+          </div>`, { sub: events.length + ' ' + T('scout.events') })}
       </div>`;
 
+    UI.bindAcc(mount);
     mount.querySelector('#matchSel').onchange = e => { matchId = e.target.value; render(); };
     mount.querySelector('#startBtn').onclick = toggleClock;
     mount.querySelector('#resetBtn').onclick = () => { clock = 0; stopClock(); mount.querySelector('#clock').textContent = UI.fmtClock(0); };
