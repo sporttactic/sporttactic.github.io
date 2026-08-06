@@ -32,6 +32,7 @@ Views.tactics = function (mount) {
   let pendingProp = null;  // training prop type queued for placement (tool='prop')
   let propPaint = null;    // colour for training props, independent of the drawing colour
   let showFacing = true;   // draw the player orientation arrows (sidebar toggle)
+  let ballMagnet = true;   // snap the ball to the selected player while dragging (sidebar toggle)
   const HOLD_MS = 380;     // press duration counted as a long-press (auto-select)
   // A fingertip is far less precise than a mouse, so touch devices get a wider
   // slop before a press counts as a drag and bigger pick radii.
@@ -207,8 +208,6 @@ Views.tactics = function (mount) {
           <label class="chess-level-row"><span>${T('chess.level')}</span> <b id="botLevelLbl">20</b></label>
           <input type="range" id="botLevelSlider" min="1" max="100" value="20">
         </div>
-        <h3 style="margin-top:12px">${T('play.systems')} <span class="tag" id="playCount">0</span></h3>
-        <div class="play-list" id="playList"></div>
       </div>
       <div class="board-stage">
         <div class="stage-row">
@@ -229,6 +228,11 @@ Views.tactics = function (mount) {
             </div>
             <div><span id="recDot" class="rec-dot hidden">REC <span id="recTime">0:00</span> · <span id="frameCount">0</span> ${T('tactics.framesCaptured')}</span></div>
             <div id="recExport" class="rec-export hidden"></div>
+            <div id="magnetWrap">
+              <h4 class="anim-head">${T('tactics.magnet')}</h4>
+              <label class="check-row"><input type="checkbox" id="magnetToggle" checked><span>${T('tactics.magnetSnap')}</span></label>
+              <p class="hint">${T('tactics.magnetHint')}</p>
+            </div>
           </div>
         </div>
         <div class="name-bar" id="nameTools">
@@ -657,6 +661,7 @@ Views.tactics = function (mount) {
 
   // Ball magnet: snap ball to selected player when close
   function applyMagnet() {
+    if (!ballMagnet) return;
     const s = selected(), b = ball();
     if (s && b && dist(s, b) < 8) { b.x = s.x; b.y = s.y - 3; }
   }
@@ -1453,7 +1458,7 @@ Views.tactics = function (mount) {
     mount.querySelectorAll('[data-sport]').forEach(x => x.classList.toggle('active', x === b));
     pendingProp = null; if (tool === 'prop') tool = 'select';
     setupBotMode();
-    renderPlaybook();
+    renderAnimList();
     renderTools();
     renderProps();
     updateCourtModeUI();
@@ -1513,6 +1518,15 @@ Views.tactics = function (mount) {
       Store.setSetting('boardFacing', showFacing);
       draw();
       UI.toast(showFacing ? T('tactics.facingOn') : T('tactics.facingOff'), showFacing ? 'success' : 'error');
+    };
+  }
+  const magnetChk = mount.querySelector('#magnetToggle');
+  if (magnetChk) {
+    Store.getSetting('boardMagnet', true).then(v => { ballMagnet = v !== false; magnetChk.checked = ballMagnet; });
+    magnetChk.onchange = () => {
+      ballMagnet = magnetChk.checked;
+      Store.setSetting('boardMagnet', ballMagnet);
+      UI.toast(ballMagnet ? T('tactics.magnetOn') : T('tactics.magnetOff'), ballMagnet ? 'success' : 'error');
     };
   }
   const rotClearBtn = mount.querySelector('#rotClear');
@@ -1579,25 +1593,9 @@ Views.tactics = function (mount) {
   }
   document.addEventListener('keydown', onKey);
 
-  // ---- Playbook: 30 tactical animation systems per sport + the coach's own ----
-  // Saved animations are `tactics` records tagged `kind:'system'`.
+  // ---- Saved animations: the coach's own `tactics` records tagged `kind:'system'` ----
   function userSystems() {
     return Store.all('tactics').filter(t => t.kind === 'system' && (t.sport || 'handball') === sportId);
-  }
-  function systemRowsHtml(mine) {
-    return mine.map(s => `<div class="play-row">
-        <button class="play-item" data-sys="${UI.esc(s.id)}" title="${UI.esc(s.name)}">★ ${UI.esc(s.name)}</button>
-        ${systemClips(s).length ? `<button class="btn sm" data-vid="${UI.esc(s.id)}" title="${T('tactics.animPlayVideo')}">▶</button>` : ''}
-        <button class="btn sm danger" data-delsys="${UI.esc(s.id)}" title="${T('common.delete')}">✕</button>
-      </div>`).join('');
-  }
-  function bindSystemRows(root) {
-    root.querySelectorAll('[data-sys]').forEach(b => b.onclick = () => loadSystem(b.dataset.sys));
-    root.querySelectorAll('[data-vid]').forEach(b => b.onclick = () => playSystemVideo(b.dataset.vid));
-    root.querySelectorAll('[data-delsys]').forEach(b => b.onclick = () => UI.confirm(T('tactics.animDelAsk'), async () => {
-      await Store.remove('tactics', b.dataset.delsys);
-      renderPlaybook(); UI.toast(T('common.delete'));
-    }));
   }
   // Mirror of the saved systems, docked under the Save Animation button.
   function renderAnimList() {
@@ -1636,33 +1634,9 @@ Views.tactics = function (mount) {
       const id = sel();
       if (id) UI.confirm(T('tactics.animDelAsk'), async () => {
         await Store.remove('tactics', id);
-        renderPlaybook(); UI.toast(T('common.delete'));
+        renderAnimList(); UI.toast(T('common.delete'));
       });
     };
-  }
-  function renderPlaybook() {
-    const list = mount.querySelector('#playList');
-    const cnt = mount.querySelector('#playCount');
-    if (!list) return;
-    const all = (window.PLAYBOOK && PLAYBOOK.plays(sportId)) || [];
-    const lang = I18N.getLang();
-    const mine = userSystems();
-    if (cnt) cnt.textContent = all.length + mine.length;
-    const allHtml = all.map((p, i) => `<button class="play-item" data-play="${i}">${UI.esc((i + 1) + '. ' + (p[lang] || p.en))}</button>`).join('');
-    list.innerHTML = (systemRowsHtml(mine) + allHtml) || `<p class="hint">${T('common.noData')}</p>`;
-    list.querySelectorAll('[data-play]').forEach(b => b.onclick = () => loadPlay(+b.dataset.play));
-    bindSystemRows(list);
-    renderAnimList();
-  }
-  function loadPlay(index) {
-    if (!window.PLAYBOOK) return;
-    stopAnimation();
-    pushHistory();
-    current.frames = PLAYBOOK.buildPlay(frame().objects, index, sportId);
-    frameIdx = 0; selectedId = null; aim = null;
-    draw(); renderTimeline();
-    UI.toast(T('play.loaded') + ': ' + PLAYBOOK.playName(sportId, index), 'success');
-    playAnimation();
   }
   function loadSystem(id, play) {
     const s = Store.find('tactics', id);
@@ -1702,7 +1676,7 @@ Views.tactics = function (mount) {
             else UI.toast(T('tactics.animVideoNone'), 'error');
           }
           await Store.save('tactics', rec);
-          UI.toast(T('tactics.animSaved'), 'success'); renderPlaybook();
+          UI.toast(T('tactics.animSaved'), 'success'); renderAnimList();
         };
         inp.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); commit(); } });
         m.querySelector('[data-close2]').onclick = close;
@@ -1786,7 +1760,7 @@ Views.tactics = function (mount) {
   bindAnimActions();
 
   setupBotMode();
-  renderPlaybook();
+  renderAnimList();
   renderTools();
   renderProps();
   updateCourtModeUI();

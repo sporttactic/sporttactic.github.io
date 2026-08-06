@@ -585,6 +585,9 @@ body.board-fs { overflow: hidden; }
 .anim-select option:disabled { color: var(--muted); }
 .frames-anim .tool-group.anim-acts { flex-direction: row; gap: 4px; }
 .anim-acts #animLoad { flex: 1; min-width: 0; }
+#magnetWrap .check-row { margin: 4px 0 0; align-items: flex-start; }
+#magnetWrap .check-row span { font-size: 12px; line-height: 1.25; }
+#magnetWrap .hint { margin: 4px 0 0; font-size: 11px; }
 @media (max-width: 900px) {
   .stage-row { flex-wrap: wrap; }
   .frames-anim { flex: 1 1 100%; width: 100%; flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: center; margin-top: 10px; }
