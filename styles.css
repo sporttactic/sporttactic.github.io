@@ -504,6 +504,10 @@ input:focus, select:focus, textarea:focus { border-color: var(--primary); }
 .tool-group { display: flex; flex-wrap: wrap; gap: 6px; }
 .tool-btn { flex: 1; min-width: 44px; padding: 8px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface-2); cursor: pointer; text-align: center; }
 .tool-btn.active { background: var(--primary); color: var(--on-primary); border-color: var(--primary); }
+/* Grid instead of flex so a short last row keeps the same box size as the rest. */
+#tools.tool-group { display: grid; grid-template-columns: repeat(auto-fill, minmax(68px, 1fr)); align-items: stretch; }
+#props.tool-group { display: grid; grid-template-columns: repeat(auto-fill, minmax(44px, 1fr)); align-items: stretch; }
+#tools .tool-btn, #props .tool-btn { flex: none; min-width: 0; display: flex; align-items: center; justify-content: center; min-height: 38px; padding: 6px 4px; font-size: 13px; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .prop-colors { margin-top: 6px; gap: 4px; }
 .prop-colors .tool-btn { flex: 0 0 24px; min-width: 24px; height: 24px; padding: 0; }
 .prop-colors .btn.sm { flex: 0 0 auto; padding: 2px 8px; line-height: 1.2; }
@@ -587,9 +591,11 @@ body.board-fs { overflow: hidden; }
 .anim-select option:disabled { color: var(--muted); }
 .frames-anim .tool-group.anim-acts { flex-direction: row; gap: 4px; }
 .anim-acts #animLoad { flex: 1; min-width: 0; }
-#magnetWrap .check-row { margin: 4px 0 0; align-items: flex-start; }
-#magnetWrap .check-row span { font-size: 12px; line-height: 1.25; }
-#magnetWrap .hint { margin: 4px 0 0; font-size: 11px; }
+#magnetWrap .check-row, #facingWrap .check-row { margin: 4px 0 0; align-items: flex-start; }
+#magnetWrap .check-row span, #facingWrap .check-row span { font-size: 12px; line-height: 1.25; }
+#magnetWrap .hint, #facingWrap .hint { margin: 4px 0 0; font-size: 11px; }
+#rotWrap .tool-group.anim-acts { margin-top: 4px; }
+#rotWrap .tool-group.anim-acts .btn { flex: 1; min-width: 0; }
 @media (max-width: 900px) {
   .stage-row { flex-wrap: wrap; }
   .frames-anim { flex: 1 1 100%; width: 100%; flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: center; margin-top: 10px; }
@@ -704,6 +710,7 @@ body { overscroll-behavior-y: contain; }
   .btn { padding: 11px 16px; }
   .btn.sm { padding: 9px 12px; font-size: 13px; }
   .tool-btn { min-height: 46px; display: flex; align-items: center; justify-content: center; }
+  #tools .tool-btn, #props .tool-btn { min-height: 46px; }
   .sport-btn { min-height: 48px; }
   .event-btn { min-height: 48px; display: flex; align-items: center; justify-content: center; text-align: center; }
   .play-item { padding: 12px; }

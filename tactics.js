@@ -180,19 +180,6 @@ Views.tactics = function (mount) {
           </div>
           <button class="btn sm danger" id="clearShapes" style="margin-top:8px">${T('tactics.eraseTools')}</button>
           <button class="btn sm hidden" id="keeperToggle" style="margin-top:8px" title="${T('tactics.keeperHint')}"></button>
-          <div id="facingWrap" style="margin-top:12px">
-            <h3 style="margin:0 0 6px">${T('tactics.facing')}</h3>
-            <label class="check-row"><input type="checkbox" id="facingToggle" checked><span>${T('tactics.facingShow')}</span></label>
-            <p class="hint">${T('tactics.facingHint')}</p>
-          </div>
-          <div id="rotWrap" class="hidden" style="margin-top:8px">
-            <h3 style="margin:0 0 6px">${T('tactics.rotation')}</h3>
-            <div class="tool-group">
-              <button class="btn sm" id="rotLeft" title="${T('tactics.rotLeft')}">\u21BA</button>
-              <button class="btn sm" id="rotRight" title="${T('tactics.rotRight')}">\u21BB</button>
-              <button class="btn sm" id="rotClear" title="${T('tactics.rotClear')}">\u2715</button>
-            </div>
-          </div>
           <div id="courtModeWrap" class="hidden" style="margin-top:12px">
             <h3 style="margin:0 0 6px">${T('tactics.court')}</h3>
             <select id="courtModeSel">
@@ -228,6 +215,19 @@ Views.tactics = function (mount) {
             </div>
             <div><span id="recDot" class="rec-dot hidden">REC <span id="recTime">0:00</span> · <span id="frameCount">0</span> ${T('tactics.framesCaptured')}</span></div>
             <div id="recExport" class="rec-export hidden"></div>
+            <div id="facingWrap">
+              <h4 class="anim-head">${T('tactics.facing')}</h4>
+              <label class="check-row"><input type="checkbox" id="facingToggle" checked><span>${T('tactics.facingShow')}</span></label>
+              <p class="hint">${T('tactics.facingHint')}</p>
+            </div>
+            <div id="rotWrap" class="hidden">
+              <h4 class="anim-head">${T('tactics.rotation')}</h4>
+              <div class="tool-group anim-acts">
+                <button class="btn sm" id="rotLeft" title="${T('tactics.rotLeft')}">\u21BA</button>
+                <button class="btn sm" id="rotRight" title="${T('tactics.rotRight')}">\u21BB</button>
+                <button class="btn sm" id="rotClear" title="${T('tactics.rotClear')}">\u2715</button>
+              </div>
+            </div>
             <div id="magnetWrap">
               <h4 class="anim-head">${T('tactics.magnet')}</h4>
               <label class="check-row"><input type="checkbox" id="magnetToggle" checked><span>${T('tactics.magnetSnap')}</span></label>
