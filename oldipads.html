@@ -1,0 +1,835 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="SportTactic">
+<meta name="format-detection" content="telephone=no">
+<title>SportTactic &mdash; Classic Board</title>
+<!--
+  Standalone tactical board for older iPads (2010, iOS 3-5 Safari).
+  ES5 only: no const/let, arrow functions, template literals, classes,
+  IndexedDB, MediaRecorder, fetch or requestAnimationFrame. Uses var,
+  function expressions, localStorage, canvas 2D and touch events so it
+  runs on the original iPad while offering the same core board features.
+-->
+<style>
+  * { -webkit-box-sizing: border-box; box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; background: #0f172a; color: #e5e7eb;
+    font-family: -apple-system, Helvetica, Arial, sans-serif;
+    -webkit-text-size-adjust: 100%; -webkit-user-select: none; user-select: none;
+    -webkit-touch-callout: none;
+  }
+  .head { padding: 8px 10px; background: #111827; border-bottom: 1px solid #1f2937; }
+  .head h1 { margin: 0; font-size: 17px; }
+  .head p { margin: 2px 0 0; font-size: 11px; color: #94a3b8; }
+  .bar { padding: 6px 8px; border-bottom: 1px solid #1f2937; }
+  .bar .lbl { font-size: 10px; color: #7c8aa0; text-transform: uppercase; letter-spacing: .5px; margin: 0 4px 4px; }
+  .row { display: block; margin-bottom: 4px; }
+  .b {
+    display: inline-block; margin: 2px; padding: 8px 11px; min-width: 40px;
+    background: #1f2937; color: #e5e7eb; border: 1px solid #334155; border-radius: 8px;
+    font-size: 14px; text-align: center; -webkit-appearance: none; line-height: 1;
+    vertical-align: middle;
+  }
+  .b.on { background: #0a84ff; border-color: #0a84ff; color: #fff; }
+  .b.red.on { background: #ff3b30; border-color: #ff3b30; }
+  .b.wide { min-width: 66px; }
+  .sw { width: 26px; min-width: 26px; height: 26px; padding: 0; border-radius: 50%; }
+  select.b { padding: 7px 8px; }
+  #wrap { text-align: center; padding: 8px 6px 20px; }
+  canvas {
+    width: 100%; max-width: 720px; height: auto; background: #0b1220;
+    border: 1px solid #1f2937; border-radius: 10px; -ms-touch-action: none; touch-action: none;
+  }
+  #snap { margin-top: 10px; }
+  #snap img { max-width: 100%; border: 1px solid #334155; border-radius: 8px; }
+  #snap p { font-size: 12px; color: #94a3b8; }
+  #frameInfo { font-size: 13px; color: #cbd5e1; display: inline-block; min-width: 54px; }
+</style>
+</head>
+<body>
+<div class="head">
+  <h1>SportTactic &mdash; Classic Board</h1>
+  <p>Tactical board optimised for older iPads. Works fully offline.</p>
+</div>
+
+<div class="bar">
+  <div class="lbl">Sport</div>
+  <div class="row" id="sportRow"></div>
+</div>
+
+<div class="bar">
+  <div class="lbl">Tools</div>
+  <div class="row" id="toolRow"></div>
+  <div class="row" id="teamRow"></div>
+  <div class="row" id="propRow"></div>
+  <div class="row" id="colorRow"></div>
+</div>
+
+<div class="bar">
+  <div class="lbl">Rotation &amp; info</div>
+  <div class="row" id="rotRow"></div>
+</div>
+
+<div class="bar">
+  <div class="lbl">Frames &amp; playback</div>
+  <div class="row" id="frameRow"></div>
+</div>
+
+<div class="bar">
+  <div class="lbl">Board</div>
+  <div class="row" id="fileRow"></div>
+</div>
+
+<div id="wrap">
+  <canvas id="cv" width="700" height="560"></canvas>
+  <div id="snap"></div>
+</div>
+
+<script>
+(function () {
+  var W = 700, H = 560;
+  var cv = document.getElementById('cv');
+  var ctx = cv.getContext('2d');
+
+  var ATK = '#0a84ff', DEF = '#ff3b30', GK = '#f59e0b', BALL = '#ffd60a';
+
+  // ---------- geometry helpers ----------
+  function clamp(v) { return v < 0 ? 0 : (v > 100 ? 100 : v); }
+  function PX(x) { return x / 100 * W; }
+  function PY(y) { return y / 100 * H; }
+  function lerpAngle(a, b, t) {
+    var d = b - a;
+    while (d > Math.PI) d -= Math.PI * 2;
+    while (d < -Math.PI) d += Math.PI * 2;
+    return a + d * t;
+  }
+  function distSeg(px, py, x1, y1, x2, y2) {
+    var dx = x2 - x1, dy = y2 - y1;
+    var L = dx * dx + dy * dy;
+    var t = L ? ((px - x1) * dx + (py - y1) * dy) / L : 0;
+    if (t < 0) t = 0; else if (t > 1) t = 1;
+    var cx = x1 + t * dx, cy = y1 + t * dy;
+    return Math.sqrt((px - cx) * (px - cx) + (py - cy) * (py - cy));
+  }
+  function cloneShallow(o) {
+    var n = {}, k;
+    for (k in o) { if (o.hasOwnProperty(k)) n[k] = o[k]; }
+    return n;
+  }
+
+  // Build the points of a handball "D" (6m/9m) area in pixel space:
+  // a quarter circle at each goal post joined by a flat top line.
+  function dPoints(goalY, dir, postHalf, R) {
+    var lp = W / 2 - postHalf, rp = W / 2 + postHalf, a, pts = [];
+    for (a = 180; a >= 90; a -= 6) {
+      pts.push({ x: lp + R * Math.cos(a * Math.PI / 180), y: goalY + dir * R * Math.sin(a * Math.PI / 180) });
+    }
+    pts.push({ x: rp, y: goalY + dir * R });
+    for (a = 90; a >= 0; a -= 6) {
+      pts.push({ x: rp + R * Math.cos(a * Math.PI / 180), y: goalY + dir * R * Math.sin(a * Math.PI / 180) });
+    }
+    return pts;
+  }
+  function fillD(goalY, dir, postHalf, R, fill, stroke) {
+    var pts = dPoints(goalY, dir, postHalf, R), i;
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for (i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+    ctx.closePath();
+    if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+    if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 2; ctx.stroke(); }
+  }
+  // Dashed stroke along an open polyline (old Safari has no setLineDash).
+  function dashPoly(pts, dash, gap) {
+    var i, carry = 0, on = true;
+    ctx.beginPath();
+    for (i = 0; i < pts.length - 1; i++) {
+      var x1 = pts[i].x, y1 = pts[i].y, x2 = pts[i + 1].x, y2 = pts[i + 1].y;
+      var segLen = Math.sqrt((x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1));
+      var ux = (x2 - x1) / segLen, uy = (y2 - y1) / segLen, pos = 0;
+      var cx = x1, cy = y1;
+      while (pos < segLen) {
+        var step = (on ? dash : gap) - carry;
+        if (step > segLen - pos) { carry += (segLen - pos); step = segLen - pos; pos = segLen; }
+        else { pos += step; carry = 0; }
+        var nx = cx + ux * step, ny = cy + uy * step;
+        if (on) { ctx.moveTo(cx, cy); ctx.lineTo(nx, ny); }
+        cx = nx; cy = ny;
+        if (carry === 0) on = !on;
+      }
+    }
+    ctx.stroke();
+  }
+
+  // ---------- court renderers ----------
+  function border() {
+    ctx.strokeStyle = '#e5e7eb'; ctx.lineWidth = 2;
+    ctx.strokeRect(8, 8, W - 16, H - 16);
+  }
+  function centerLine() {
+    ctx.strokeStyle = '#e5e7eb'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(8, H / 2); ctx.lineTo(W - 8, H / 2); ctx.stroke();
+  }
+  function circle(cx, cy, r) {
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2, false); ctx.stroke();
+  }
+  function goal(goalY, dir, postHalf) {
+    ctx.strokeStyle = '#e5e7eb'; ctx.lineWidth = 3;
+    ctx.strokeRect(W / 2 - postHalf, goalY - (dir > 0 ? 0 : 6), postHalf * 2, 6);
+  }
+
+  function courtHandball() {
+    ctx.fillStyle = '#215d8c'; ctx.fillRect(0, 0, W, H);
+    border(); centerLine();
+    var postHalf = 35, R6 = 132, R9 = 178;
+    var gTop = 14, gBot = H - 14;
+    fillD(gTop, 1, postHalf, R6, 'rgba(255,255,255,0.10)', '#e5e7eb');
+    fillD(gBot, -1, postHalf, R6, 'rgba(255,255,255,0.10)', '#e5e7eb');
+    ctx.strokeStyle = '#dbeafe'; ctx.lineWidth = 2;
+    dashPoly(dPoints(gTop, 1, postHalf, R9), 10, 8);
+    dashPoly(dPoints(gBot, -1, postHalf, R9), 10, 8);
+    // 7 m marks
+    ctx.strokeStyle = '#e5e7eb'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(W / 2 - 18, gTop + 150); ctx.lineTo(W / 2 + 18, gTop + 150);
+    ctx.moveTo(W / 2 - 18, gBot - 150); ctx.lineTo(W / 2 + 18, gBot - 150); ctx.stroke();
+    goal(gTop, 1, postHalf); goal(gBot, -1, postHalf);
+  }
+
+  function courtSoccer() {
+    ctx.fillStyle = '#2f8f4e'; ctx.fillRect(0, 0, W, H);
+    border(); centerLine();
+    ctx.strokeStyle = '#e5e7eb'; ctx.lineWidth = 2;
+    circle(W / 2, H / 2, 62);
+    ctx.fillStyle = '#e5e7eb';
+    ctx.beginPath(); ctx.arc(W / 2, H / 2, 4, 0, Math.PI * 2, false); ctx.fill();
+    // penalty boxes
+    var bw = 300, bh = 78, gw = 150, gh = 34;
+    ctx.strokeRect(W / 2 - bw / 2, 8, bw, bh);
+    ctx.strokeRect(W / 2 - gw / 2, 8, gw, gh);
+    ctx.strokeRect(W / 2 - bw / 2, H - 8 - bh, bw, bh);
+    ctx.strokeRect(W / 2 - gw / 2, H - 8 - gh, gw, gh);
+    ctx.beginPath(); ctx.arc(W / 2, 8 + 100, 4, 0, Math.PI * 2, false);
+    ctx.arc(W / 2, H - 8 - 100, 4, 0, Math.PI * 2, false); ctx.fill();
+  }
+
+  function courtBasket() {
+    ctx.fillStyle = '#c8843c'; ctx.fillRect(0, 0, W, H);
+    border(); centerLine();
+    ctx.strokeStyle = '#f8fafc'; ctx.lineWidth = 2;
+    circle(W / 2, H / 2, 52);
+    // keys + free-throw circles + three point arcs
+    var kw = 120, kh = 150;
+    ctx.strokeRect(W / 2 - kw / 2, 8, kw, kh);
+    circle(W / 2, 8 + kh, 40);
+    ctx.strokeRect(W / 2 - kw / 2, H - 8 - kh, kw, kh);
+    circle(W / 2, H - 8 - kh, 40);
+    ctx.beginPath(); ctx.arc(W / 2, 34, 200, 0.15 * Math.PI, 0.85 * Math.PI, false); ctx.stroke();
+    ctx.beginPath(); ctx.arc(W / 2, H - 34, 200, 1.15 * Math.PI, 1.85 * Math.PI, false); ctx.stroke();
+  }
+
+  function courtVolley() {
+    ctx.fillStyle = '#d98c3f'; ctx.fillRect(0, 0, W, H);
+    border();
+    ctx.strokeStyle = '#f8fafc'; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.moveTo(8, H / 2); ctx.lineTo(W - 8, H / 2); ctx.stroke();
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(8, H / 2 - 90); ctx.lineTo(W - 8, H / 2 - 90);
+    ctx.moveTo(8, H / 2 + 90); ctx.lineTo(W - 8, H / 2 + 90);
+    ctx.stroke();
+  }
+
+  function courtGeneric() {
+    ctx.fillStyle = '#1e293b'; ctx.fillRect(0, 0, W, H);
+    border(); centerLine();
+    ctx.strokeStyle = '#e5e7eb'; ctx.lineWidth = 2;
+    circle(W / 2, H / 2, 56);
+  }
+
+  // ---------- sport definitions ----------
+  function mk(id, t, team, label, x, y, rot) {
+    var o = { id: id, t: t, team: team, label: label, x: x, y: y };
+    if (typeof rot === 'number') o.rot = rot;
+    return o;
+  }
+  function line(team, base, xs, ys, y) {
+    var out = [], i;
+    for (i = 0; i < xs.length; i++) out.push(mk(base + i, 'player', team, i + 1, xs[i], y));
+    return out;
+  }
+
+  var SPORTS = {
+    handball: {
+      name: 'Handball', court: courtHandball, props: ['cone', 'pole', 'minigoal', 'dummy'],
+      formation: function () {
+        var o = [], i;
+        var def = [[26.44, 14.82, 2.715], [38.37, 26.89, 2.091], [47.57, 28.21, 1.684], [52.43, 28.21, 1.458], [61.63, 26.89, 1.051], [73.56, 14.82, 0.426]];
+        var atk = [[17.09, 20.14, -0.426], [33.27, 38.05, -1.051], [46.41, 40.98, -1.458], [53.59, 40.98, -1.684], [66.73, 38.05, -2.091], [82.91, 20.14, -2.715]];
+        for (i = 0; i < def.length; i++) o.push(mk('d' + i, 'player', 'def', i + 1, def[i][0], def[i][1], def[i][2]));
+        for (i = 0; i < atk.length; i++) o.push(mk('a' + i, 'player', 'atk', i + 1, atk[i][0], atk[i][1], atk[i][2]));
+        o.push(mk('gk', 'gk', 'def', 1, 50, 6, Math.PI / 2));
+        o.push(mk('ball', 'ball', '', '', 50, 46));
+        return o;
+      }
+    },
+    soccer: {
+      name: 'Soccer', court: courtSoccer, props: ['cone', 'disc', 'pole', 'minigoal'],
+      formation: function () {
+        var o = [];
+        o.push(mk('gkA', 'gk', 'atk', 1, 50, 90));
+        o = o.concat(line('atk', 100, [16, 38, 62, 84], null, 74));
+        o = o.concat(line('atk', 200, [22, 42, 58, 78], null, 60));
+        o = o.concat(line('atk', 300, [34, 66], null, 52));
+        o.push(mk('gkB', 'gk', 'def', 1, 50, 10));
+        o = o.concat(line('def', 400, [16, 38, 62, 84], null, 26));
+        o = o.concat(line('def', 500, [22, 42, 58, 78], null, 40));
+        o = o.concat(line('def', 600, [34, 66], null, 48));
+        o.push(mk('ball', 'ball', '', '', 50, 50));
+        return o;
+      }
+    },
+    basketball: {
+      name: 'Basketball', court: courtBasket, props: ['cone', 'disc', 'ring', 'dummy'],
+      formation: function () {
+        var o = [];
+        o = o.concat(line('atk', 100, [18, 34, 50, 66, 82], null, 66));
+        o = o.concat(line('def', 200, [18, 34, 50, 66, 82], null, 34));
+        o.push(mk('ball', 'ball', '', '', 50, 50));
+        return o;
+      }
+    },
+    volleyball: {
+      name: 'Volleyball', court: courtVolley, props: ['cone', 'ring', 'ball', 'pole'],
+      formation: function () {
+        var o = [];
+        o.push(mk('a1', 'player', 'atk', 1, 25, 60)); o.push(mk('a2', 'player', 'atk', 2, 50, 60)); o.push(mk('a3', 'player', 'atk', 3, 75, 60));
+        o.push(mk('a4', 'player', 'atk', 4, 25, 82)); o.push(mk('a5', 'player', 'atk', 5, 50, 82)); o.push(mk('a6', 'player', 'atk', 6, 75, 82));
+        o.push(mk('d1', 'player', 'def', 1, 25, 40)); o.push(mk('d2', 'player', 'def', 2, 50, 40)); o.push(mk('d3', 'player', 'def', 3, 75, 40));
+        o.push(mk('d4', 'player', 'def', 4, 25, 18)); o.push(mk('d5', 'player', 'def', 5, 50, 18)); o.push(mk('d6', 'player', 'def', 6, 75, 18));
+        o.push(mk('ball', 'ball', '', '', 50, 30));
+        return o;
+      }
+    },
+    generic: {
+      name: 'Generic', court: courtGeneric, props: ['cone', 'disc', 'pole', 'ring', 'dummy'],
+      formation: function () {
+        var o = [];
+        o = o.concat(line('atk', 100, [20, 35, 50, 65, 80], null, 68));
+        o = o.concat(line('def', 200, [20, 35, 50, 65, 80], null, 32));
+        o.push(mk('ball', 'ball', '', '', 50, 50));
+        return o;
+      }
+    }
+  };
+  var SPORT_ORDER = ['handball', 'soccer', 'basketball', 'volleyball', 'generic'];
+
+  var PROPS = {
+    cone: 'Cone', disc: 'Disc', pole: 'Pole', hurdle: 'Hurdle', ladder: 'Ladder',
+    ring: 'Ring', minigoal: 'Mini goal', dummy: 'Dummy', ball: 'Med. ball', target: 'Target'
+  };
+
+  // ---------- state ----------
+  var state = { sport: 'handball', frames: [] };
+  var frameIdx = 0;
+  var tool = 'select';
+  var curTeam = 'atk';
+  var curProp = 'cone';
+  var curColor = '#ffffff';
+  var selectedId = null;
+  var addSeq = 1;
+  var pending = null;
+  var playTimer = null;
+  var touching = false, dragging = false;
+
+  function frame() { return state.frames[frameIdx]; }
+  function sport() { return SPORTS[state.sport]; }
+
+  function newFrame() { return { objects: sport().formation() }; }
+  function blankFrame() { return { objects: [] }; }
+
+  function findById(f, id) {
+    var i;
+    for (i = 0; i < f.objects.length; i++) if (f.objects[i].id === id) return f.objects[i];
+    return null;
+  }
+  function selected() { return selectedId ? findById(frame(), selectedId) : null; }
+
+  // ---------- object drawing ----------
+  function drawFacing(rot, x, y, r) {
+    var ex = x + Math.cos(rot) * (r + 12), ey = y + Math.sin(rot) * (r + 12);
+    ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(ex, ey); ctx.stroke();
+    var a = 0.5;
+    ctx.beginPath();
+    ctx.moveTo(ex, ey);
+    ctx.lineTo(ex - Math.cos(rot - a) * 9, ey - Math.sin(rot - a) * 9);
+    ctx.lineTo(ex - Math.cos(rot + a) * 9, ey - Math.sin(rot + a) * 9);
+    ctx.closePath(); ctx.fillStyle = '#ffffff'; ctx.fill();
+  }
+
+  function drawPlayer(o) {
+    var x = PX(o.x), y = PY(o.y), r = o.t === 'gk' ? 16 : 15;
+    if (typeof o.rot === 'number') drawFacing(o.rot, x, y, r);
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2, false);
+    ctx.fillStyle = o.t === 'gk' ? GK : (o.team === 'def' ? DEF : ATK);
+    ctx.fill();
+    if (o.id === selectedId) { ctx.strokeStyle = '#fff'; ctx.lineWidth = 3; ctx.stroke(); }
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 13px Helvetica';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(String(o.label), x, y);
+  }
+
+  function drawBall(o) {
+    var x = PX(o.x), y = PY(o.y);
+    ctx.beginPath(); ctx.arc(x, y, 9, 0, Math.PI * 2, false);
+    ctx.fillStyle = BALL; ctx.fill();
+    ctx.strokeStyle = '#7a5b00'; ctx.lineWidth = 1.5; ctx.stroke();
+    if (o.id === selectedId) { ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke(); }
+  }
+
+  function drawProp(o) {
+    var x = PX(o.x), y = PY(o.y), p = o.prop;
+    ctx.lineWidth = 2;
+    if (p === 'cone') {
+      ctx.fillStyle = '#ff7a1a';
+      ctx.beginPath(); ctx.moveTo(x, y - 13); ctx.lineTo(x - 10, y + 9); ctx.lineTo(x + 10, y + 9); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#0b1220'; ctx.fillRect(x - 12, y + 9, 24, 4);
+    } else if (p === 'disc') {
+      ctx.fillStyle = '#ffb020';
+      ctx.beginPath(); ctx.arc(x, y, 11, 0, Math.PI * 2, false); ctx.fill();
+      ctx.fillStyle = '#0b1220';
+      ctx.beginPath(); ctx.arc(x, y, 5, 0, Math.PI * 2, false); ctx.fill();
+    } else if (p === 'pole') {
+      ctx.strokeStyle = '#e11d48';
+      ctx.beginPath(); ctx.moveTo(x, y - 16); ctx.lineTo(x, y + 12); ctx.stroke();
+      ctx.fillStyle = '#e11d48'; ctx.fillRect(x - 8, y + 12, 16, 3);
+    } else if (p === 'hurdle') {
+      ctx.strokeStyle = '#facc15';
+      ctx.strokeRect(x - 12, y - 8, 24, 16);
+      ctx.beginPath(); ctx.moveTo(x - 12, y + 8); ctx.lineTo(x - 12, y + 12);
+      ctx.moveTo(x + 12, y + 8); ctx.lineTo(x + 12, y + 12); ctx.stroke();
+    } else if (p === 'ladder') {
+      ctx.strokeStyle = '#eab308';
+      ctx.strokeRect(x - 8, y - 16, 16, 32);
+      ctx.beginPath();
+      ctx.moveTo(x - 8, y - 6); ctx.lineTo(x + 8, y - 6);
+      ctx.moveTo(x - 8, y + 4); ctx.lineTo(x + 8, y + 4); ctx.stroke();
+    } else if (p === 'ring') {
+      ctx.strokeStyle = '#22d3ee'; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(x, y, 11, 0, Math.PI * 2, false); ctx.stroke();
+    } else if (p === 'minigoal') {
+      ctx.strokeStyle = '#f8fafc'; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(x - 15, y + 8); ctx.lineTo(x - 15, y - 8);
+      ctx.lineTo(x + 15, y - 8); ctx.lineTo(x + 15, y + 8); ctx.stroke();
+    } else if (p === 'dummy') {
+      ctx.fillStyle = '#94a3b8';
+      ctx.beginPath(); ctx.arc(x, y - 6, 6, 0, Math.PI * 2, false); ctx.fill();
+      ctx.fillRect(x - 5, y, 10, 14);
+    } else if (p === 'ball') {
+      ctx.fillStyle = '#8b5a2b';
+      ctx.beginPath(); ctx.arc(x, y, 10, 0, Math.PI * 2, false); ctx.fill();
+    } else if (p === 'target') {
+      ctx.strokeStyle = '#ef4444'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(x, y, 11, 0, Math.PI * 2, false); ctx.stroke();
+      ctx.beginPath(); ctx.arc(x, y, 5, 0, Math.PI * 2, false); ctx.stroke();
+      ctx.fillStyle = '#ef4444'; ctx.beginPath(); ctx.arc(x, y, 2, 0, Math.PI * 2, false); ctx.fill();
+    }
+    if (o.id === selectedId) {
+      ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5;
+      ctx.strokeRect(x - 15, y - 18, 30, 34);
+    }
+  }
+
+  function arrowHead(x1, y1, x2, y2, color) {
+    var a = Math.atan2(y2 - y1, x2 - x1);
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - Math.cos(a - 0.4) * 12, y2 - Math.sin(a - 0.4) * 12);
+    ctx.lineTo(x2 - Math.cos(a + 0.4) * 12, y2 - Math.sin(a + 0.4) * 12);
+    ctx.closePath(); ctx.fill();
+  }
+
+  function drawShape(o) {
+    var i;
+    ctx.strokeStyle = o.color; ctx.lineWidth = 3;
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    if (o.t === 'free') {
+      if (!o.pts.length) return;
+      ctx.beginPath(); ctx.moveTo(PX(o.pts[0].x), PY(o.pts[0].y));
+      for (i = 1; i < o.pts.length; i++) ctx.lineTo(PX(o.pts[i].x), PY(o.pts[i].y));
+      ctx.stroke();
+    } else {
+      var x1 = PX(o.x1), y1 = PY(o.y1), x2 = PX(o.x2), y2 = PY(o.y2);
+      ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+      if (o.t === 'arrow') arrowHead(x1, y1, x2, y2, o.color);
+    }
+  }
+
+  function drawObject(o) {
+    if (o.t === 'player' || o.t === 'gk') drawPlayer(o);
+    else if (o.t === 'ball') drawBall(o);
+    else if (o.t === 'prop') drawProp(o);
+    else drawShape(o);
+  }
+
+  function drawCourt() { sport().court(); }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    drawCourt();
+    var objs = frame().objects, i;
+    for (i = 0; i < objs.length; i++) if (objs[i].t === 'line' || objs[i].t === 'arrow' || objs[i].t === 'free') drawObject(objs[i]);
+    for (i = 0; i < objs.length; i++) if (!(objs[i].t === 'line' || objs[i].t === 'arrow' || objs[i].t === 'free')) drawObject(objs[i]);
+    if (pending) drawObject(pending);
+  }
+
+  function drawInterp(fa, fb, t) {
+    ctx.clearRect(0, 0, W, H);
+    drawCourt();
+    var i, o, a, oo;
+    for (i = 0; i < fb.objects.length; i++) { o = fb.objects[i]; if (o.t === 'line' || o.t === 'arrow' || o.t === 'free') drawObject(o); }
+    for (i = 0; i < fb.objects.length; i++) {
+      o = fb.objects[i];
+      if (o.t === 'line' || o.t === 'arrow' || o.t === 'free') continue;
+      a = findById(fa, o.id);
+      if (a) {
+        oo = cloneShallow(o);
+        oo.x = a.x + (o.x - a.x) * t; oo.y = a.y + (o.y - a.y) * t;
+        if (typeof o.rot === 'number' && typeof a.rot === 'number') oo.rot = lerpAngle(a.rot, o.rot, t);
+      } else oo = o;
+      drawObject(oo);
+    }
+  }
+
+  // ---------- hit testing ----------
+  function radiusOf(o) {
+    if (o.t === 'gk') return 18; if (o.t === 'player') return 17;
+    if (o.t === 'ball') return 12; if (o.t === 'prop') return 18; return 0;
+  }
+  function hitMovable(pt) {
+    var objs = frame().objects, i, o, dx, dy;
+    for (i = objs.length - 1; i >= 0; i--) {
+      o = objs[i];
+      if (o.t === 'line' || o.t === 'arrow' || o.t === 'free') continue;
+      dx = PX(o.x) - pt.px; dy = PY(o.y) - pt.py;
+      if (Math.sqrt(dx * dx + dy * dy) <= radiusOf(o)) return o;
+    }
+    return null;
+  }
+  function hitAny(pt) {
+    var m = hitMovable(pt);
+    if (m) return m;
+    var objs = frame().objects, i, o, j, d;
+    for (i = objs.length - 1; i >= 0; i--) {
+      o = objs[i];
+      if (o.t === 'line' || o.t === 'arrow') {
+        d = distSeg(pt.px, pt.py, PX(o.x1), PY(o.y1), PX(o.x2), PY(o.y2));
+        if (d <= 10) return o;
+      } else if (o.t === 'free') {
+        for (j = 0; j < o.pts.length - 1; j++) {
+          d = distSeg(pt.px, pt.py, PX(o.pts[j].x), PY(o.pts[j].y), PX(o.pts[j + 1].x), PY(o.pts[j + 1].y));
+          if (d <= 10) return o;
+        }
+      }
+    }
+    return null;
+  }
+  function removeObj(o) {
+    var objs = frame().objects, i;
+    for (i = 0; i < objs.length; i++) if (objs[i] === o) { objs.splice(i, 1); return; }
+  }
+
+  // ---------- pointer handling ----------
+  function evtXY(e) {
+    var rect = cv.getBoundingClientRect(), cx, cy;
+    if (e.touches && e.touches.length) { cx = e.touches[0].clientX; cy = e.touches[0].clientY; }
+    else if (e.changedTouches && e.changedTouches.length) { cx = e.changedTouches[0].clientX; cy = e.changedTouches[0].clientY; }
+    else { cx = e.clientX; cy = e.clientY; }
+    var sx = W / rect.width, sy = H / rect.height;
+    var px = (cx - rect.left) * sx, py = (cy - rect.top) * sy;
+    return { px: px, py: py, x: px / W * 100, y: py / H * 100 };
+  }
+
+  var press = null;
+
+  function onDown(pt) {
+    if (playTimer) stopPlay();
+    if (tool === 'select') {
+      var o = hitMovable(pt);
+      if (o) { selectedId = o.id; press = { obj: o, dx: pt.x - o.x, dy: pt.y - o.y }; }
+      else { selectedId = null; press = null; }
+      updateRot(); draw();
+    } else if (tool === 'player') {
+      frame().objects.push(mk('u' + (addSeq++), 'player', curTeam, countTeam(curTeam) + 1, clamp(pt.x), clamp(pt.y)));
+      draw(); persist();
+    } else if (tool === 'prop') {
+      frame().objects.push({ id: 'pr' + (addSeq++), t: 'prop', prop: curProp, x: clamp(pt.x), y: clamp(pt.y) });
+      draw(); persist();
+    } else if (tool === 'erase') {
+      var e = hitAny(pt); if (e) { removeObj(e); if (selectedId === e.id) selectedId = null; draw(); persist(); }
+    } else if (tool === 'line' || tool === 'arrow') {
+      pending = { id: 'ln' + (addSeq++), t: tool, color: curColor, x1: pt.x, y1: pt.y, x2: pt.x, y2: pt.y };
+    } else if (tool === 'free') {
+      pending = { id: 'fr' + (addSeq++), t: 'free', color: curColor, pts: [{ x: pt.x, y: pt.y }] };
+    }
+  }
+
+  function onMove(pt) {
+    if (press && press.obj) {
+      press.obj.x = clamp(pt.x - press.dx); press.obj.y = clamp(pt.y - press.dy);
+      draw();
+    } else if (pending) {
+      if (pending.t === 'free') pending.pts.push({ x: clamp(pt.x), y: clamp(pt.y) });
+      else { pending.x2 = clamp(pt.x); pending.y2 = clamp(pt.y); }
+      draw();
+    }
+  }
+
+  function onUp() {
+    if (press && press.obj) { press = null; persist(); }
+    if (pending) {
+      var keep = false;
+      if (pending.t === 'free') keep = pending.pts.length > 1;
+      else keep = Math.abs(pending.x2 - pending.x1) + Math.abs(pending.y2 - pending.y1) > 1;
+      if (keep) frame().objects.push(pending);
+      pending = null; draw(); persist();
+    }
+  }
+
+  function countTeam(team) {
+    var objs = frame().objects, n = 0, i;
+    for (i = 0; i < objs.length; i++) if (objs[i].t === 'player' && objs[i].team === team) n++;
+    return n;
+  }
+
+  cv.ontouchstart = function (e) { e.preventDefault(); touching = true; onDown(evtXY(e)); };
+  cv.ontouchmove = function (e) { e.preventDefault(); onMove(evtXY(e)); };
+  cv.ontouchend = function (e) { e.preventDefault(); onUp(evtXY(e)); };
+  cv.onmousedown = function (e) { if (touching) return; dragging = true; onDown(evtXY(e)); };
+  cv.onmousemove = function (e) { if (touching || !dragging) return; onMove(evtXY(e)); };
+  cv.onmouseup = function (e) { if (touching) { return; } dragging = false; onUp(evtXY(e)); };
+
+  // ---------- rotation ----------
+  function rotateSel(delta) {
+    var s = selected();
+    if (!s || (s.t !== 'player' && s.t !== 'gk')) return;
+    s.rot = (typeof s.rot === 'number' ? s.rot : 0) + delta;
+    draw(); persist();
+  }
+  function clearRot() {
+    var s = selected();
+    if (s && typeof s.rot === 'number') { delete s.rot; draw(); persist(); }
+  }
+
+  // ---------- persistence ----------
+  function persist() {
+    try { localStorage.setItem('oldipads_board', JSON.stringify({ sport: state.sport, frames: state.frames, idx: frameIdx })); } catch (e) { }
+  }
+  function restore() {
+    try {
+      var raw = localStorage.getItem('oldipads_board');
+      if (!raw) return false;
+      var d = JSON.parse(raw);
+      if (!d || !d.frames || !d.frames.length || !SPORTS[d.sport]) return false;
+      state.sport = d.sport; state.frames = d.frames; frameIdx = d.idx || 0;
+      if (frameIdx >= state.frames.length) frameIdx = 0;
+      return true;
+    } catch (e) { return false; }
+  }
+
+  // ---------- playback ----------
+  function play() {
+    if (state.frames.length < 2) return;
+    stopPlay();
+    var seg = 0, t = 0, stepMs = 45, durPer = 800;
+    playBtn.innerHTML = 'Stop';
+    playTimer = setInterval(function () {
+      t += stepMs / durPer;
+      if (t >= 1) { t = 0; seg++; if (seg >= state.frames.length - 1) { stopPlay(); frameIdx = state.frames.length - 1; draw(); updateFrameInfo(); return; } }
+      drawInterp(state.frames[seg], state.frames[seg + 1], t);
+    }, stepMs);
+  }
+  function stopPlay() {
+    if (playTimer) { clearInterval(playTimer); playTimer = null; }
+    playBtn.innerHTML = 'Play';
+  }
+
+  // ---------- UI building ----------
+  function btn(label, cls) {
+    var b = document.createElement('button');
+    b.className = 'b' + (cls ? ' ' + cls : '');
+    b.innerHTML = label;
+    return b;
+  }
+  function setActive(container, el) {
+    var kids = container.childNodes, i;
+    for (i = 0; i < kids.length; i++) if (kids[i].className !== undefined) kids[i].className = kids[i].className.replace(' on', '');
+    if (el) el.className += ' on';
+  }
+
+  var sportRow = document.getElementById('sportRow');
+  var toolRow = document.getElementById('toolRow');
+  var teamRow = document.getElementById('teamRow');
+  var propRow = document.getElementById('propRow');
+  var colorRow = document.getElementById('colorRow');
+  var rotRow = document.getElementById('rotRow');
+  var frameRow = document.getElementById('frameRow');
+  var fileRow = document.getElementById('fileRow');
+  var frameInfo, playBtn, propSelect;
+
+  function buildSports() {
+    var i, id;
+    for (i = 0; i < SPORT_ORDER.length; i++) {
+      (function (id) {
+        var b = btn(SPORTS[id].name, 'wide');
+        if (id === state.sport) b.className += ' on';
+        b.onclick = function () {
+          if (id === state.sport) return;
+          state.sport = id; state.frames = [newFrame()]; frameIdx = 0;
+          selectedId = null; stopPlay();
+          setActive(sportRow, b);
+          buildProps(); updatePropRow(); draw(); updateFrameInfo(); persist();
+        };
+        sportRow.appendChild(b);
+      })(SPORT_ORDER[i]);
+    }
+  }
+
+  function buildTools() {
+    var tools = [['select', 'Select'], ['player', 'Add'], ['prop', 'Prop'], ['line', 'Line'], ['arrow', 'Arrow'], ['free', 'Draw'], ['erase', 'Erase']];
+    var i;
+    for (i = 0; i < tools.length; i++) {
+      (function (t, lbl) {
+        var b = btn(lbl);
+        if (t === tool) b.className += ' on';
+        b.onclick = function () { tool = t; setActive(toolRow, b); updatePropRow(); };
+        toolRow.appendChild(b);
+      })(tools[i][0], tools[i][1]);
+    }
+    // team toggle
+    var ba = btn('Attack'); ba.className += ' on';
+    var bd = btn('Defense', 'red');
+    ba.onclick = function () { curTeam = 'atk'; ba.className = 'b on'; bd.className = 'b red'; };
+    bd.onclick = function () { curTeam = 'def'; bd.className = 'b red on'; ba.className = 'b'; };
+    teamRow.appendChild(document.createTextNode(' Team: '));
+    teamRow.appendChild(ba); teamRow.appendChild(bd);
+    // colors for drawings
+    var cols = ['#ffffff', '#0a84ff', '#ff3b30', '#ffd60a', '#34c759'];
+    colorRow.appendChild(document.createTextNode(' Pen: '));
+    for (i = 0; i < cols.length; i++) {
+      (function (c) {
+        var b = btn('', 'sw'); b.style.background = c;
+        if (c === curColor) b.className += ' on';
+        b.onclick = function () { curColor = c; setActive(colorRow, b); };
+        colorRow.appendChild(b);
+      })(cols[i]);
+    }
+  }
+
+  function buildProps() {
+    propRow.innerHTML = '';
+    propRow.appendChild(document.createTextNode(' Prop: '));
+    propSelect = document.createElement('select');
+    propSelect.className = 'b';
+    var list = sport().props, i;
+    for (i = 0; i < list.length; i++) {
+      var op = document.createElement('option');
+      op.value = list[i]; op.innerHTML = PROPS[list[i]];
+      propSelect.appendChild(op);
+    }
+    curProp = list[0];
+    propSelect.onchange = function () { curProp = propSelect.value; };
+    propRow.appendChild(propSelect);
+  }
+  function updatePropRow() {
+    propRow.style.display = (tool === 'prop') ? 'block' : 'none';
+  }
+
+  function buildRot() {
+    var bl = btn('&#8630; Left'); bl.onclick = function () { rotateSel(-Math.PI / 12); };
+    var br = btn('Right &#8631;'); br.onclick = function () { rotateSel(Math.PI / 12); };
+    var bc = btn('Clear facing'); bc.onclick = function () { clearRot(); };
+    rotRow.appendChild(document.createTextNode(' Selected: '));
+    rotRow.appendChild(bl); rotRow.appendChild(br); rotRow.appendChild(bc);
+  }
+  function updateRot() { /* reserved for future selected-state UI */ }
+
+  function buildFrames() {
+    var add = btn('+ Frame'); add.onclick = function () {
+      var f = { objects: [] }, src = frame(), i;
+      for (i = 0; i < src.objects.length; i++) f.objects.push(cloneShallow(src.objects[i]));
+      // deep copy free-draw point arrays so frames stay independent
+      for (i = 0; i < f.objects.length; i++) if (f.objects[i].t === 'free') {
+        var p = [], j; for (j = 0; j < src.objects[i].pts.length; j++) p.push({ x: src.objects[i].pts[j].x, y: src.objects[i].pts[j].y });
+        f.objects[i].pts = p;
+      }
+      state.frames.splice(frameIdx + 1, 0, f); frameIdx++;
+      draw(); updateFrameInfo(); persist();
+    };
+    var prev = btn('&#9664;'); prev.onclick = function () { if (frameIdx > 0) { frameIdx--; selectedId = null; draw(); updateFrameInfo(); persist(); } };
+    var next = btn('&#9654;'); next.onclick = function () { if (frameIdx < state.frames.length - 1) { frameIdx++; selectedId = null; draw(); updateFrameInfo(); persist(); } };
+    var del = btn('Delete'); del.onclick = function () {
+      if (state.frames.length <= 1) { state.frames = [newFrame()]; frameIdx = 0; }
+      else { state.frames.splice(frameIdx, 1); if (frameIdx >= state.frames.length) frameIdx = state.frames.length - 1; }
+      selectedId = null; draw(); updateFrameInfo(); persist();
+    };
+    playBtn = btn('Play'); playBtn.onclick = function () { if (playTimer) stopPlay(); else play(); };
+    frameInfo = document.createElement('span'); frameInfo.id = 'frameInfo';
+    frameRow.appendChild(prev);
+    frameRow.appendChild(frameInfo);
+    frameRow.appendChild(next);
+    frameRow.appendChild(add);
+    frameRow.appendChild(del);
+    frameRow.appendChild(playBtn);
+  }
+  function updateFrameInfo() {
+    if (frameInfo) frameInfo.innerHTML = ' ' + (frameIdx + 1) + ' / ' + state.frames.length + ' ';
+  }
+
+  function buildFile() {
+    var reset = btn('Reset'); reset.onclick = function () {
+      state.frames = [newFrame()]; frameIdx = 0; selectedId = null; stopPlay();
+      draw(); updateFrameInfo(); persist();
+    };
+    var clear = btn('Clear frame'); clear.onclick = function () {
+      frame().objects = []; selectedId = null; draw(); persist();
+    };
+    var snap = btn('Snapshot'); snap.onclick = function () { snapshot(); };
+    fileRow.appendChild(reset);
+    fileRow.appendChild(clear);
+    fileRow.appendChild(snap);
+  }
+
+  function snapshot() {
+    var box = document.getElementById('snap');
+    try {
+      var url = cv.toDataURL('image/png');
+      box.innerHTML = '<p>Press and hold the image to save it to your Photos.</p>';
+      var img = document.createElement('img');
+      img.src = url; box.appendChild(img);
+    } catch (e) {
+      box.innerHTML = '<p>Snapshot is not supported on this device.</p>';
+    }
+  }
+
+  // ---------- init ----------
+  if (!restore()) { state.frames = [newFrame()]; frameIdx = 0; }
+  buildSports();
+  buildTools();
+  buildProps();
+  buildRot();
+  buildFrames();
+  buildFile();
+  updatePropRow();
+  updateFrameInfo();
+  draw();
+})();
+</script>
+</body>
+</html>

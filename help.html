@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SportTactic — Help &amp; Tutorials</title>
+  <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('ht_help_theme')||'dark');}catch(e){}</script>
+  <style>
+    /* Palette mirrors styles.css: light is the default, dark is the override. */
+    :root{--bg:#dcdcdc;--surface:#f1f1f1;--surface2:#e5e5e5;--border:#c0c0c0;--text:#101010;--soft:#3c3c3c;--muted:#6e6e6e;--primary:#111111;--primary-soft:#d6d6d6;--on-primary:#ffffff;--accent:#12903f;--danger:#c81f36;--warning:#a35b00;--shadow:0 1px 3px rgba(0,0,0,.16),0 1px 2px rgba(0,0,0,.10);--radius:12px;--steel:"Arial Black","Arial Bold","Helvetica Neue",Arial,Gadget,sans-serif}
+    [data-theme="dark"]{--bg:#0b0b0b;--surface:#191919;--surface2:#121212;--border:#303030;--text:#f4f4f4;--soft:#c3c3c3;--muted:#8a8a8a;--primary:#f4f4f4;--primary-soft:#272727;--on-primary:#0b0b0b;--accent:#22e07a;--danger:#ff3b5c;--warning:#ffb020;--shadow:0 4px 18px rgba(0,0,0,.55)}
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text);line-height:1.6}
+    [data-theme="dark"] body{background:
+      radial-gradient(1200px 500px at 100% -10%,rgba(255,255,255,.05),transparent 60%),
+      radial-gradient(900px 400px at -10% 110%,rgba(255,255,255,.03),transparent 60%),var(--bg)}
+    *{scrollbar-width:thin;scrollbar-color:var(--primary) transparent}
+    *::-webkit-scrollbar{width:10px;height:10px}
+    *::-webkit-scrollbar-track{background:var(--surface2);border-radius:10px}
+    *::-webkit-scrollbar-thumb{background:var(--primary);border-radius:10px;border:2px solid var(--surface2);background-clip:padding-box}
+    *::-webkit-scrollbar-thumb:hover{background:var(--primary);border-color:var(--surface2);background-clip:padding-box}
+    *::-webkit-scrollbar-corner{background:transparent}
+    header{padding:34px 24px;text-align:center;border-bottom:1px solid var(--border)}
+    header .logo{color:var(--primary);filter:drop-shadow(0 3px 9px rgba(15,23,42,.28))}
+    [data-theme="dark"] header .logo{filter:drop-shadow(0 0 8px rgba(255,255,255,.25))}
+    /* Brand title matches .brand-text strong in styles.css: brushed metal on light, white on dark. */
+    header h1{font-family:var(--steel);text-transform:uppercase;letter-spacing:1px;margin-top:0;font-size:26px;font-weight:900;background:linear-gradient(180deg,#3a424c,#1a1f26 42%,#05070a 54%,#222932 70%,#0a0e12);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:#0a0e12;filter:drop-shadow(0 1px .5px rgba(255,255,255,.55))}
+    [data-theme="dark"] header h1{background:none;-webkit-background-clip:border-box;background-clip:border-box;-webkit-text-fill-color:#fff;color:#fff;filter:drop-shadow(0 1px 1px rgba(0,0,0,.4))}
+    .title-row{display:inline-flex;align-items:center;gap:9px;margin-top:6px}
+    .runner{color:var(--primary);flex:none;animation:runnerBob .32s ease-in-out infinite}
+    .runner .run-a{animation:runnerFrameA .32s steps(1,end) infinite}
+    .runner .run-b{animation:runnerFrameB .32s steps(1,end) infinite}
+    @keyframes runnerFrameA{0%,49.9%{opacity:1}50%,100%{opacity:0}}
+    @keyframes runnerFrameB{0%,49.9%{opacity:0}50%,100%{opacity:1}}
+    @keyframes runnerBob{0%,100%{transform:translateY(0)}50%{transform:translateY(-2px)}}
+    @media (prefers-reduced-motion:reduce){.runner,.runner .run-a,.runner .run-b{animation:none}.runner .run-b{opacity:0}}
+    header p{color:var(--muted)}
+    .wrap{max-width:960px;margin:0 auto;padding:24px}
+    .lang{position:fixed;top:16px;right:16px;display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px;max-width:calc(100vw - 32px)}
+    .lang button,.lang a{background:var(--surface2);border:1px solid var(--border);color:var(--soft);padding:6px 12px;border-radius:20px;cursor:pointer;font-weight:600;text-decoration:none;display:inline-flex;align-items:center;gap:6px}
+    .lang button:hover,.lang a:hover{background:var(--border);color:var(--text)}
+    .lang button svg{border-radius:2px;box-shadow:0 0 0 1px rgba(0,0,0,.15)}
+    .lang button.active{background:var(--primary);border-color:var(--primary);color:var(--on-primary)}
+    nav.toc{display:flex;flex-wrap:wrap;gap:8px;margin:20px 0}
+    nav.toc a{background:var(--surface2);border:1px solid var(--border);color:var(--soft);padding:8px 14px;border-radius:20px;text-decoration:none;font-size:14px}
+    nav.toc a:hover{background:var(--border);color:var(--text)}
+    section.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:22px;margin:18px 0;box-shadow:var(--shadow)}
+    section.card h2{text-transform:uppercase;letter-spacing:.5px;font-size:19px;margin-bottom:6px;display:flex;align-items:center;gap:10px}
+    section.card h2 .num{width:30px;height:30px;border-radius:50%;background:var(--primary);color:var(--on-primary);display:inline-flex;align-items:center;justify-content:center;font-size:15px}
+    ol,ul{margin:10px 0 10px 22px}
+    li{margin:5px 0;color:var(--soft)}
+    kbd{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:1px 7px;font-size:12px}
+    .tut{display:grid;grid-template-columns:280px 1fr;gap:18px;align-items:center;margin-top:14px}
+    @media(max-width:640px){.tut{grid-template-columns:1fr}}
+    .fig{background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:8px}
+    .drills-h{margin:24px 0 2px;font-size:13px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)}
+    .tag{display:inline-block;background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:2px 10px;font-size:12px;color:var(--soft)}
+    /* Icon is taken out of flow so wrapped lines keep a clean hanging indent and
+       inline <b>/<a> inside the text are not broken up. */
+    .callout{position:relative;border-left:4px solid var(--primary);background:var(--surface2);padding:10px 14px 10px 42px;border-radius:8px;margin:12px 0;color:var(--soft)}
+    .callout > .sym:first-child{position:absolute;left:14px;top:calc(10px + .3em);color:var(--primary)}
+    footer{text-align:center;color:var(--muted);padding:30px;border-top:1px solid var(--border)}
+    a.back{color:var(--primary);text-decoration:none;font-weight:600}
+    .to-top{position:fixed;right:18px;bottom:18px;z-index:60;width:46px;height:46px;border-radius:50%;border:1px solid var(--border);background:var(--surface);color:var(--text);cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:var(--shadow);opacity:0;visibility:hidden;transform:translateY(10px);transition:opacity .2s,transform .2s,visibility .2s}
+    .to-top.show{opacity:1;visibility:visible;transform:translateY(0)}
+    .to-top:hover{border-color:var(--primary);color:var(--primary)}
+    .sym{display:inline-block;width:1em;height:1em;vertical-align:-0.15em;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+    .sym.solid{fill:currentColor;stroke:none}
+    .dot-rec{color:var(--danger)}
+    #themeIcon{display:inline-flex}
+    #themeIcon svg{box-shadow:none;border-radius:0}
+    [data-theme="dark"] .lang button.active{background:linear-gradient(90deg,#ffffff,#9aa3b5);border-color:transparent;box-shadow:0 6px 16px rgba(0,0,0,.5)}
+    [data-theme="dark"] section.card h2 .num{background:linear-gradient(90deg,#ffffff,#9aa3b5)}
+    [data-theme="dark"] .callout{border-left-color:var(--primary)}
+    [data-theme="dark"] .callout > .sym:first-child{color:var(--primary)}
+    /* Hide the inactive language only — never re-declare display, or block elements
+       (p, li, div.callout) would collapse to inline when Danish is active. */
+    body:not(.da) [data-lang-da]{display:none}
+    body.da [data-lang-en]{display:none}
+  </style>
+</head>
+<body>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <symbol id="i-play" viewBox="0 0 24 24"><polygon points="6 4 20 12 6 20 6 4"/></symbol>
+      <symbol id="i-rec" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/></symbol>
+      <symbol id="i-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></symbol>
+      <symbol id="i-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="1"/></symbol>
+      <symbol id="i-arrow" viewBox="0 0 24 24"><line x1="4" y1="12" x2="20" y2="12"/><polyline points="14 6 20 12 14 18"/></symbol>
+      <symbol id="i-pass" viewBox="0 0 24 24"><line x1="5" y1="19" x2="19" y2="5" stroke-dasharray="4 3"/><polyline points="12 5 19 5 19 12"/></symbol>
+      <symbol id="i-run" viewBox="0 0 24 24"><line x1="4" y1="12" x2="18" y2="12" stroke-dasharray="4 3"/><polyline points="13 7 19 12 13 17"/></symbol>
+      <symbol id="i-hand" viewBox="0 0 24 24"><path d="M18 11V6a2 2 0 0 0-4 0M14 10V4a2 2 0 0 0-4 0v6M10 10.5V6a2 2 0 0 0-4 0v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2a8 8 0 0 1-7-4l-2.5-4a2 2 0 0 1 3.4-2L7 14"/></symbol>
+      <symbol id="i-whistle" viewBox="0 0 24 24"><path d="M2 12a6 6 0 0 0 12 0V9h8l-2 4a8 8 0 1 1-8-8h2"/><circle cx="8" cy="12" r="2"/></symbol>
+      <symbol id="i-video" viewBox="0 0 24 24"><rect x="2" y="6" width="14" height="12" rx="2"/><path d="m16 10 6-3v10l-6-3"/></symbol>
+      <symbol id="i-mail" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m2 6 10 7L22 6"/></symbol>
+      <symbol id="i-right" viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="13 6 19 12 13 18"/></symbol>
+      <symbol id="i-left" viewBox="0 0 24 24"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="11 6 5 12 11 18"/></symbol>
+      <symbol id="i-sound" viewBox="0 0 24 24"><polygon points="4 9 8 9 13 4 13 20 8 15 4 15"/><path d="M17 8a5 5 0 0 1 0 8"/></symbol>
+      <symbol id="i-cue" viewBox="0 0 24 24"><line x1="4" y1="20" x2="18" y2="6"/><circle cx="18" cy="18" r="3"/></symbol>
+      <symbol id="i-clip" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M8 4v5M16 4v5"/></symbol>
+      <symbol id="i-dumbbell" viewBox="0 0 24 24"><path d="M6 8v8M18 8v8M3 10v4M21 10v4M6 12h12"/></symbol>
+      <symbol id="i-flag" viewBox="0 0 24 24"><path d="M4 22V4s2-1 5-1 5 2 8 2 3-1 3-1v9s-1 1-3 1-5-2-8-2-5 1-5 1"/><line x1="4" y1="22" x2="4" y2="15"/></symbol>
+      <symbol id="i-bot" viewBox="0 0 24 24"><rect x="4" y="8" width="16" height="12" rx="2"/><path d="M12 8V4M9 4h6"/><circle cx="9" cy="13" r="1"/><circle cx="15" cy="13" r="1"/><path d="M2 13v3M22 13v3M9 17h6"/></symbol>
+      <symbol id="i-lock" viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol>
+      <symbol id="i-heart" viewBox="0 0 24 24"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1.1 1.1L12 21.2l7.7-7.7 1.1-1.1a5.5 5.5 0 0 0 0-7.8z"/></symbol>
+    </defs>
+  </svg>
+  <div class="lang">
+    <button id="btnEn" class="active" onclick="setLang('en')"><svg viewBox="0 0 60 30" width="20" height="12" aria-hidden="true"><clipPath id="fen"><rect width="60" height="30"/></clipPath><g clip-path="url(#fen)"><rect width="60" height="30" fill="#012169"/><path d="M0,0 60,30M60,0 0,30" stroke="#fff" stroke-width="6"/><path d="M0,0 60,30M60,0 0,30" stroke="#C8102E" stroke-width="4"/><path d="M30,0 V30M0,15 H60" stroke="#fff" stroke-width="10"/><path d="M30,0 V30M0,15 H60" stroke="#C8102E" stroke-width="6"/></g></svg> EN</button>
+    <button id="btnDa" onclick="setLang('da')"><svg viewBox="0 0 37 28" width="20" height="12" aria-hidden="true"><rect width="37" height="28" fill="#C8102E"/><rect x="12" width="4" height="28" fill="#fff"/><rect y="12" width="37" height="4" fill="#fff"/></svg> DA</button>
+    <button id="btnTheme" onclick="toggleTheme()" title="Light / Dark" aria-label="Toggle light or dark theme"><span id="themeIcon"></span><span data-lang-en>Theme</span><span data-lang-da>Tema</span></button>
+  </div>
+  <header>
+    <div class="logo">
+      <img src="logo.svg?v=6" width="64" height="64" alt="SportTactic logo" />
+    </div>
+    <div class="title-row">
+      <h1>SportTactic</h1>
+      <svg class="runner" viewBox="0 0 22 26" width="26" height="31" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <g class="run-a">
+          <circle cx="11" cy="5" r="2.7" fill="currentColor" stroke="none"/>
+          <path d="M11 7.6V15"/><path d="M11 9.4 15.4 5.6"/><path d="M11 9.4 6.4 13"/><path d="M11 15 7.4 21.8"/><path d="M11 15 14.6 21.8"/>
+        </g>
+        <g class="run-b">
+          <circle cx="11" cy="5" r="2.7" fill="currentColor" stroke="none"/>
+          <path d="M11 7.6V15"/><path d="M11 9.4 16.6 3.6"/><path d="M11 9.4 6.4 13"/><path d="M11 15 7.4 21.8"/><path d="M11 15 14.6 21.8"/>
+        </g>
+      </svg>
+    </div>
+    <p data-lang-en>Help &amp; Tutorials — how to use the app</p>
+    <p data-lang-da>Hjælp &amp; Vejledninger — sådan bruger du appen</p>
+    <p style="margin-top:10px"><a class="back" href="index.html"><svg class="sym"><use href="#i-left"/></svg> <span data-lang-en>Back to app</span><span data-lang-da>Tilbage til appen</span></a></p>
+  </header>
+
+  <div class="wrap">
+    <nav class="toc">
+      <a href="#start"><span data-lang-en>Getting Started</span><span data-lang-da>Kom godt i gang</span></a>
+      <a href="#sport"><span data-lang-en>Choose Your Sport</span><span data-lang-da>Vælg Sportsgren</span></a>
+      <a href="#bots"><span data-lang-en>Game Bots</span><span data-lang-da>Spil-bots</span></a>
+      <a href="#board"><span data-lang-en>Tactical Board</span><span data-lang-da>Taktiktavle</span></a>
+      <a href="#gestures"><span data-lang-en>Gestures &amp; Autosave</span><span data-lang-da>Bevægelser &amp; Autogem</span></a>
+      <a href="#shoot"><span data-lang-en>Shooting &amp; Magnet</span><span data-lang-da>Skud &amp; Magnet</span></a>
+      <a href="#physics"><span data-lang-en>Physics &amp; Cue Sports</span><span data-lang-da>Fysik &amp; Køllesport</span></a>
+      <a href="#record"><span data-lang-en>Record Board</span><span data-lang-da>Optag Tavlen</span></a>
+      <a href="#video"><span data-lang-en>Video Analysis</span><span data-lang-da>Videoanalyse</span></a>
+      <a href="#squad"><span data-lang-en>Squad, Matches &amp; Training</span><span data-lang-da>Trup, Kampe &amp; Træning</span></a>
+      <a href="#exercises"><span data-lang-en>Exercise Library</span><span data-lang-da>Øvelsesbibliotek</span></a>
+      <a href="#opponents"><span data-lang-en>Opponent Analysis</span><span data-lang-da>Modstanderanalyse</span></a>
+      <a href="#scout"><span data-lang-en>Live Scouting</span><span data-lang-da>Live Registrering</span></a>
+      <a href="#stats"><span data-lang-en>Statistics &amp; Reports</span><span data-lang-da>Statistik &amp; Rapporter</span></a>
+      <a href="#share"><span data-lang-en>Share Data</span><span data-lang-da>Del Data</span></a>
+      <a href="#messenger"><span data-lang-en>Secure Messenger</span><span data-lang-da>Sikre Beskeder</span></a>
+      <a href="#keys"><span data-lang-en>Shortcuts</span><span data-lang-da>Genveje</span></a>
+      <a href="#support"><span data-lang-en>Support the App</span><span data-lang-da>Støt appen</span></a>
+    </nav>
+
+    <!-- 1. Getting started -->
+    <section class="card" id="start">
+      <h2><span class="num">1</span> <span data-lang-en>Getting Started</span><span data-lang-da>Kom godt i gang</span></h2>
+      <p data-lang-en>SportTactic runs fully in your browser and works offline — there is <b>no account and no server</b>. Everything you create is stored on your own device, and you decide what to share.</p>
+      <p data-lang-da>SportTactic kører fuldt ud i din browser og virker offline — der er <b>ingen konto og ingen server</b>. Alt hvad du laver gemmes på din egen enhed, og du bestemmer, hvad der deles.</p>
+      <div class="tut">
+        <div class="fig">
+          <svg viewBox="0 0 280 150" width="100%">
+            <rect x="0" y="0" width="70" height="150" rx="8" fill="var(--surface2)" stroke="var(--border)"/>
+            <rect x="8" y="14" width="54" height="12" rx="4" fill="var(--primary)"/>
+            <rect x="8" y="34" width="54" height="10" rx="4" fill="var(--border)"/>
+            <rect x="8" y="50" width="54" height="10" rx="4" fill="var(--border)"/>
+            <rect x="8" y="66" width="54" height="10" rx="4" fill="var(--border)"/>
+            <rect x="82" y="10" width="188" height="20" rx="8" fill="var(--surface2)" stroke="var(--border)"/>
+            <g stroke="var(--muted)" fill="none" stroke-width="1.5"><circle cx="93" cy="20" r="3.5"/><line x1="95.5" y1="22.5" x2="98" y2="25"/></g>
+            <text x="104" y="24" fill="var(--muted)" font-size="10">search…</text>
+            <rect x="82" y="40" width="90" height="46" rx="8" fill="var(--surface)" stroke="var(--border)"/>
+            <rect x="178" y="40" width="92" height="46" rx="8" fill="var(--surface)" stroke="var(--border)"/>
+            <text x="92" y="66" fill="var(--text)" font-size="14" font-weight="bold">28</text>
+            <text x="188" y="66" fill="var(--accent)" font-size="14" font-weight="bold">72%</text>
+          </svg>
+        </div>
+        <div>
+          <ul>
+            <li data-lang-en>Open the <b>Dashboard</b> to see next/last match, injuries and team form.</li>
+            <li data-lang-da>Åbn <b>Oversigt</b> for at se næste/seneste kamp, skader og holdform.</li>
+            <li data-lang-en>Switch <b>language</b> and <b>theme</b> under <span class="tag">Settings</span> or from the top bar.</li>
+            <li data-lang-da>Skift <b>sprog</b> og <b>tema</b> under <span class="tag">Indstillinger</span> eller fra topbjælken.</li>
+            <li data-lang-en>Toggle <b>sound effects</b> on/off with the <svg class="sym"><use href="#i-sound"/></svg> speaker button in the top bar — it mutes the whistle and ball sounds.</li>
+            <li data-lang-da>Slå <b>lydeffekter</b> til/fra med <svg class="sym"><use href="#i-sound"/></svg> højttaler-knappen i topbjælken — den lydløser fløjt og boldlyde.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. Choose your sport -->
+    <section class="card" id="sport">
+      <h2><span class="num">2</span> <span data-lang-en>Choose Your Sport</span><span data-lang-da>Vælg Sportsgren</span></h2>
+      <p data-lang-en>SportTactic supports <b>18 sports &amp; games</b>. Pick one from the <b>sport selector</b> at the top of the sidebar and the whole app instantly adapts — the tactical board surface, player positions, live-scouting events, exercise categories and opponent formations all change to match.</p>
+      <p data-lang-da>SportTactic understøtter <b>18 sportsgrene &amp; spil</b>. Vælg en i <b>sportsvælgeren</b> øverst i sidebjælken, og hele appen tilpasser sig med det samme — taktiktavlens bane, spillerpositioner, live-registreringens hændelser, øvelseskategorier og modstanderopstillinger ændrer sig alle, så de passer.</p>
+      <ul>
+        <li data-lang-en><b>Team sports:</b> Handball, Soccer, Basketball, Volleyball, Baseball, Rugby, American Football, Ice Hockey, Floorball.</li>
+        <li data-lang-da><b>Holdsport:</b> Håndbold, Fodbold, Basketball, Volleyball, Baseball, Rugby, Amerikansk Fodbold, Ishockey, Floorball.</li>
+        <li data-lang-en><b>Racket sports:</b> Badminton, Tennis.</li>
+        <li data-lang-da><b>Ketsjersport:</b> Badminton, Tennis.</li>
+        <li data-lang-en><b>Cue &amp; precision:</b> Snooker, 8-ball Pool, Darts.</li>
+        <li data-lang-da><b>Kølle &amp; præcision:</b> Snooker, 8-ball Pool, Dart.</li>
+        <li data-lang-en><b>Mind &amp; card games:</b> Chess, Bridge, Poker, Backgammon — each with a <b>playable bot</b>.</li>
+        <li data-lang-da><b>Tænke- &amp; kortspil:</b> Skak, Bridge, Poker, Backgammon — hver med en <b>spilbar bot</b>.</li>
+      </ul>
+      <div class="callout" data-lang-en><svg class="sym"><use href="#i-target"/></svg> Your chosen sport is remembered. Each keeps its own board, positions, scouting events and a playbook of <b>best tactics</b> (100 for the mind &amp; card games).</div>
+      <div class="callout" data-lang-da><svg class="sym"><use href="#i-target"/></svg> Din valgte sportsgren huskes. Hver har sin egen bane, positioner, scouting-hændelser og en spillebog med <b>bedste taktikker</b> (100 for tænke- &amp; kortspillene).</div>
+      <div class="callout" data-lang-en><svg class="sym"><use href="#i-hand"/></svg> <b>Older iPad?</b> If the main app is slow on a very old device, open <a class="back" href="oldipads.html">oldipads.html</a> — a lightweight <b>Classic Board</b> with the same core tactical board (sports, formations, props, frames &amp; playback) built to run on iPads from 2010.</div>
+      <div class="callout" data-lang-da><svg class="sym"><use href="#i-hand"/></svg> <b>Ældre iPad?</b> Hvis hovedappen er langsom på en meget gammel enhed, så åbn <a class="back" href="oldipads.html">oldipads.html</a> — en let <b>Klassisk Tavle</b> med den samme centrale taktiktavle (sportsgrene, formationer, rekvisitter, frames &amp; afspilning) bygget til iPads fra 2010.</div>
+    </section>
+
+    <!-- Game bots -->
+    <section class="card" id="bots">
+      <h2><span class="num"><svg class="sym"><use href="#i-bot"/></svg></span> <span data-lang-en>Play the Game Bots</span><span data-lang-da>Spil mod Spil-botterne</span></h2>
+      <p data-lang-en>Four board &amp; card games include a full <b>playable bot</b> with <b>100 training levels</b> — from beginner to world-class. Select <b>Chess</b>, <b>Bridge</b>, <b>Poker</b> or <b>Backgammon</b> in the Tactical Board, open the <b>Game Bots</b> panel and press <b>Play</b>.</p>
+      <p data-lang-da>Fire bræt- og kortspil har en fuld <b>spilbar bot</b> med <b>100 træningsniveauer</b> — fra begynder til verdensklasse. Vælg <b>Skak</b>, <b>Bridge</b>, <b>Poker</b> eller <b>Backgammon</b> i Taktiktavlen, åbn <b>Spil-bots</b>-panelet og tryk <b>Spil</b>.</p>
+      <ul>
+        <li data-lang-en><b>Chess — Kasparov Bot:</b> a real engine (legal moves, castling, en passant, checkmate). Click a piece then its square; use <b>Hint</b>, <b>Undo</b>, <b>Flip</b> and choose White or Black.</li>
+        <li data-lang-da><b>Skak — Kasparov-bot:</b> en ægte motor (lovlige træk, rokade, en passant, skakmat). Klik en brik og dens felt; brug <b>Tip</b>, <b>Fortryd</b>, <b>Vend</b> og vælg hvid eller sort.</li>
+        <li data-lang-en><b>Poker — Texas Hold'em:</b> you plus two bots, blinds and four betting rounds. Fold, check/call or raise with the slider; the bot uses hand strength &amp; pot odds.</li>
+        <li data-lang-da><b>Poker — Texas Hold'em:</b> dig plus to bots, blinds og fire budrunder. Kast, check/syn eller hæv med skyderen; botten bruger håndstyrke &amp; pot odds.</li>
+        <li data-lang-en><b>Backgammon:</b> roll the dice, click a checker then its point, hit blots, bear off and use the doubling cube.</li>
+        <li data-lang-da><b>Backgammon:</b> kast terningerne, klik en brik og dens punkt, ram blots, bær af og brug doblingsterningen.</li>
+        <li data-lang-en><b>Bridge:</b> a deal is auto-bid to a contract, then you play the tricks as South, with dummy revealed after the opening lead.</li>
+        <li data-lang-da><b>Bridge:</b> et spil meldes automatisk til en kontrakt, og du spiller stikkene som Syd, med blindemand vist efter udspillet.</li>
+      </ul>
+      <div class="callout" data-lang-en><svg class="sym"><use href="#i-bot"/></svg> Drag the <b>Level</b> slider (1–100) to set the bot's strength. The dialog also works in <b>full-screen</b> mode.</div>
+      <div class="callout" data-lang-da><svg class="sym"><use href="#i-bot"/></svg> Træk <b>Niveau</b>-skyderen (1–100) for at sætte bottens styrke. Dialogen virker også i <b>fuld skærm</b>.</div>
+    </section>
+
+    <!-- 3. Tactical board -->
+    <section class="card" id="board">
+      <h2><span class="num">3</span> <span data-lang-en>Tactical Board</span><span data-lang-da>Taktiktavle</span></h2>
+      <p data-lang-en>Design plays on a handball court. Drag players with the <b>Select</b> tool, draw passes, runs, arrows and shapes, and build multi-frame animations on the timeline.</p>
+      <p data-lang-da>Design spil på en håndboldbane. Træk spillere med <b>Vælg</b>-værktøjet, tegn afleveringer, løb, pile og former, og byg animationer med flere frames på tidslinjen.</p>
+      <div class="tut">
+        <div class="fig">
+          <svg viewBox="0 0 280 200" width="100%">
+            <defs><linearGradient id="pitch" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#0d5c2b"/><stop offset=".5" stop-color="#127a37"/><stop offset="1" stop-color="#0d5c2b"/>
+            </linearGradient></defs>
+            <rect x="6" y="6" width="268" height="188" rx="10" fill="url(#pitch)" stroke="#fff"/>
+            <line x1="6" y1="100" x2="274" y2="100" stroke="#fff"/>
+            <path d="M60 6 A80 80 0 0 0 220 6" fill="none" stroke="#fff"/>
+            <path d="M60 194 A80 80 0 0 1 220 194" fill="none" stroke="#fff"/>
+            <circle cx="90" cy="150" r="11" fill="#0a84ff" stroke="#fff" stroke-width="2"/><text x="90" y="154" fill="#fff" font-size="11" text-anchor="middle">1</text>
+            <circle cx="150" cy="140" r="11" fill="#0a84ff" stroke="#fff" stroke-width="2"/><text x="150" y="144" fill="#fff" font-size="11" text-anchor="middle">3</text>
+            <circle cx="120" cy="70" r="11" fill="#ff3b5c" stroke="#fff" stroke-width="2"/>
+            <circle cx="150" cy="170" r="7" fill="#ffeffb" stroke="#0b1220"/>
+            <path d="M100 148 L142 142" stroke="#22e07a" stroke-dasharray="5 4" stroke-width="2"/>
+          </svg>
+        </div>
+        <div>
+          <ol>
+            <li data-lang-en><b>Select</b> <svg class="sym"><use href="#i-hand"/></svg> — click a player to mark it (yellow glow); drag to move. With a player marked, click a team-mate to <b>pass</b> or the goal to <b>shoot</b>.</li>
+            <li data-lang-da><b>Vælg</b> <svg class="sym"><use href="#i-hand"/></svg> — klik på en spiller for at markere den (gul glød); træk for at flytte. Med en spiller markeret: klik på en medspiller for at <b>aflevere</b> eller målet for at <b>skyde</b>.</li>
+            <li data-lang-en><b>Pass <svg class="sym"><use href="#i-pass"/></svg> / Run <svg class="sym"><use href="#i-run"/></svg> / Arrow <svg class="sym"><use href="#i-arrow"/></svg></b> — click-drag to draw dashed or solid paths.</li>
+            <li data-lang-da><b>Aflevering <svg class="sym"><use href="#i-pass"/></svg> / Løb <svg class="sym"><use href="#i-run"/></svg> / Pil <svg class="sym"><use href="#i-arrow"/></svg></b> — klik og træk for at tegne stiplede eller fyldte linjer.</li>
+            <li data-lang-en><b>Frames &amp; Animation</b> sits in a bar <b>directly above the court</b>, so <b><svg class="sym solid"><use href="#i-play"/></svg> Play</b> and <b><svg class="sym solid dot-rec"><use href="#i-rec"/></svg> Record (auto-frames)</b> are always in reach. Use <b>Add Frame</b> on the frame strip under the court, move the objects, then press <b>Play</b> to animate between frames.</li>
+            <li data-lang-da><b>Frames &amp; Animation</b> ligger i en bjælke <b>direkte over banen</b>, så <b><svg class="sym solid"><use href="#i-play"/></svg> Afspil</b> og <b><svg class="sym solid dot-rec"><use href="#i-rec"/></svg> Optag (auto-frames)</b> altid er lige ved hånden. Brug <b>Tilføj Frame</b> på frame-stribe under banen, flyt objekterne, og tryk <b>Afspil</b> for at animere mellem frames.</li>
+            <li data-lang-en><b>Training Props</b> — under the tools, pick a cone, marker disc, pole, hurdle, ladder, ring, mini-goal, dummy or medicine ball (the choice matches your sport), then tap the board to place it. Drag to move, or use <b>Erase</b> to remove. Props have their <b>own colour row</b> right below them, separate from the drawing colours — pick a colour and every prop you place gets it (the <b>↺</b> button returns to the natural colours). Picking a colour also recolours the prop you have marked.</li>
+            <li data-lang-da><b>Træningsrekvisitter</b> — under værktøjerne vælger du en kegle, markeringsdisk, stang, hæk, stige, ring, minimål, dummy eller medicinbold (valget passer til din sport) og trykker på banen for at placere den. Træk for at flytte, eller brug <b>Slet</b> for at fjerne. Rekvisitter har deres <b>egen farverække</b> lige under sig, adskilt fra tegnefarverne — vælg en farve, og alle rekvisitter du placerer får den (<b>↺</b>-knappen vender tilbage til de naturlige farver). At vælge en farve omfarver også den rekvisit, du har markeret.</li>
+            <li data-lang-en><b>Everything you draw can be moved.</b> When you finish an arrow, line, circle, rectangle, freehand path or text label, the board switches straight back to <b>Select</b> — so the next drag picks the drawing up and moves it. No tool switching needed.</li>
+            <li data-lang-da><b>Alt du tegner kan flyttes.</b> Når du er færdig med en pil, linje, cirkel, firkant, frihåndsstreg eller tekst, skifter tavlen straks tilbage til <b>Vælg</b> — så det næste træk tager fat i tegningen og flytter den. Du behøver ikke skifte værktøj.</li>
+            <li data-lang-en><b>Rotation</b> — when a player is marked, the <b>Rotation</b> ↺ ↻ ✕ buttons turn them left/right or clear the facing. A white pointer on the disc shows which way the player faces.</li>
+            <li data-lang-da><b>Rotation</b> — med en spiller markeret drejer <b>Rotation</b>-knapperne ↺ ↻ ✕ den til venstre/højre eller rydder retningen. En hvid pil på brikken viser, hvilken vej spilleren vender.</li>
+            <li data-lang-en><b>Facing arrows</b> — the <b>Show player orientation</b> checkbox in the side menu turns those white pointers on and off, including the automatic turning that happens while you drag. Switch it off for a clean, uncluttered board; the directions are remembered and come straight back when you switch it on again. Your choice is saved between sessions.</li>
+            <li data-lang-da><b>Retningspile</b> — afkrydsningsfeltet <b>Vis spillerens retning</b> i sidemenuen slår de hvide pile til og fra, også den automatiske drejning der sker, mens du trækker. Slå den fra for et rent bræt uden rod; retningerne huskes og kommer tilbage, når du slår den til igen. Dit valg gemmes mellem besøg.</li>
+            <li data-lang-en><b>⟳ Reset</b> — the red button in the top bar clears the board back to the sport's starting formation: one frame, no drawings, no names. You are asked to confirm first, and <b>↶ Undo</b> brings it all back if you change your mind.</li>
+            <li data-lang-da><b>⟳ Nulstil</b> — den røde knap i topbjælken rydder tavlen tilbage til sportens startopstilling: én frame, ingen tegninger, ingen navne. Du bliver spurgt først, og <b>↶ Fortryd</b> henter det hele tilbage, hvis du fortryder.</li>
+          </ol>
+          <div class="callout" data-lang-en><svg class="sym"><use href="#i-whistle"/></svg> A referee whistle plays each time you press <svg class="sym solid"><use href="#i-play"/></svg> Play — it resets and plays again on every press (never overlaps).</div>
+          <div class="callout" data-lang-da><svg class="sym"><use href="#i-whistle"/></svg> En dommerfløjte lyder hver gang du trykker <svg class="sym solid"><use href="#i-play"/></svg> Afspil — den nulstilles og afspilles igen ved hvert tryk (overlapper aldrig).</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Board gestures, autosave, screenshot & court size -->
+    <section class="card" id="gestures">
+      <h2><span class="num"><svg class="sym"><use href="#i-hand"/></svg></span> <span data-lang-en>Board Gestures, Autosave &amp; Screenshot</span><span data-lang-da>Tavle-bevægelser, Autogem &amp; Skærmbillede</span></h2>
+      <p data-lang-en>With the <b>Select</b> tool the board reacts to how you touch it — a quick tap, a hold, or a drag each do something different. Everything you change is saved automatically.</p>
+      <p data-lang-da>Med <b>Vælg</b>-værktøjet reagerer tavlen på hvordan du rører den — et hurtigt tryk, et hold eller et træk gør hver sin ting. Alt du ændrer, gemmes automatisk.</p>
+      <ul>
+        <li data-lang-en><b>Tap</b> a player to <b>mark</b> it (yellow glow).</li>
+        <li data-lang-da><b>Tryk</b> på en spiller for at <b>markere</b> den (gul glød).</li>
+        <li data-lang-en>With a player marked, <b>tap a team-mate</b> to <b>throw the ball</b> to them — the pass flies over and that player becomes the marked one. Tapping the marked player while they have no ball feeds it to them too.</li>
+        <li data-lang-da>Med en spiller markeret <b>tryk på en medspiller</b> for at <b>kaste bolden</b> til denne — afleveringen flyver over, og spilleren bliver den markerede. Trykker du på den markerede spiller uden bold, får denne også bolden.</li>
+        <li data-lang-en>With a player marked, <b>tap the goal</b> to <b>shoot</b> — the ball flies into the net (the keeper saves it when the keeper is on).</li>
+        <li data-lang-da>Med en spiller markeret <b>tryk på målet</b> for at <b>skyde</b> — bolden flyver i nettet (målmanden redder den, når målmanden er slået til).</li>
+        <li data-lang-en><b>Hold</b> (press and keep still) on a player to <b>name it</b> — a box opens where you type a name, then <b>Save</b> (or <b>Remove</b> / <b>Cancel</b>). The name appears on a plate <b>under the disc</b> — the same for red and blue players — and is saved with the play.</li>
+        <li data-lang-da><b>Hold</b> (tryk og hold stille) på en spiller for at <b>navngive den</b> — en boks åbnes, hvor du skriver et navn og trykker <b>Gem</b> (eller <b>Fjern</b> / <b>Annuller</b>). Navnet vises på en plade <b>under cirklen</b> — ens for røde og blå spillere — og gemmes med spillet.</li>
+        <li data-lang-en><b>Drag</b> a player or the ball to <b>move</b> it across the court; release to drop.</li>
+        <li data-lang-da><b>Træk</b> en spiller eller bolden for at <b>flytte</b> den over banen; slip for at placere.</li>
+      </ul>
+      <div class="callout" data-lang-en><svg class="sym"><use href="#i-target"/></svg> <b>Autosave:</b> every move, pass, drawing and frame is saved to your device automatically — no Save button needed. Your board is exactly as you left it next time.</div>
+      <div class="callout" data-lang-da><svg class="sym"><use href="#i-target"/></svg> <b>Autogem:</b> hvert træk, aflevering, tegning og frame gemmes automatisk på din enhed — ingen Gem-knap nødvendig. Din tavle er præcis som du forlod den næste gang.</div>
+      <ul>
+        <li data-lang-en><b>📷 Screenshot</b> — press the screenshot button in the top bar to download the <b>board</b> as a PNG image (just the court, ready to share or print).</li>
+        <li data-lang-da><b>📷 Skærmbillede</b> — tryk på skærmbillede-knappen i topbjælken for at downloade <b>tavlen</b> som et PNG-billede (kun banen, klar til deling eller print).</li>
+        <li data-lang-en><b>Full / Half court</b> — for team sports, use the <b>Court</b> selector to switch between the full pitch and a zoomed <b>half court</b> for attack/defence set-pieces.</li>
+        <li data-lang-da><b>Hel / Halv bane</b> — for holdsport, brug <b>Bane</b>-vælgeren til at skifte mellem den fulde bane og en zoomet <b>halv bane</b> til angreb/forsvar-oplæg.</li>
+        <li data-lang-en><b>Always fits the screen</b> — the court resizes itself to the window, in both full and half view, so you never have to scroll to see the whole pitch. Rotate the tablet or open the sidebar and it re-fits instantly.</li>
+        <li data-lang-da><b>Passer altid til skærmen</b> — banen tilpasser selv sin størrelse til vinduet, både i hel og halv visning, så du aldrig skal scrolle for at se hele banen. Drej tabletten eller åbn sidemenuen, og den tilpasser sig med det samme.</li>
+      </ul>
+    </section>
+
+    <!-- 4. Shooting & magnet -->
+    <section class="card" id="shoot">
+      <h2><span class="num">4</span> <span data-lang-en>Shooting the Ball &amp; Magnet Effect</span><span data-lang-da>Skyd Bolden &amp; Magneteffekt</span></h2>
+      <div class="tut">
+        <div class="fig">
+          <svg viewBox="0 0 280 200" width="100%">
+            <rect x="6" y="6" width="268" height="188" rx="10" fill="url(#pitch)" stroke="#fff"/>
+            <rect x="110" y="8" width="60" height="8" fill="#ffd400"/>
+            <circle cx="140" cy="30" r="12" fill="#f59e0b" stroke="#fff" stroke-width="2"/><text x="140" y="34" fill="#fff" font-size="9" text-anchor="middle">GK</text>
+            <circle cx="90" cy="150" r="13" fill="#0a84ff" stroke="#ffd400" stroke-width="3"/>
+            <circle cx="90" cy="150" r="20" fill="none" stroke="#ffd400" stroke-dasharray="3 3"/>
+            <circle cx="90" cy="133" r="7" fill="#ffeffb" stroke="#0b1220"/>
+            <line x1="97" y1="140" x2="150" y2="45" stroke="#fff" stroke-dasharray="5 5"/>
+            <circle cx="150" cy="45" r="10" fill="none" stroke="#ffd400" stroke-width="3"/>
+            <line x1="140" y1="45" x2="160" y2="45" stroke="#ffd400" stroke-width="3"/>
+            <line x1="150" y1="35" x2="150" y2="55" stroke="#ffd400" stroke-width="3"/>
+          </svg>
+        </div>
+        <div>
+          <ul>
+            <li data-lang-en><b>Magnet:</b> select a player and drag the ball (or the player) close — the ball snaps to the player's hand automatically.</li>
+            <li data-lang-da><b>Magnet:</b> vælg en spiller og træk bolden (eller spilleren) tæt på — bolden hopper automatisk fast ved spillerens hånd.</li>
+            <li data-lang-en>Choose the <b><svg class="sym"><use href="#i-target"/></svg> Shoot</b> tool. A dashed aim line and target marker follow your cursor.</li>
+            <li data-lang-da>Vælg <b><svg class="sym"><use href="#i-target"/></svg> Skud</b>-værktøjet. En stiplet sigtelinje og et målmærke følger markøren.</li>
+            <li data-lang-en>Aim at a <b>teammate</b> <svg class="sym"><use href="#i-right"/></svg> the marker turns green and the ball is <b>passed</b> (that teammate becomes selected).</li>
+            <li data-lang-da>Sigt mod en <b>medspiller</b> <svg class="sym"><use href="#i-right"/></svg> mærket bliver grønt og bolden <b>afleveres</b> (medspilleren bliver valgt).</li>
+            <li data-lang-en>Aim at the <b>goal</b> <svg class="sym"><use href="#i-right"/></svg> the ball is <b>shot</b> to where you point.</li>
+            <li data-lang-da>Sigt mod <b>målet</b> <svg class="sym"><use href="#i-right"/></svg> bolden <b>skydes</b> hen hvor du peger.</li>
+            <li data-lang-en>Aim <b>near the goalkeeper</b> <svg class="sym"><use href="#i-right"/></svg> the marker turns red and the ball <b>magnets to the keeper</b> (a save).</li>
+            <li data-lang-da>Sigt <b>tæt på målmanden</b> <svg class="sym"><use href="#i-right"/></svg> mærket bliver rødt og bolden <b>magnetiseres til målmanden</b> (en redning).</li>
+          </ul>
+        </div>
+      </div>
+      <div class="callout" data-lang-en><svg class="sym"><use href="#i-hand"/></svg> <b>Quick way:</b> you don't have to switch tools — with the <b>Select</b> tool, mark a player then tap a team-mate to <b>pass</b> the ball to them, or tap the goal to <b>shoot</b> it into the net.</div>
+      <div class="callout" data-lang-da><svg class="sym"><use href="#i-hand"/></svg> <b>Hurtig måde:</b> du behøver ikke skifte værktøj — med <b>Vælg</b>-værktøjet markerer du en spiller og trykker på en medspiller for at <b>aflevere</b> bolden eller på målet for at <b>skyde</b> den i nettet.</div>
+    </section>
+
+    <!-- 5. Physics & cue sports -->
+    <section class="card" id="physics">
+      <h2><span class="num">5</span> <span data-lang-en>Physics &amp; Cue Sports</span><span data-lang-da>Fysik &amp; Køllesport</span></h2>
+      <p data-lang-en>Cue and precision sports use a real <b>physics engine</b> — balls roll, collide, transfer momentum and slow down with friction.</p>
+      <p data-lang-da>Kølle- og præcisionssport bruger en ægte <b>fysikmotor</b> — bolde ruller, kolliderer, overfører bevægelsesenergi og bremses af friktion.</p>
+      <ul>
+        <li data-lang-en><b>Snooker &amp; Pool:</b> pick the <svg class="sym"><use href="#i-cue"/></svg> cue tool, then <b>press and hold</b> on the cue ball to charge power — a growing ring shows the strength. Release to strike; a longer hold sends the ball further.</li>
+        <li data-lang-da><b>Snooker &amp; Pool:</b> vælg <svg class="sym"><use href="#i-cue"/></svg> kølle-værktøjet, og <b>tryk og hold</b> på den hvide kugle for at lade kraften op — en voksende ring viser styrken. Slip for at støde; et længere hold sender kuglen længere.</li>
+        <li data-lang-en><b>Collisions:</b> struck balls hit others and pass on their energy realistically, then settle as friction slows them.</li>
+        <li data-lang-da><b>Kollisioner:</b> ramte kugler støder ind i andre og overfører energien realistisk, og falder til ro, når friktionen bremser dem.</li>
+        <li data-lang-en><b>Darts:</b> aim and throw at the board; the dart lands where you release.</li>
+        <li data-lang-da><b>Dart:</b> sigt og kast mod skiven; pilen lander der, hvor du slipper.</li>
+      </ul>
+      <div class="callout" data-lang-en><svg class="sym"><use href="#i-hand"/></svg> Tip: a quick tap gives a soft nudge, a long hold gives a power break. Use the <b>Erase</b> tool to remove drawn lines without moving the balls.</div>
+      <div class="callout" data-lang-da><svg class="sym"><use href="#i-hand"/></svg> Tip: et hurtigt tryk giver et blødt puf, et langt hold giver et kraftfuldt break. Brug <b>Slet</b>-værktøjet for at fjerne tegnede linjer uden at flytte kuglerne.</div>
+    </section>
+
+    <!-- 6. Record -->
+    <section class="card" id="record">
+      <h2><span class="num">6</span> <span data-lang-en>Record the Board (auto-frames + video)</span><span data-lang-da>Optag Tavlen (auto-frames + video)</span></h2>
+      <p data-lang-en>The <b>Frames &amp; Animation</b> bar <b>above the court</b> records in one press: every move you make becomes an <b>animation frame</b>, and the whole sequence is saved as a <b>video clip</b> you can share with players or other coaches.</p>
+      <p data-lang-da><b>Frames &amp; Animation</b>-bjælken <b>over banen</b> optager med ét tryk: hver bevægelse du laver bliver til en <b>animations-frame</b>, og hele sekvensen gemmes som et <b>videoklip</b>, du kan dele med spillere eller andre trænere.</p>
+      <ol>
+        <li data-lang-en>Press <b><svg class="sym solid dot-rec"><use href="#i-rec"/></svg> Record (auto-frames)</b> above the court — a blinking <span class="tag"><svg class="sym solid dot-rec"><use href="#i-rec"/></svg> REC</span> timer and a frame counter appear.</li>
+        <li data-lang-da>Tryk <b><svg class="sym solid dot-rec"><use href="#i-rec"/></svg> Optag (auto-frames)</b> over banen — en blinkende <span class="tag"><svg class="sym solid dot-rec"><use href="#i-rec"/></svg> REC</span> timer og en frame-tæller vises.</li>
+        <li data-lang-en>Do your moves / passes / shots on the board. <b>Every move adds a frame</b> automatically — you never press Add Frame.</li>
+        <li data-lang-da>Lav dine bevægelser / afleveringer / skud på tavlen. <b>Hver bevægelse tilføjer en frame</b> automatisk — du trykker aldrig Tilføj Frame.</li>
+        <li data-lang-en>Press <b><svg class="sym solid"><use href="#i-stop"/></svg> Stop</b>. Nothing downloads on its own — an <b>export bar</b> appears above the court with a button per format (<b>WEBM</b> and, where your browser can encode it, <b>MP4</b>) showing each file's size. Click the one you want to save it, or <b>✕</b> to discard the take. The captured frames stay on the frame strip either way.</li>
+        <li data-lang-da>Tryk <b><svg class="sym solid"><use href="#i-stop"/></svg> Stop</b>. Intet downloades af sig selv — en <b>eksport-bjælke</b> vises over banen med en knap pr. format (<b>WEBM</b> og, hvis din browser kan kode det, <b>MP4</b>) med filstørrelsen. Klik på den du vil gemme, eller <b>✕</b> for at kassere optagelsen. De fangede frames bliver liggende på frame-striben uanset hvad.</li>
+        <li data-lang-en>Press <b><svg class="sym solid"><use href="#i-play"/></svg> Play</b> to replay the recorded sequence on the board at any time.</li>
+        <li data-lang-da>Tryk <b><svg class="sym solid"><use href="#i-play"/></svg> Afspil</b> for at afspille den optagne sekvens på tavlen når som helst.</li>
+      </ol>
+      <div class="callout" data-lang-en><svg class="sym"><use href="#i-video"/></svg> Both containers are recorded in the same take, so choosing MP4 costs no extra time. WebM plays in Chrome, Edge and Firefox; MP4 plays everywhere. If your browser cannot capture video at all, the <b>frames are still recorded</b> — only the export bar is skipped.</div>
+      <div class="callout" data-lang-da><svg class="sym"><use href="#i-video"/></svg> Begge formater optages i samme omgang, så MP4 koster ikke ekstra tid. WebM afspilles i Chrome, Edge og Firefox; MP4 afspilles overalt. Kan din browser slet ikke optage video, bliver <b>framesene stadig optaget</b> — kun eksport-bjælken springes over.</div>
+    </section>
+
+    <!-- 7. Video analysis -->
+    <section class="card" id="video">
+      <h2><span class="num">7</span> <span data-lang-en>Video Analysis</span><span data-lang-da>Videoanalyse</span></h2>
+      <p data-lang-en>Import a match video or paste a live-stream link, bookmark key moments, and export short clips around each bookmark — with your comment burned into the picture.</p>
+      <p data-lang-da>Importér en kampvideo eller indsæt et live-stream-link, bogmærk vigtige øjeblikke, og eksportér korte klip omkring hvert bogmærke — med din kommentar brændt ind i billedet.</p>
+      <ol>
+        <li data-lang-en><b>Import</b> a local video file, or paste a <b>stream link</b> (YouTube, Twitch, Vimeo, Dailymotion, Facebook) and press <b>Watch</b>.</li>
+        <li data-lang-da><b>Importér</b> en lokal videofil, eller indsæt et <b>stream-link</b> (YouTube, Twitch, Vimeo, Dailymotion, Facebook) og tryk <b>Se</b>.</li>
+        <li data-lang-en>Use the speed buttons (<kbd>0.5×</kbd>–<kbd>2×</kbd>) and the ±5s seek to study the play. These only apply to imported files — a stream is controlled by its own player, so they are hidden while you watch one.</li>
+        <li data-lang-da>Brug hastighedsknapperne (<kbd>0.5×</kbd>–<kbd>2×</kbd>) og ±5s-spring for at studere spillet. De gælder kun importerede filer — et stream styres af sin egen afspiller, så de skjules mens du ser et.</li>
+        <li data-lang-en>Press <b>★ Bookmark</b> at any moment, add a <b>tag</b> and a <b>comment</b> — bookmarks save automatically. The <b>Time (mm:ss)</b> field is filled in for you on an imported file and can be typed by hand, which is how you bookmark moments in a <b>stream</b>.</li>
+        <li data-lang-da>Tryk <b>★ Bogmærke</b> når som helst, tilføj et <b>tag</b> og en <b>kommentar</b> — bogmærker gemmes automatisk. Feltet <b>Tid (mm:ss)</b> udfyldes for dig på en importeret fil og kan skrives manuelt, hvilket er sådan du bogmærker øjeblikke i et <b>stream</b>.</li>
+        <li data-lang-en>Press <b>Go</b> on a bookmark to jump straight to that second in an imported file.</li>
+        <li data-lang-da>Tryk <b>Gå</b> på et bogmærke for at hoppe direkte til det sekund i en importeret fil.</li>
+        <li data-lang-en>Press <b>Export Clips (WebM + MP4)</b> to download a short clip around every bookmark (imported files only). Each clip has a caption layer burned in showing the <b>timestamp, tag and comment</b>, so the note travels with the file.</li>
+        <li data-lang-da>Tryk <b>Eksportér Klip (WebM + MP4)</b> for at downloade et kort klip omkring hvert bogmærke (kun importerede filer). Hvert klip har et tekstlag brændt ind med <b>tidsstempel, tag og kommentar</b>, så noten følger med filen.</li>
+      </ol>
+      <div class="callout" data-lang-en><svg class="sym"><use href="#i-clip"/></svg> Export records each bookmark's segment straight from the player, writing WebM and MP4 in the same pass — keep the tab visible while it runs. Streaming links can't be exported (only imported files).</div>
+      <div class="callout" data-lang-da><svg class="sym"><use href="#i-clip"/></svg> Eksporten optager hvert bogmærkes segment direkte fra afspilleren og skriver WebM og MP4 i samme omgang — hold fanen synlig mens den kører. Stream-links kan ikke eksporteres (kun importerede filer).</div>
+    </section>
+
+    <!-- 8. Squad, matches & training -->
+    <section class="card" id="squad">
+      <h2><span class="num">8</span> <span data-lang-en>Squad, Matches &amp; Training Planner</span><span data-lang-da>Trup, Kampe &amp; Træningsplan</span></h2>
+      <p data-lang-en>These three modules hold the everyday data the rest of the app builds on — who is on the team, when you play, and what you train.</p>
+      <p data-lang-da>Disse tre moduler rummer de daglige data, som resten af appen bygger på — hvem der er på holdet, hvornår I spiller, og hvad I træner.</p>
+      <ul>
+        <li data-lang-en><b>Teams &amp; Players:</b> add players with number, position, height and status. Positions follow your chosen sport. Mark a player <b>Injured</b> and it shows on the Dashboard — Injured and Not Active players are also left out of the statistics leaderboard.</li>
+        <li data-lang-da><b>Hold &amp; Spillere:</b> tilføj spillere med nummer, position, højde og status. Positionerne følger din valgte sportsgren. Markér en spiller som <b>Skadet</b>, og det vises på Oversigten — skadede og ikke-aktive spillere udelades også fra statistik-ranglisten.</li>
+        <li data-lang-en><b>Rename your team:</b> the line under the <b>Teams &amp; Players</b> heading is editable — click it (✎) to set the <b>team name</b>, <b>division / league</b> and <b>category</b>. The new name is used across the app and is included in your backup.</li>
+        <li data-lang-da><b>Omdøb dit hold:</b> linjen under overskriften <b>Hold &amp; Spillere</b> kan redigeres — klik på den (✎) for at sætte <b>holdnavn</b>, <b>division / liga</b> og <b>kategori</b>. Det nye navn bruges i hele appen og kommer med i din backup.</li>
+        <li data-lang-en><b>Staff:</b> add coaches, physios and analysts under the same view, each with a role — and start a <b>💬 chat</b> with any player or staff member straight from the list.</li>
+        <li data-lang-da><b>Stab:</b> tilføj trænere, fysioterapeuter og analytikere i samme visning, hver med en rolle — og start en <b>💬 chat</b> med enhver spiller eller stabsmedlem direkte fra listen.</li>
+        <li data-lang-en><b>Matches:</b> create fixtures with opponent, date, home/away and venue. The next match appears on the Dashboard and is what <b>Live Scouting</b> registers against.</li>
+        <li data-lang-da><b>Kampe:</b> opret kampe med modstander, dato, hjemme/ude og spillested. Næste kamp vises på Oversigten og er den, <b>Live Registrering</b> registrerer på.</li>
+        <li data-lang-en><b>Training Planner:</b> build a session from your <b>Exercise Library</b> — pick drills, set the order and total duration, then save it as a plan you can reuse or share.</li>
+        <li data-lang-da><b>Træningsplan:</b> byg en session ud fra dit <b>Øvelsesbibliotek</b> — vælg øvelser, sæt rækkefølge og samlet varighed, og gem den som en plan, du kan genbruge eller dele.</li>
+      </ul>
+      <div class="callout" data-lang-en><svg class="sym"><use href="#i-dumbbell"/></svg> Use the <kbd>/</kbd> search box in the top bar to jump straight to a player, match, drill or saved tactic.</div>
+      <div class="callout" data-lang-da><svg class="sym"><use href="#i-dumbbell"/></svg> Brug <kbd>/</kbd>-søgefeltet i topbjælken for at hoppe direkte til en spiller, kamp, øvelse eller gemt taktik.</div>
+    </section>
+
+    <!-- 9. Exercise library -->
+    <section class="card" id="exercises">
+      <h2><span class="num">9</span> <span data-lang-en>Exercise Library</span><span data-lang-da>Øvelsesbibliotek</span></h2>
+      <p data-lang-en>Build a library of reusable drills with tags, duration and intensity. The <b>categories match your chosen sport</b> automatically.</p>
+      <p data-lang-da>Byg et bibliotek af genanvendelige øvelser med tags, varighed og intensitet. <b>Kategorierne matcher din valgte sportsgren</b> automatisk.</p>
+      <ul>
+        <li data-lang-en>Filter drills with the category <b>pills</b> — e.g. basketball shows Offense, Defense, Shooting, Ball Handling, Rebounds, Conditioning.</li>
+        <li data-lang-da>Filtrér øvelser med kategori-<b>pillerne</b> — fx viser basketball Angreb, Forsvar, Skud, Boldbehandling, Rebounds, Kondition.</li>
+        <li data-lang-en>Press <b>+ New Exercise</b>, choose a sport-specific category and intensity, and add tags.</li>
+        <li data-lang-da>Tryk <b>+ Ny Øvelse</b>, vælg en sports-specifik kategori og intensitet, og tilføj tags.</li>
+        <li data-lang-en>In <span class="tag">Training Planner <svg class="sym"><use href="#i-right"/></svg> + New Drill</span> you can also paste a <b>YouTube link</b> and one <b>other video link</b>. They show up as ▶ buttons on the drill card and open in a new tab — handy for showing the squad how a drill is run.</li>
+        <li data-lang-da>I <span class="tag">Træningsplan <svg class="sym"><use href="#i-right"/></svg> + Ny Øvelse</span> kan du også indsætte et <b>YouTube-link</b> og ét <b>andet videolink</b>. De vises som ▶-knapper på øvelseskortet og åbner i en ny fane — praktisk til at vise truppen, hvordan en øvelse køres.</li>
+        <li data-lang-en>Exercises feed the <b>Training Planner</b> when you build sessions.</li>
+        <li data-lang-da>Øvelser føder <b>Træningsplanen</b>, når du bygger sessioner.</li>
+      </ul>
+    </section>
+
+    <!-- 10. Opponent analysis -->
+    <section class="card" id="opponents">
+      <h2><span class="num">10</span> <span data-lang-en>Opponent Analysis</span><span data-lang-da>Modstanderanalyse</span></h2>
+      <p data-lang-en>Track opponents with scouting reports, key players, tendencies and a <b>preferred formation that matches your sport</b>.</p>
+      <p data-lang-da>Følg modstandere med scoutingrapporter, nøglespillere, tendenser og en <b>foretrukken opstilling der matcher din sport</b>.</p>
+      <ul>
+        <li data-lang-en>Press <b>+ New Opponent</b> and fill in the record, key players and tendencies.</li>
+        <li data-lang-da>Tryk <b>+ Ny Modstander</b> og udfyld resultat, nøglespillere og tendenser.</li>
+        <li data-lang-en>The <b>Preferred formation</b> list adapts to your sport — e.g. soccer offers 4-4-2, 4-3-3, 3-5-2, 5-3-2, 4-2-3-1.</li>
+        <li data-lang-da><b>Foretrukken opstilling</b>-listen tilpasser sig din sport — fx tilbyder fodbold 4-4-2, 4-3-3, 3-5-2, 5-3-2, 4-2-3-1.</li>
+        <li data-lang-en>Open <b>Scouting Report</b> to generate a shareable summary per opponent.</li>
+        <li data-lang-da>Åbn <b>Scoutingrapport</b> for at generere et delbart resumé pr. modstander.</li>
+      </ul>
+    </section>
+
+    <!-- 11. Live scouting -->
+    <section class="card" id="scout">
+      <h2><span class="num">11</span> <span data-lang-en>Live Scouting</span><span data-lang-da>Live Registrering</span></h2>
+      <ul>
+        <li data-lang-en>Pick the match, press <b>Start</b> to run the clock.</li>
+        <li data-lang-da>Vælg kampen, tryk <b>Start</b> for at køre uret.</li>
+        <li data-lang-en>Choose a category (Attack, Defense, Fouls…), select the player, and tap an event — goals update the scoreboard instantly.</li>
+        <li data-lang-da>Vælg en kategori (Angreb, Forsvar, Frikast…), vælg spilleren og tryk på en hændelse — mål opdaterer scoretavlen med det samme.</li>
+        <li data-lang-en>Every event feeds the <b>Statistics</b> and <b>Reports</b> modules automatically.</li>
+        <li data-lang-da>Hver hændelse føder automatisk <b>Statistik</b>- og <b>Rapport</b>-modulerne.</li>
+      </ul>
+    </section>
+
+    <!-- 12. Statistics & reports -->
+    <section class="card" id="stats">
+      <h2><span class="num">12</span> <span data-lang-en>Statistics &amp; Reports</span><span data-lang-da>Statistik &amp; Rapporter</span></h2>
+      <p data-lang-en>Everything you register while scouting is turned into numbers you can read and hand out.</p>
+      <p data-lang-da>Alt hvad du registrerer under scouting bliver til tal, du kan læse og dele ud.</p>
+      <ul>
+        <li data-lang-en><b>Statistics</b> shows team and player performance — totals, efficiency and per-player breakdowns for the events your sport uses.</li>
+        <li data-lang-da><b>Statistik</b> viser hold- og spillerpræstation — totaler, effektivitet og opdeling pr. spiller for de hændelser, din sport bruger.</li>
+        <li data-lang-en>The player leaderboard only lists <b>available</b> players. Anyone marked <b>Injured</b> or <b>Not Active</b> in <span class="tag">Teams &amp; Players</span> is left out, and reappears as soon as you set them back to Active.</li>
+        <li data-lang-da>Spiller-ranglisten viser kun <b>tilgængelige</b> spillere. Alle markeret <b>Skadet</b> eller <b>Ikke aktiv</b> under <span class="tag">Hold &amp; Spillere</span> udelades og dukker op igen, så snart du sætter dem tilbage til Aktiv.</li>
+        <li data-lang-en><b>Reports</b> generates a <b>Match Report</b>, <b>Player Report</b> or <b>Season Report</b> — pick the report, then the match or player.</li>
+        <li data-lang-da><b>Rapporter</b> genererer en <b>Kamprapport</b>, <b>Spillerrapport</b> eller <b>Sæsonrapport</b> — vælg rapporten og derefter kampen eller spilleren.</li>
+        <li data-lang-en>Export any report as <span class="tag">CSV</span> for a spreadsheet, or <span class="tag">PDF / Print</span> to print or save it as a PDF.</li>
+        <li data-lang-da>Eksportér enhver rapport som <span class="tag">CSV</span> til et regneark, eller <span class="tag">PDF / Udskriv</span> for at printe eller gemme som PDF.</li>
+      </ul>
+    </section>
+
+    <!-- 13. Share -->
+    <section class="card" id="share">
+      <h2><span class="num">13</span> <span data-lang-en>Share Data (no account)</span><span data-lang-da>Del Data (ingen konto)</span></h2>
+      <p data-lang-en>SportTactic needs <b>no Google account and no login</b>. You share everything as small <b>files</b>, so it works fully offline.</p>
+      <p data-lang-da>SportTactic kræver <b>ingen Google-konto og intet login</b>. Du deler alt som små <b>filer</b>, så det virker helt offline.</p>
+      <ul>
+        <li data-lang-en><b>Full backup:</b> <span class="tag">Settings <svg class="sym"><use href="#i-right"/></svg> Export Backup</span> downloads a JSON of <b>everything</b> — squad, staff, matches, events, videos, exercises, reports, tactics, opponents, training and your settings. Recorded animation clips are packed into the same file, so nothing is left behind. Another device loads it with <span class="tag">Import Backup</span>, which also reads older backup files.</li>
+        <li data-lang-da><b>Fuld backup:</b> <span class="tag">Indstillinger <svg class="sym"><use href="#i-right"/></svg> Export Backup</span> downloader en JSON med <b>det hele</b> — trup, trænerstab, kampe, hændelser, videoer, øvelser, rapporter, taktikker, modstandere, træning og dine indstillinger. Optagede animationsklip pakkes med i samme fil, så intet går tabt. En anden enhed indlæser den med <span class="tag">Import Backup</span>, som også kan læse ældre backup-filer.</li>
+        <li data-lang-en><b>Send to coach:</b> <span class="tag">Send to Coach <svg class="sym"><use href="#i-mail"/></svg></span> downloads a share file and opens your email app with a ready message — just attach the file. Nothing is sent until you press send in your own mail app.</li>
+        <li data-lang-da><b>Send til træner:</b> <span class="tag">Send til Træner <svg class="sym"><use href="#i-mail"/></svg></span> downloader en delefil og åbner din e-mail med en færdig besked — vedhæft blot filen. Intet sendes, før du selv trykker send i dit mailprogram.</li>
+        <li data-lang-en><b>Reset:</b> <span class="tag">Reset Data</span> clears every store on this device and starts over from the demo data — export a backup first if you want to keep anything.</li>
+        <li data-lang-da><b>Nulstil:</b> <span class="tag">Nulstil Data</span> rydder alle datalagre på denne enhed og starter forfra med demodata — eksportér en backup først, hvis du vil beholde noget.</li>
+      </ul>
+      <div class="callout" data-lang-en><svg class="sym"><use href="#i-target"/></svg> To talk to your squad instead of swapping files, use the <a class="back" href="#messenger">Secure Messenger</a> — a live, end-to-end encrypted chat that needs no account.</div>
+      <div class="callout" data-lang-da><svg class="sym"><use href="#i-target"/></svg> Vil du tale med truppen i stedet for at bytte filer, så brug <a class="back" href="#messenger">Sikre Beskeder</a> — en live, end-to-end krypteret chat uden konto.</div>
+    </section>
+
+    <!-- Secure messenger -->
+    <section class="card" id="messenger">
+      <h2><span class="num"><svg class="sym"><use href="#i-lock"/></svg></span> <span data-lang-en>Secure Messenger (live &amp; encrypted)</span><span data-lang-da>Sikre Beskeder (live &amp; krypteret)</span></h2>
+      <p data-lang-en>When you and the other person are both online, you can talk <b>live</b>. Open <span class="tag">Settings <svg class="sym"><use href="#i-right"/></svg> Secure Messenger</span> (team sports). Messages travel <b>directly between the two devices</b> and are <b>end-to-end encrypted</b> — no account, no message ever stored on a server.</p>
+      <p data-lang-da>Når du og den anden begge er online, kan I tale <b>live</b>. Åbn <span class="tag">Indstillinger <svg class="sym"><use href="#i-right"/></svg> Sikre Beskeder</span> (holdsport). Beskeder går <b>direkte mellem de to enheder</b> og er <b>end-to-end krypteret</b> — ingen konto, og ingen beskeder gemmes på en server.</p>
+      <div class="drills-h" data-lang-en>Quick connect — the easy way</div>
+      <div class="drills-h" data-lang-da>Hurtig forbindelse — den nemme måde</div>
+      <ol>
+        <li data-lang-en>Type <b>Your name</b> so the other person sees who is writing.</li>
+        <li data-lang-da>Skriv <b>Dit navn</b>, så den anden kan se, hvem der skriver.</li>
+        <li data-lang-en>Tap the <b>🎲 dice</b> to generate a shared key (or type one you agreed on).</li>
+        <li data-lang-da>Tryk på <b>🎲 terningen</b> for at lave en fælles nøgle (eller skriv en, I har aftalt).</li>
+        <li data-lang-en>Send the key to the other person with <b>📤 Share</b> or <b>📋 Copy</b> — WhatsApp, SMS, e-mail, anything.</li>
+        <li data-lang-da>Send nøglen til den anden med <b>📤 Del</b> eller <b>📋 Kopiér</b> — WhatsApp, SMS, e-mail, hvad som helst.</li>
+        <li data-lang-en>Pick <b>Mode</b> — Chat only, Voice call or Video call.</li>
+        <li data-lang-da>Vælg <b>Tilstand</b> — kun chat, taleopkald eller videoopkald.</li>
+        <li data-lang-en>You both type the <b>exact same key</b> and tap <b>🔗 Connect</b>. When the status says <b>Connected</b>, start writing.</li>
+        <li data-lang-da>I skriver begge <b>præcis samme nøgle</b> og trykker <b>🔗 Forbind</b>. Når status siger <b>Forbundet</b>, kan I skrive.</li>
+      </ol>
+      <div class="callout" data-lang-en><svg class="sym"><use href="#i-lock"/></svg> The key <b>is</b> the password: it both finds the other device and encrypts everything. <b>Anyone who has the key can join</b>, so keep it private and use a fresh key for a new conversation. Nothing readable ever leaves your device.</div>
+      <div class="callout" data-lang-da><svg class="sym"><use href="#i-lock"/></svg> Nøglen <b>er</b> adgangskoden: den både finder den anden enhed og krypterer alt. <b>Alle med nøglen kan deltage</b>, så hold den privat og brug en ny nøgle til en ny samtale. Intet læsbart forlader nogensinde din enhed.</div>
+      <div class="drills-h" data-lang-en>Team chat setup — one key per player or staff member</div>
+      <div class="drills-h" data-lang-da>Opsæt holdchat — én nøgle pr. spiller eller træner</div>
+      <p data-lang-en>Under Quick connect you get a <b>👥 Team chat setup</b> panel listing your whole squad — <b>Staff</b> first, then <b>Players</b>. Each person gets their own key, so you never retype anything.</p>
+      <p data-lang-da>Under Hurtig forbindelse finder du panelet <b>👥 Opsæt holdchat</b> med hele truppen — <b>Trænerstab</b> først, derefter <b>Spillere</b>. Hver person får sin egen nøgle, så du aldrig skal skrive noget igen.</p>
+      <ol>
+        <li data-lang-en>A row shows <b>Set up</b> until that person has a key, then <b>🔑 Ready</b>.</li>
+        <li data-lang-da>En række viser <b>Opsæt</b>, indtil personen har en nøgle, derefter <b>🔑 Klar</b>.</li>
+        <li data-lang-en>Tap <b>📤</b> to create the key (first time) and send it to them — once only.</li>
+        <li data-lang-da>Tryk <b>📤</b> for at lave nøglen (første gang) og sende den til personen — kun én gang.</li>
+        <li data-lang-en>From then on, <b>💬 Chat</b> fills the key in and connects in one tap.</li>
+        <li data-lang-da>Derefter udfylder <b>💬 Chat</b> nøglen og forbinder med ét tryk.</li>
+        <li data-lang-en>Tap <b>🎲</b> to issue a <b>new key</b> if one leaks or a player leaves — the old key stops working for that person.</li>
+        <li data-lang-da>Tryk <b>🎲</b> for at udstede en <b>ny nøgle</b>, hvis en nøgle lækker, eller en spiller stopper — den gamle nøgle virker ikke længere for personen.</li>
+      </ol>
+      <p data-lang-en>The same works straight from <span class="tag">Teams &amp; Players</span>: every player row <b>and every staff row</b> has a <b>💬 Chat</b> button that opens the messenger with that person's key already loaded.</p>
+      <p data-lang-da>Det samme virker direkte fra <span class="tag">Hold &amp; Spillere</span>: hver spillerrække <b>og hver trænerrække</b> har en <b>💬 Chat</b>-knap, der åbner beskeder med personens nøgle allerede indlæst.</p>
+      <div class="callout" data-lang-en><svg class="sym"><use href="#i-lock"/></svg> These per-person keys are stored with the squad record, so they are included in a full backup. Treat a backup file like a password list — share it only with people you trust.</div>
+      <div class="callout" data-lang-da><svg class="sym"><use href="#i-lock"/></svg> Nøglerne gemmes sammen med trup-oplysningerne og er derfor med i en fuld backup. Behandl en backup-fil som en liste af adgangskoder — del den kun med folk, du stoler på.</div>
+      <ul>
+        <li data-lang-en>Send <b>files and photos</b> with <b>Attach</b> (max 8 MB) — they are encrypted like the messages.</li>
+        <li data-lang-da>Send <b>filer og billeder</b> med <b>Vedhæft</b> (maks. 8 MB) — de krypteres som beskederne.</li>
+        <li data-lang-en>Turn on <b>Disappearing messages</b> (1 minute, 1 hour, 1 day or 1 week) if the chat should clean itself up.</li>
+        <li data-lang-da>Slå <b>Forsvindende beskeder</b> til (1 minut, 1 time, 1 dag eller 1 uge), hvis chatten skal rydde op efter sig selv.</li>
+        <li data-lang-en>Lost the connection? Tap <b>Reconnect</b> — or <b>Show key</b> to read the key out again.</li>
+        <li data-lang-da>Mistet forbindelsen? Tryk <b>Forbind igen</b> — eller <b>Vis nøgle</b> for at læse nøglen op igen.</li>
+        <li data-lang-en>Both devices must be <b>online at the same time</b> — messages are never stored anywhere in between.</li>
+        <li data-lang-da>Begge enheder skal være <b>online samtidig</b> — beskeder gemmes aldrig nogen steder imens.</li>
+      </ul>
+    </section>
+
+    <!-- 14. Shortcuts -->
+    <section class="card" id="keys">
+      <h2><span class="num">14</span> <span data-lang-en>Keyboard Shortcuts</span><span data-lang-da>Tastaturgenveje</span></h2>
+      <ul>
+        <li><kbd>1</kbd>–<kbd>9</kbd> <span data-lang-en>Switch modules (Dashboard, Teams, Matches, Live Scouting, Statistics, Tactical Board, Video, Training, Exercises)</span><span data-lang-da>Skift modul (Oversigt, Hold, Kampe, Live Registrering, Statistik, Taktiktavle, Video, Træning, Øvelser)</span></li>
+        <li><kbd>/</kbd> <span data-lang-en>Focus search</span><span data-lang-da>Fokus på søgning</span></li>
+        <li><kbd>Esc</kbd> <span data-lang-en>Close dialog or leave a field</span><span data-lang-da>Luk dialog eller forlad et felt</span></li>
+        <li><kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>Z</kbd> <span data-lang-en>Undo on the tactical board</span><span data-lang-da>Fortryd på taktiktavlen</span></li>
+        <li><kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd> <span data-lang-en>or</span><span data-lang-da>eller</span> <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>Y</kbd> <span data-lang-en>Redo on the tactical board</span><span data-lang-da>Gendan på taktiktavlen</span></li>
+      </ul>
+    </section>
+
+    <!-- Support / donate -->
+    <section class="card" id="support">
+      <h2><span class="num"><svg class="sym"><use href="#i-heart"/></svg></span> <span data-lang-en>Support the App</span><span data-lang-da>Støt appen</span></h2>
+      <p data-lang-en>SportTactic is free, works offline and shows no ads. There is no subscription and no data is ever sold — because none of it leaves your device.</p>
+      <p data-lang-da>SportTactic er gratis, virker offline og viser ingen reklamer. Der er intet abonnement, og ingen data sælges — for intet forlader din enhed.</p>
+      <ul>
+        <li data-lang-en>The <b><svg class="sym"><use href="#i-heart"/></svg> Donate</b> button sits in the top bar, right next to the <b>EN / DA</b> language switch.</li>
+        <li data-lang-da>Knappen <b><svg class="sym"><use href="#i-heart"/></svg> Doner</b> ligger i topbjælken, lige ved siden af sprogskifteren <b>EN / DA</b>.</li>
+        <li data-lang-en>Tapping it opens a small dialog with the official <b>PayPal donate button</b> — card payments included, no PayPal account required. Nothing is tracked and nothing changes in the app if you skip it.</li>
+        <li data-lang-da>Et tryk åbner en lille dialog med den officielle <b>PayPal-donationsknap</b> — kortbetaling inkluderet, ingen PayPal-konto nødvendig. Intet spores, og intet ændrer sig i appen, hvis du springer over.</li>
+        <li data-lang-en>The PayPal button is the only part of SportTactic that loads anything from the internet, and it is fetched <b>only when you open the dialog</b> — everything else keeps working offline.</li>
+        <li data-lang-da>PayPal-knappen er den eneste del af SportTactic, der henter noget fra internettet, og den hentes <b>kun når du åbner dialogen</b> — alt andet virker fortsat offline.</li>
+      </ul>
+      <div class="callout" data-lang-en><svg class="sym"><use href="#i-heart"/></svg> Every feature stays available whether you donate or not. Support simply pays for the time that goes into new sports, drills and tools.</div>
+      <div class="callout" data-lang-da><svg class="sym"><use href="#i-heart"/></svg> Alle funktioner er tilgængelige, uanset om du donerer eller ej. Støtten betaler blot for den tid, der bruges på nye sportsgrene, øvelser og værktøjer.</div>
+    </section>
+  </div>
+
+  <footer>
+    <p><a class="back" href="index.html"><svg class="sym"><use href="#i-left"/></svg> <span data-lang-en>Return to main page</span><span data-lang-da>Tilbage til hovedsiden</span></a></p>
+    <p style="margin-top:10px">© 2026 ArcToCore — Steen Østerby Rasmussen</p>
+    <p style="margin-top:8px"><a class="back" href="license.html"><span data-lang-en>License</span><span data-lang-da>Licens</span></a></p>
+  </footer>
+
+  <button id="toTop" class="to-top" type="button" title="Scroll to top" aria-label="Scroll to top"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 15l-6-6-6 6"/></svg></button>
+
+  <script>
+    function setLang(l){
+      document.body.classList.toggle('da', l === 'da');
+      document.getElementById('btnEn').classList.toggle('active', l === 'en');
+      document.getElementById('btnDa').classList.toggle('active', l === 'da');
+      document.documentElement.setAttribute('lang', l);
+      try { localStorage.setItem('ht_help_lang', l); } catch(e){}
+    }
+
+    const THEME_SUN = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/></svg>';
+    const THEME_MOON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z"/></svg>';
+    function applyTheme(t){
+      t = (t === 'light') ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', t);
+      const ic = document.getElementById('themeIcon');
+      if (ic) ic.innerHTML = (t === 'dark') ? THEME_SUN : THEME_MOON;
+      try { localStorage.setItem('ht_help_theme', t); } catch(e){}
+    }
+    function toggleTheme(){
+      const cur = document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+      applyTheme(cur === 'light' ? 'dark' : 'light');
+    }
+
+    (function(){
+      const btn = document.getElementById('toTop');
+      if (!btn) return;
+      const onScroll = () => btn.classList.toggle('show', window.scrollY > 300);
+      window.addEventListener('scroll', onScroll, { passive: true });
+      btn.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+      onScroll();
+    })();
+
+    try { setLang(localStorage.getItem('ht_help_lang') || 'en'); } catch(e){}
+    try { applyTheme(localStorage.getItem('ht_help_theme') || 'dark'); } catch(e){ applyTheme('dark'); }
+  </script>
+</body>
+</html>

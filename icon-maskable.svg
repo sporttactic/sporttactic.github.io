@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="SportTactic">
+  <!-- Maskable: art is kept inside the centre 60% safe zone so any mask shape can crop it. -->
+  <rect width="512" height="512" fill="#ffffff"/>
+  <g transform="translate(20 46) scale(4)">
+    <text x="59" y="36" text-anchor="middle" textLength="66" lengthAdjust="spacing"
+          font-family="Arial, Helvetica, sans-serif" font-size="17" fill="#111111">SPORT</text>
+    <g fill="#111111">
+      <path d="M25 42 H95 L93 50 H23 Z"/>
+      <path d="M34.5 50 H46.5 L38.75 81 H26.75 Z"/>
+      <path d="M68.5 50 H80.5 L72.75 81 H60.75 Z"/>
+    </g>
+  </g>
+</svg>
