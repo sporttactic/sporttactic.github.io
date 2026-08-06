@@ -105,6 +105,10 @@ Views.scouting = function (mount, params) {
   const catLabel = c => (I18N.getLang() === 'da' ? c.da : c.en);
   const evLabel = t => (I18N.getLang() === 'da' ? (EV_LABELS[t] || t) : t);
   const curCat = () => cats.find(c => c.id === activeCat) || cats[0];
+  const posBadgeHtml = (pos) => {
+    const b = SPORTS.posBadge(sport, pos);
+    return `<span class="pos-badge role-${b.role}" style="--pos:${b.color}" title="${UI.esc(pos || '')}">${UI.esc(b.ab)}</span>`;
+  };
 
   let clock = 0, timer = null, activeCat = cats[0].id;
 
@@ -132,7 +136,7 @@ Views.scouting = function (mount, params) {
           <div class="player-events">
             ${rows.length ? rows.map(p => `
               <div class="player-row">
-                <span class="player-tag">${p.position === 'Goalkeeper' ? '🧤 ' : ''}#${p.number} ${UI.esc(p.lastName)}</span>
+                <span class="player-tag">${posBadgeHtml(p.position)}#${p.number} ${UI.esc(p.lastName)}</span>
                 <div class="pev">
                   ${curCat().ev.map((e, i) => `<button class="event-btn ${e[3]}" data-ev="${i}" data-player="${p.id}">${UI.esc(I18N.getLang() === 'da' ? e[1] : e[0])}</button>`).join('')}
                 </div>
