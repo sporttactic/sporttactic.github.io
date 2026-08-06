@@ -8,7 +8,7 @@
 
    BUMP `VERSION` and the matching `?v=` entries in SHELL whenever an asset changes.
 */
-const VERSION = 'v18';
+const VERSION = 'v19';
 const CACHE = 'sporttactic-' + VERSION;
 
 const SHELL = [
@@ -25,17 +25,17 @@ const SHELL = [
   './sports.js?v=13',
   './playbook.js?v=12',
   './store.js?v=12',
-  './ui.js?v=14',
+  './ui.js?v=15',
   './dashboard.js?v=12',
   './teams.js?v=15',
-  './matches.js?v=13',
+  './matches.js?v=14',
   './scouting.js?v=14',
   './statistics.js?v=13',
-  './chess.js?v=12',
-  './bridge.js?v=12',
-  './poker.js?v=12',
-  './backgammon.js?v=12',
-  './tactics.js?v=34',
+  './chess.js?v=13',
+  './bridge.js?v=13',
+  './poker.js?v=13',
+  './backgammon.js?v=13',
+  './tactics.js?v=35',
   './video.js?v=17',
   './training.js?v=13',
   './exercises.js?v=12',
@@ -43,7 +43,7 @@ const SHELL = [
   './reports.js?v=12',
   './settings.js?v=20',
   './messenger.js?v=11',
-  './app.js?v=15'
+  './app.js?v=16'
 ];
 
 self.addEventListener('install', e => {

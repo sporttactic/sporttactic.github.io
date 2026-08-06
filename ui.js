@@ -53,15 +53,12 @@ const UI = (() => {
   // Translate helper that tolerates i18n not being loaded yet.
   function tr(key, fallback) { return (typeof T === 'function' && T(key)) || fallback; }
 
-  function modal({ title, body, footer, onOpen, width, fullscreen, dismissible, closeButtonOnly }) {
+  function modal({ title, body, footer, onOpen, width, fullscreen }) {
     const host = document.getElementById('modalHost');
     host.innerHTML = '';
-    // `dismissible: false` means the dialog can only be left through its own
-    // footer buttons (e.g. Cancel) — no X, no backdrop click, no Escape.
-    // `closeButtonOnly: true` keeps the X but blocks backdrop clicks and Escape.
-    const canDismiss = dismissible !== false;
-    const showClose = canDismiss || closeButtonOnly;
-    const freeDismiss = canDismiss && !closeButtonOnly;
+    // Every dialog is locked: no X, no backdrop click, no Escape. The only way
+    // out is one of its own footer buttons (Cancel / Close), so nothing is ever
+    // dismissed by accident.
     // When a view is in the Fullscreen API, only descendants of the fullscreen
     // element are visible — so move the modal host inside it while open.
     // Detect across vendor prefixes so it also works in WebKit/Firefox.
@@ -71,10 +68,9 @@ const UI = (() => {
     const fsBtn = fullscreen
       ? `<button class="icon-btn fs-btn" data-fs type="button" title="${esc(tr('common.fullscreen', 'Full Screen'))}" aria-label="${esc(tr('common.fullscreen', 'Full Screen'))}">\u26f6</button>`
       : '';
-    const closeBtn = showClose ? `<button class="icon-btn" data-close type="button">${icon('close', 18)}</button>` : '';
     const m = el(`
       <div class="modal" style="${width ? 'max-width:' + width + 'px' : ''}">
-        <div class="modal-head"><h2>${esc(title)}</h2><div class="modal-head-actions">${fsBtn}${closeBtn}</div></div>
+        <div class="modal-head"><h2>${esc(title)}</h2><div class="modal-head-actions">${fsBtn}</div></div>
         <div class="modal-body"></div>
         ${footer ? '<div class="modal-foot"></div>' : ''}
       </div>`);
@@ -82,15 +78,14 @@ const UI = (() => {
     if (footer) m.querySelector('.modal-foot').innerHTML = footer;
     host.appendChild(m);
     host.classList.remove('hidden');
-    if (freeDismiss) host.removeAttribute('data-locked'); else host.setAttribute('data-locked', '1');
+    host.setAttribute('data-locked', '1');
     const detachFs = fullscreen ? setupModalFullscreen(m) : null;
     const close = () => {
       if (detachFs) detachFs();
       host.classList.add('hidden'); host.innerHTML = ''; host.removeAttribute('data-locked');
       if (host.parentNode !== homeParent) homeParent.appendChild(host); // restore original position
     };
-    if (showClose) m.querySelector('[data-close]').onclick = close;
-    host.onclick = freeDismiss ? e => { if (e.target === host) close(); } : null;
+    host.onclick = null;
     if (onOpen) onOpen(m, close);
     return { root: m, close };
   }

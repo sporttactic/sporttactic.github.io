@@ -1,20 +1,20 @@
-# SportTactic — Tactical Analysis & Coaching Platform (Pure HTML5)
+# ?? SportTactic — Tactical Analysis & Coaching Platform (Pure HTML5)
 
 A fully client-side, offline-first handball coaching platform built with **pure HTML5, CSS and vanilla JavaScript** — no build step, no frameworks, no server. All data is stored locally in the browser using **IndexedDB**.
 
-## Running
+## ?? Running
 
 Just open `index.html` in any modern browser. For full functionality (IndexedDB, video import) it is best served over HTTP:
 
-powershell
+```powershell
 # from the project folder
 python -m http.server 8080
 # then open http://localhost:8080
-
+```
 
 Or double-click `index.html` directly.
 
-##  Implemented Modules
+## ? Implemented Modules
 
 | Module | Features |
 |--------|----------|
@@ -31,7 +31,7 @@ Or double-click `index.html` directly.
 | **Reports** | Match / player / season reports, export to **CSV** and **PDF/Print** |
 | **Settings** | Dark/light theme, language, role-based access, backup export/import, data reset |
 
-##  Non-functional Features
+## ?? Non-functional Features
 - **Offline mode** — everything runs locally via IndexedDB
 - **Auto-save** — changes persist instantly; 30s auto-save indicator
 - **PWA manifest** — installable on desktop & mobile
@@ -43,7 +43,7 @@ Or double-click `index.html` directly.
 - **Help & Tutorials** — see `help.html` (bilingual, with SVG graphics)
 
 ## Project Structure
-
+```
 index.html            app shell
 help.html             bilingual help & animated sport tutorials
 manifest.webmanifest
@@ -57,8 +57,8 @@ app.js                router, sport picker, search, theme, shortcuts, autosave
 dashboard.js teams.js matches.js scouting.js statistics.js
 tactics.js video.js training.js exercises.js opponents.js
 reports.js settings.js   one file per module (loaded flat from root)
+```
 
-
-##  Extending to the full stack
+## ?? Extending to the full stack
 This pure-HTML5 build is the front-end blueprint. To reach the full specification (cloud sync, auth, video processing) it maps onto:
 ASP.NET Core / Node.js + PostgreSQL + SignalR + FFmpeg + Azure/AWS storage, using the same entity model defined in `store.js`.

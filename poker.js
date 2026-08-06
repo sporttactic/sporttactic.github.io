@@ -120,9 +120,10 @@ window.PokerBot = (() => {
           <button class="btn sm primary" id="pkNew">${tr('poker.newHand', 'New Hand')}</button>
         </div>
       </div>`;
-    const modal = (window.UI && UI.modal) ? UI.modal({ title: tr('poker.title', 'Play the Poker Bot'), body, width: 640, fullscreen: true, onOpen: init }) : null;
+    const modal = (window.UI && UI.modal) ? UI.modal({ title: tr('poker.title', 'Play the Poker Bot'), body, width: 640, fullscreen: true, footer: `<button class="btn ghost" data-close2>${tr('common.close', 'Close')}</button>`, onOpen: init }) : null;
 
-    function init(m) {
+    function init(m, close) {
+      m.querySelector('[data-close2]').onclick = close;
       boardEl = m.querySelector('#pkTable');
       const range = m.querySelector('#pkRange'), lvl = m.querySelector('#pkLvl'), tier = m.querySelector('#pkTier');
       tier.textContent = tierName(level);

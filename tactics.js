@@ -1764,14 +1764,14 @@ Views.tactics = function (mount) {
     UI.modal({
       title: UI.esc(s.name),
       width: 720,
-      closeButtonOnly: true,
       body: `<video src="${show.url}" class="sys-video" controls autoplay loop muted playsinline></video>
         <p class="hint sys-video-err hidden">${T('tactics.animVideoPlayFail')}</p>`,
-      footer: items.map((i, n) => `<button class="btn" data-dl="${n}">⬇ ${i.ext.toUpperCase()}</button>`).join(''),
-      onOpen: m => {
+      footer: `<button class="btn ghost" data-close2>${T('common.close')}</button>` + items.map((i, n) => `<button class="btn" data-dl="${n}">⬇ ${i.ext.toUpperCase()}</button>`).join(''),
+      onOpen: (m, close) => {
         const v = m.querySelector('.sys-video');
         // Some engines can encode a container but not decode it back.
         v.onerror = () => { v.classList.add('hidden'); m.querySelector('.sys-video-err').classList.remove('hidden'); };
+        m.querySelector('[data-close2]').onclick = close;
         m.querySelectorAll('[data-dl]').forEach(b => b.onclick = () => {
           const i = items[+b.dataset.dl];
           const a = document.createElement('a'); a.href = i.url; a.download = i.file; a.click();

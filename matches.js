@@ -37,7 +37,6 @@ Views.matches = function (mount) {
     const dstr = d.toISOString().slice(0, 10);
     UI.modal({
       title: mt.id ? T('matches.editMatch') : T('matches.newMatch'),
-      dismissible: false,
       body: `
         <label class="field"><span>${T('matches.opponent')}</span><input id="m_opp" value="${UI.esc(mt.opponent || '')}"></label>
         <div class="row">

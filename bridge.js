@@ -105,9 +105,10 @@ window.BridgeBot = (() => {
           <button class="btn sm primary" id="brNew">${tr('bridge.newDeal', 'New Deal')}</button>
         </div>
       </div>`;
-    const modal = (window.UI && UI.modal) ? UI.modal({ title: tr('bridge.title', 'Play the Bridge Bot'), body, width: 660, fullscreen: true, onOpen: init }) : null;
+    const modal = (window.UI && UI.modal) ? UI.modal({ title: tr('bridge.title', 'Play the Bridge Bot'), body, width: 660, fullscreen: true, footer: `<button class="btn ghost" data-close2>${tr('common.close', 'Close')}</button>`, onOpen: init }) : null;
 
-    function init(m) {
+    function init(m, close) {
+      m.querySelector('[data-close2]').onclick = close;
       boardEl = m.querySelector('#brTable');
       const range = m.querySelector('#brRange'), lvl = m.querySelector('#brLvl'), tier = m.querySelector('#brTier');
       tier.textContent = tierName(level);

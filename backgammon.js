@@ -171,9 +171,10 @@ window.BackgammonBot = (() => {
         </div>
       </div>`;
 
-    const modal = (window.UI && UI.modal) ? UI.modal({ title: tr('bg.title', 'Play the Backgammon Bot'), body, width: 720, fullscreen: true, onOpen: init }) : null;
+    const modal = (window.UI && UI.modal) ? UI.modal({ title: tr('bg.title', 'Play the Backgammon Bot'), body, width: 720, fullscreen: true, footer: `<button class="btn ghost" data-close2>${tr('common.close', 'Close')}</button>`, onOpen: init }) : null;
 
-    function init(m) {
+    function init(m, close) {
+      m.querySelector('[data-close2]').onclick = close;
       boardEl = m.querySelector('#bgBoard'); diceEl = m.querySelector('#bgDice'); statusEl = m.querySelector('#bgStatus');
       rollBtn = m.querySelector('#bgRoll'); dblBtn = m.querySelector('#bgDouble');
       const range = m.querySelector('#bgRange'), lvl = m.querySelector('#bgLvl'), tier = m.querySelector('#bgTier');

@@ -239,18 +239,19 @@ window.ChessBot = (() => {
         </div>
       </div>`;
 
-    const modal = (window.UI && UI.modal) ? UI.modal({ title: tr('chess.title', 'Play the Kasparov Bot'), body, width: 640, fullscreen: true, onOpen: init }) : fallbackModal();
+    const modal = (window.UI && UI.modal) ? UI.modal({ title: tr('chess.title', 'Play the Kasparov Bot'), body, width: 640, fullscreen: true, footer: `<button class="btn ghost" data-close2>${tr('common.close', 'Close')}</button>`, onOpen: init }) : fallbackModal();
 
     function fallbackModal() {
       const host = document.getElementById('modalHost') || document.body;
-      const wrap = document.createElement('div'); wrap.className = 'modal'; wrap.innerHTML = `<div class="modal-head"><h2>${tr('chess.title', 'Play the Kasparov Bot')}</h2><button class="icon-btn" data-x>✕</button></div><div class="modal-body">${body}</div>`;
+      const wrap = document.createElement('div'); wrap.className = 'modal'; wrap.innerHTML = `<div class="modal-head"><h2>${tr('chess.title', 'Play the Kasparov Bot')}</h2></div><div class="modal-body">${body}</div><div class="modal-foot"><button class="btn ghost" data-close2>${tr('common.close', 'Close')}</button></div>`;
       host.classList.remove('hidden'); host.appendChild(wrap);
       const close = () => { wrap.remove(); host.classList.add('hidden'); };
-      wrap.querySelector('[data-x]').onclick = close;
       init(wrap, close); return { root: wrap, close };
     }
 
-    function init(m) {
+    function init(m, close) {
+      const closeBtn = m.querySelector('[data-close2]');
+      if (closeBtn) closeBtn.onclick = close;
       boardEl = m.querySelector('#cbBoard'); statusEl = m.querySelector('#cbStatus');
       logEl = m.querySelector('#cbLog'); capEl = m.querySelector('#cbCap');
       levelLbl = m.querySelector('#cbLvl'); levelNameEl = m.querySelector('#cbLvlName');
