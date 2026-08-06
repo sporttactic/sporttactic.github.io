@@ -89,10 +89,19 @@ Views.scouting = function (mount, params) {
     ]
   };
 
-  const cats = SPORT_EVENTS[sport] || SPORT_EVENTS.handball;
+  // Goalkeeper actions get their own tab in the sports that actually field one.
+  const GK_CAT = {
+    id: 'keeper', en: 'Goalkeeper', da: 'Målmand',
+    ev: [['Save', 'Redning', 'save', ''], ['Penalty Save', 'Straffekastredning', 'save', ''], ['One-on-One Save', 'Duelredning', 'save', ''], ['Rebound Control', 'Returkontrol', 'save', ''], ['Goal Conceded', 'Mål imod', 'conceded', 'turnover'], ['Assist', 'Assist', 'assist', '']]
+  };
+  const hasKeeper = ((window.SPORTS && SPORTS.positions(sport)) || []).indexOf('Goalkeeper') > -1;
+  const keepers = players.filter(p => p.position === 'Goalkeeper');
+
+  const cats = (SPORT_EVENTS[sport] || SPORT_EVENTS.handball).concat(hasKeeper ? [GK_CAT] : []);
   // en → da lookup across all sports so the event log translates historic events.
   const EV_LABELS = {};
   Object.values(SPORT_EVENTS).forEach(list => list.forEach(c => c.ev.forEach(e => { EV_LABELS[e[0]] = e[1]; })));
+  GK_CAT.ev.forEach(e => { EV_LABELS[e[0]] = e[1]; });
   const catLabel = c => (I18N.getLang() === 'da' ? c.da : c.en);
   const evLabel = t => (I18N.getLang() === 'da' ? (EV_LABELS[t] || t) : t);
   const curCat = () => cats.find(c => c.id === activeCat) || cats[0];
@@ -103,6 +112,8 @@ Views.scouting = function (mount, params) {
     const match = Store.find('matches', matchId);
     const events = Store.matchEvents(matchId).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
     const goals = events.filter(e => e.result === 'goal').length;
+    // The Goalkeeper tab only registers on keepers.
+    const rows = activeCat === 'keeper' ? keepers : players;
     mount.innerHTML = `
       <div class="page-head">
         <div><h1>${T('scout.title')}</h1><p>${T('scout.subtitle')} · ${UI.esc(SPORTS.name(sport, I18N.getLang()))}</p></div>
@@ -119,13 +130,13 @@ Views.scouting = function (mount, params) {
             ${cats.map(c => `<span class="pill ${c.id === activeCat ? 'active' : ''}" data-cat="${c.id}">${UI.esc(catLabel(c))}</span>`).join('')}
           </div>
           <div class="player-events">
-            ${players.length ? players.map(p => `
+            ${rows.length ? rows.map(p => `
               <div class="player-row">
-                <span class="player-tag">#${p.number} ${UI.esc(p.lastName)}</span>
+                <span class="player-tag">${p.position === 'Goalkeeper' ? '🧤 ' : ''}#${p.number} ${UI.esc(p.lastName)}</span>
                 <div class="pev">
                   ${curCat().ev.map((e, i) => `<button class="event-btn ${e[3]}" data-ev="${i}" data-player="${p.id}">${UI.esc(I18N.getLang() === 'da' ? e[1] : e[0])}</button>`).join('')}
                 </div>
-              </div>`).join('') : `<p style="color:var(--muted)">${T('scout.noPlayers')}</p>`}
+              </div>`).join('') : `<p style="color:var(--muted)">${activeCat === 'keeper' ? T('scout.noKeepers') : T('scout.noPlayers')}</p>`}
           </div>
         </div>
         <div class="card">

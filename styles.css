@@ -312,7 +312,9 @@ body {
 .bm-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 8px; }
 .bm-item { padding: 8px 0; border-bottom: 1px solid var(--border); }
 .bm-item:last-child { border-bottom: 0; }
-.bm-main { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.bm-item.sel { background: color-mix(in srgb, var(--primary) 12%, transparent); border-radius: 8px; padding-left: 8px; padding-right: 8px; box-shadow: inset 3px 0 0 var(--primary); }
+.bm-main { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+.bm-acts { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
 .bm-comment { margin: 4px 0 0; font-size: 13px; color: var(--text-soft); line-height: 1.45; }
 .video-panel.fs { position: fixed; inset: 0; z-index: 200; margin: 0; border-radius: 0; overflow: auto; padding: 18px; background: var(--surface); }
 .video-panel.fs #mediaWrap { max-width: 1100px; margin: 0 auto; }

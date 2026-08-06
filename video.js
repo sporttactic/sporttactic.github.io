@@ -5,6 +5,7 @@ Views.video = function (mount) {
   let bookmarks = [];
   const BM_ID = 'bookmarks';
   let clipLenSec = 6; // WebM sequence length around each bookmark
+  let selectedBm = null; // set by "Go" — scopes the export buttons to one clip
 
   function loadBookmarks() {
     const rec = Store.find('videos', BM_ID);
@@ -91,6 +92,7 @@ Views.video = function (mount) {
           </span>
         </div>
         <p class="hint" style="margin:6px 0 4px">${T('video.bmEmpty')}</p>
+        <p class="hint" id="bmScope" style="margin:0 0 8px"></p>
         <div id="bmList" class="bm-list"></div>
       </div>
     </div>`;
@@ -356,50 +358,88 @@ Views.video = function (mount) {
       else { try { v.currentTime = target; } catch (e) { v.removeEventListener('seeked', onSeeked); begin(); } }
     });
   }
-  async function exportClipSequences(ext) {
+  async function exportClipSequences(ext, only) {
     if (!v || !v.src || !v.duration || isNaN(v.duration)) { UI.toast(T('video.needLocal'), 'error'); return; }
     if (!window.MediaRecorder || !(v.captureStream || v.mozCaptureStream)) { UI.toast(T('video.needLocal'), 'error'); return; }
-    if (!bookmarks.length) { UI.toast(T('video.noBm'), 'error'); return; }
+    const list = (only && bookmarks.indexOf(only) >= 0) ? [only] : bookmarks;
+    if (!list.length) { UI.toast(T('video.noBm'), 'error'); return; }
     const formats = pickFormats().filter(f => f.ext === ext);
     if (!formats.length) { UI.toast(T('video.noMp4'), 'error'); return; }
     UI.toast(T('video.exporting') + ' ' + ext.toUpperCase());
     const wasRate = v.playbackRate, wasMuted = v.muted;
     v.playbackRate = 1; v.muted = true;   // mute so playback is silent and never autoplay-blocked
     let ok = 0;
-    for (let i = 0; i < bookmarks.length; i++) {
-      const b = bookmarks[i];
+    for (let i = 0; i < list.length; i++) {
+      const b = list[i];
       const start = Math.max(0, b.t - clipLenSec / 2);
       const end = Math.min(v.duration, Math.max(b.t + clipLenSec / 2, start + 1));
       try {
         const outs = await recordSegment(start, end, formats, b);
         const safe = String(b.tag).replace(/[^\w\-]+/g, '_').slice(0, 40) || 'clip';
-        const base = `clip-${String(i + 1).padStart(2, '0')}-${safe}-${Math.floor(b.t)}s`;
+        const base = `clip-${String(bookmarks.indexOf(b) + 1).padStart(2, '0')}-${safe}-${Math.floor(b.t)}s`;
         (outs || []).forEach(o => { download(o.blob, `${base}.${o.ext}`); ok++; });
       } catch (e) { /* skip failed segment */ }
     }
     v.playbackRate = wasRate; v.muted = wasMuted; v.pause();
     UI.toast(ok ? T('video.exported') + ' (' + ok + ' × ' + ext.toUpperCase() + ')' : T('video.needLocal'), ok ? 'success' : 'error');
   }
-  mount.querySelector('#exportWebm').onclick = () => exportClipSequences('webm');
+  const mp4Ok = pickFormats().some(f => f.ext === 'mp4');
+  mount.querySelector('#exportWebm').onclick = () => exportClipSequences('webm', selectedBm);
   const mp4Btn = mount.querySelector('#exportMp4');
-  mp4Btn.onclick = () => exportClipSequences('mp4');
-  if (!pickFormats().some(f => f.ext === 'mp4')) { mp4Btn.disabled = true; mp4Btn.title = T('video.noMp4'); }
+  mp4Btn.onclick = () => exportClipSequences('mp4', selectedBm);
+  if (!mp4Ok) { mp4Btn.disabled = true; mp4Btn.title = T('video.noMp4'); }
+
+  // Shows whether the header export buttons cover every bookmark or just the
+  // one picked with "Go".
+  function renderScope() {
+    const s = mount.querySelector('#bmScope');
+    if (!s) return;
+    if (selectedBm && bookmarks.indexOf(selectedBm) >= 0) {
+      s.innerHTML = `${T('video.expOne')} <b>${UI.fmtClock(Math.floor(selectedBm.t))} ${UI.esc(selectedBm.tag)}</b> `
+        + `<button class="btn sm" id="bmScopeAll">${T('video.expAllBtn')}</button>`;
+      const all = s.querySelector('#bmScopeAll');
+      if (all) all.onclick = () => { selectedBm = null; renderBm(); };
+    } else {
+      s.textContent = T('video.expAll');
+    }
+  }
 
   async function renderBm() {
     const l = mount.querySelector('#bmList');
     l.innerHTML = bookmarks.length ? bookmarks.map((b, i) =>
-      `<div class="bm-item">
+      `<div class="bm-item${b === selectedBm ? ' sel' : ''}">
         <div class="bm-main">
           <span><span class="tag blue">${UI.fmtClock(Math.floor(b.t))}</span> ${UI.esc(b.tag)}</span>
-          <span><button class="btn sm" data-go="${i}">${T('common.go')}</button> <button class="btn sm danger" data-rm="${i}">${T('common.remove')}</button></span>
+          <span class="bm-acts">
+            <button class="btn sm" data-go="${i}">${T('common.go')}</button>
+            <button class="btn sm primary" data-webm="${i}">${T('video.exportWebm')}</button>
+            <button class="btn sm primary" data-mp4="${i}"${mp4Ok ? '' : ` disabled title="${UI.esc(T('video.noMp4'))}"`}>${T('video.exportMp4')}</button>
+            <button class="btn sm danger" data-rm="${i}">${T('common.remove')}</button>
+          </span>
         </div>
         ${b.comment ? `<p class="bm-comment">${UI.esc(b.comment)}</p>` : ''}
       </div>`).join('') : `<p style="color:var(--muted)">${T('video.noBm')}</p>`;
     l.querySelectorAll('[data-go]').forEach(b => b.onclick = () => {
       if (!hasLocalVideo()) { UI.toast(T('video.needLocal'), 'error'); return; }
-      v.currentTime = bookmarks[+b.dataset.go].t; v.play();
+      const bm = bookmarks[+b.dataset.go];
+      selectedBm = bm;
+      v.currentTime = bm.t; v.play();
+      renderBm();
     });
-    l.querySelectorAll('[data-rm]').forEach(b => b.onclick = async () => { bookmarks.splice(+b.dataset.rm, 1); await saveBookmarks(); renderBm(); });
+    l.querySelectorAll('[data-webm]').forEach(b => b.onclick = () => {
+      selectedBm = bookmarks[+b.dataset.webm]; renderBm();
+      exportClipSequences('webm', selectedBm);
+    });
+    l.querySelectorAll('[data-mp4]').forEach(b => b.onclick = () => {
+      selectedBm = bookmarks[+b.dataset.mp4]; renderBm();
+      exportClipSequences('mp4', selectedBm);
+    });
+    l.querySelectorAll('[data-rm]').forEach(b => b.onclick = async () => {
+      const gone = bookmarks.splice(+b.dataset.rm, 1)[0];
+      if (gone === selectedBm) selectedBm = null;
+      await saveBookmarks(); renderBm();
+    });
+    renderScope();
   }
   renderBm();
 
