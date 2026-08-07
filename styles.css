@@ -601,10 +601,10 @@ body.board-fs { overflow: hidden; }
 .tl-title { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: var(--text-soft); }
 .tl-title b { color: var(--primary); }
 .tl-actions { display: flex; gap: 6px; }
-.tl-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 6px; max-height: 104px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+.tl-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); grid-auto-rows: minmax(46px, auto); gap: 8px; align-content: start; max-height: 148px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
 .tl-grid::-webkit-scrollbar { width: 8px; }
 .tl-grid::-webkit-scrollbar-thumb { background: var(--border); border-radius: 8px; }
-.frame-chip { padding: 6px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); cursor: pointer; font-size: 13px; line-height: 1.25; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.frame-chip { display: flex; align-items: center; justify-content: center; padding: 6px 10px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); cursor: pointer; font-size: 14px; font-weight: 600; line-height: 1.25; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .frame-chip.active { background: var(--primary); color: var(--on-primary); border-color: var(--primary); }
 
 /* Private Messenger (peer-to-peer, end-to-end encrypted) */
@@ -670,7 +670,7 @@ body.board-fs { overflow: hidden; }
 #rotWrap .tool-group.anim-acts { margin-top: 4px; }
 #rotWrap .tool-group.anim-acts .btn { flex: 1; min-width: 0; }
 /* Frame strip, docked as a vertical list to the LEFT of the court. */
-.stage-row > .timeline { flex: 0 0 148px; width: 148px; margin-top: 0; align-self: stretch; display: flex; flex-direction: column; min-height: 0; }
+.stage-row > .timeline { flex: 0 0 168px; width: 168px; margin-top: 0; align-self: stretch; display: flex; flex-direction: column; min-height: 0; }
 .stage-row > .timeline .tl-head { flex-direction: column; align-items: stretch; gap: 6px; }
 .stage-row > .timeline .tl-actions { flex-direction: column; }
 .stage-row > .timeline .tl-grid { grid-template-columns: 1fr; max-height: none; flex: 1 1 auto; min-height: 60px; overflow-y: auto; align-content: start; }
@@ -684,7 +684,7 @@ body.board-fs { overflow: hidden; }
   .stage-row > .timeline { order: 3; flex: 1 1 100%; width: 100%; margin-top: 10px; align-self: auto; }
   .stage-row > .timeline .tl-head { flex-direction: row; align-items: center; }
   .stage-row > .timeline .tl-actions { flex-direction: row; }
-  .stage-row > .timeline .tl-grid { grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); max-height: 104px; }
+  .stage-row > .timeline .tl-grid { grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); max-height: 148px; }
 }
 
 /* Playbook — tactical systems */
@@ -721,6 +721,15 @@ body.board-fs { overflow: hidden; }
 .mus-pick { display: flex; align-items: center; gap: 6px; font-size: 13px; padding: 2px 0; cursor: pointer; }
 .mus-pick input { width: auto; margin: 0; }
 @media (max-width: 900px) { .ex-layout { grid-template-columns: 1fr; } .body-card { position: static; } }
+
+/* Saved-animation viewer (anim.js) + the read-only body map in dialogs. */
+.anim-view { display: flex; flex-direction: column; gap: 10px; }
+.anim-canvas { width: 100%; height: auto; display: block; border-radius: 10px; border: 1px solid var(--border); background: #0b1220; }
+.anim-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.anim-bar .hint { margin: 0; }
+.anim-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.body-modal { max-width: 380px; margin: 0 auto 10px; }
+.body-modal .mus { cursor: default; }
 
 .avatar { width: 34px; height: 34px; border-radius: 50%; background: var(--primary-soft); color: var(--primary); display: inline-flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; line-height: 1; flex: 0 0 auto; }
 /* Player marker: shirt abbreviation on the position's role colour. */
@@ -850,7 +859,8 @@ body { overscroll-behavior-y: contain; }
   .event-btn { min-height: 52px; display: flex; align-items: center; justify-content: center; text-align: center; }
   .play-item { padding: 12px; }
   .nav-item { padding: 13px 12px; }
-  .frame-chip { padding: 9px 14px; }
+  .frame-chip { padding: 9px 14px; min-height: 52px; }
+  .tl-grid { grid-auto-rows: minmax(52px, auto); }
   input, select, textarea, .search-box input { font-size: 16px; }  /* iOS won't zoom at >=16px */
 }
 

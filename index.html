@@ -2,6 +2,33 @@
 <html lang="en" data-theme="dark">
 <head>
   <meta charset="UTF-8" />
+  <!-- Legacy-device gate. MUST stay the first script and MUST stay ES3: an old
+       iPad (iOS 3-6) or a 2010-era Chrome throws a SyntaxError on the ES6 in the
+       splash builder and the app modules, so the check has to run and redirect
+       before any of that is parsed. ?full=1 forces the modern app, ?classic=1
+       forces the legacy one. -->
+  <script>
+    (function () {
+      var q = String(window.location.search || '');
+      function has(k) { return q.indexOf(k) >= 0; }
+      if (has('full=1')) { try { localStorage.setItem('stx_force_full', '1'); } catch (e) {} return; }
+      try { if (localStorage.getItem('stx_force_full') === '1') return; } catch (e) {}
+      var legacy = has('classic=1');
+      if (!legacy) {
+        // Every feature the modern build hard-depends on.
+        var ok = !!(window.indexedDB && window.Promise && window.JSON && Object.assign &&
+          window.matchMedia && document.querySelector && document.documentElement.classList &&
+          window.localStorage && Array.prototype.forEach && window.CustomEvent);
+        // ES6 syntax support — an old parser cannot even read the app files.
+        if (ok) { try { new Function('var f=(a)=>`${a}`;class C{};let x=0;'); } catch (e) { ok = false; } }
+        // Original iPad / early iOS report these; they pass some checks above.
+        var ua = navigator.userAgent || '';
+        if (ok && /\((iPad|iPhone|iPod)[^)]*OS ([1-9]|10)_/.test(ua)) ok = false;
+        legacy = !ok;
+      }
+      if (legacy) window.location.replace('oldipads.html');
+    })();
+  </script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <meta name="theme-color" content="#0b0b0b" />
   <!-- iPad / iOS home-screen web-app support (incl. older iPadOS & iOS Safari) -->
@@ -17,7 +44,7 @@ Show focus areas
 Produce video clips.">
   <link rel="apple-touch-icon" href="logo.svg?v=6" />
   <title>SportTactic</title>
-  <link rel="stylesheet" href="styles.css?v=72" />
+  <link rel="stylesheet" href="styles.css?v=73" />
   <link rel="manifest" href="manifest.webmanifest?v=2" />
   <style>
     /* Boot splash — inline so it paints before styles.css / the app scripts run.
@@ -187,7 +214,7 @@ Produce video clips.">
   <div id="toastHost" class="toast-host"></div>
 
   <script src="db.js?v=13"></script>
-  <script src="i18n.js?v=70"></script>
+  <script src="i18n.js?v=71"></script>
   <script src="sports.js?v=18"></script>
   <script src="playbook.js?v=12"></script>
   <script src="store.js?v=19"></script>
@@ -203,10 +230,11 @@ Produce video clips.">
   <script src="bridge.js?v=13"></script>
   <script src="poker.js?v=13"></script>
   <script src="backgammon.js?v=13"></script>
-  <script src="tactics.js?v=51"></script>
+  <script src="tactics.js?v=52"></script>
+  <script src="anim.js?v=1"></script>
   <script src="video.js?v=21"></script>
-  <script src="training.js?v=23"></script>
-  <script src="exercises.js?v=15"></script>
+  <script src="training.js?v=24"></script>
+  <script src="exercises.js?v=16"></script>
   <script src="opponents.js?v=17"></script>
   <script src="reports.js?v=19"></script>
   <script src="settings.js?v=37"></script>

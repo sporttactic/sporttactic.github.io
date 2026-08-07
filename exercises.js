@@ -124,6 +124,43 @@ Views.exerciseLib = function (mount, opts) {
     return s;
   }
 
+  // One drill card — rendered inside the accordion of its own category.
+  function cardHtml(e) {
+    const yt = safeUrl(e.videoYt), vid = safeUrl(e.videoUrl);
+    return `
+      <div class="card" data-card="${e.id}">
+        <div style="display:flex;justify-content:space-between"><h3 style="margin:0">${UI.esc(dt(e.title))}</h3><span class="tag blue">${UI.esc(tt('cat', e.category))}</span></div>
+        <p style="color:var(--text-soft);margin:8px 0;font-size:13px">${UI.esc(dd(e.title, e.description))}</p>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
+          <span class="tag">${e.duration || 0} ${T('training.min')}</span><span class="tag ${e.intensity === 'High' ? 'red' : e.intensity === 'Medium' ? 'amber' : 'green'}">${UI.esc(tt('intensity', e.intensity || 'Low'))}</span>
+          ${(e.muscles || []).map(m => `<span class="tag mus-tag" data-pick="${m}">${UI.esc(musLabel(m))}</span>`).join('')}
+          ${(e.tags || []).map(t => `<span class="tag">#${UI.esc(t)}</span>`).join('')}
+        </div>
+        ${(yt || vid) ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
+          ${yt ? `<a class="btn sm" href="${UI.esc(yt)}" target="_blank" rel="noopener noreferrer">▶ YouTube</a>` : ''}
+          ${vid ? `<a class="btn sm" href="${UI.esc(vid)}" target="_blank" rel="noopener noreferrer">▶ ${T('training.video')}</a>` : ''}
+        </div>` : ''}
+        <button class="btn sm" data-edit="${e.id}">${T('common.edit')}</button> <button class="btn sm danger" data-del="${e.id}">${T('common.delete')}</button>
+      </div>`;
+  }
+
+  // The drills are folded into one accordion per category so a long library
+  // stays scannable; the order follows the sport's own category list.
+  function groupsHtml(list) {
+    if (!list.length) return `<div class="empty"><div class="big">${UI.icon('dumbbell', 40)}</div>${T('exercises.none')}</div>`;
+    const known = cats().filter(c => c !== 'All');
+    const byCat = new Map();
+    list.forEach(e => {
+      const c = e.category || T('exercises.uncategorised');
+      if (!byCat.has(c)) byCat.set(c, []);
+      byCat.get(c).push(e);
+    });
+    const order = known.filter(c => byCat.has(c)).concat([...byCat.keys()].filter(c => known.indexOf(c) < 0));
+    return order.map(c => UI.acc('exlibcat_' + c, catLabel(c),
+      `<div class="grid cols-2">${byCat.get(c).map(cardHtml).join('')}</div>`,
+      { sub: byCat.get(c).length + ' ' + T('training.drills') })).join('');
+  }
+
   function render() {
     const list = Store.all('exercises').filter(keep);
     const inner = `
@@ -138,27 +175,7 @@ Views.exerciseLib = function (mount, opts) {
           <div class="pill-row">${['All'].concat(Object.keys(MUSCLE_AREAS)).map(a =>
       `<span class="pill ${a === area ? 'active' : ''}" data-area="${a}">${UI.esc(a === 'All' ? T('exercises.allAreas') : T('area.' + a))}</span>`).join('')}</div>
           <div class="pill-row">${cats().map(c => `<span class="pill ${c === cat ? 'active' : ''}" data-cat="${c}">${UI.esc(catLabel(c))}</span>`).join('')}</div>
-          <div class="grid cols-2">
-            ${list.map(e => `
-              <div class="card" data-card="${e.id}">
-                <div style="display:flex;justify-content:space-between"><h3 style="margin:0">${UI.esc(dt(e.title))}</h3><span class="tag blue">${UI.esc(tt('cat', e.category))}</span></div>
-                <p style="color:var(--text-soft);margin:8px 0;font-size:13px">${UI.esc(dd(e.title, e.description))}</p>
-                <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
-                  <span class="tag">${e.duration || 0} ${T('training.min')}</span><span class="tag ${e.intensity === 'High' ? 'red' : e.intensity === 'Medium' ? 'amber' : 'green'}">${UI.esc(tt('intensity', e.intensity || 'Low'))}</span>
-                  ${(e.muscles || []).map(m => `<span class="tag mus-tag" data-pick="${m}">${UI.esc(musLabel(m))}</span>`).join('')}
-                  ${(e.tags || []).map(t => `<span class="tag">#${UI.esc(t)}</span>`).join('')}
-                </div>
-                ${(() => {
-        const yt = safeUrl(e.videoYt), vid = safeUrl(e.videoUrl);
-        if (!yt && !vid) return '';
-        return `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
-                  ${yt ? `<a class="btn sm" href="${UI.esc(yt)}" target="_blank" rel="noopener noreferrer">▶ YouTube</a>` : ''}
-                  ${vid ? `<a class="btn sm" href="${UI.esc(vid)}" target="_blank" rel="noopener noreferrer">▶ ${T('training.video')}</a>` : ''}
-                </div>`;
-      })()}
-                <button class="btn sm" data-edit="${e.id}">${T('common.edit')}</button> <button class="btn sm danger" data-del="${e.id}">${T('common.delete')}</button>
-              </div>`).join('') || `<div class="empty"><div class="big">${UI.icon('dumbbell', 40)}</div>${T('exercises.none')}</div>`}
-          </div>
+          ${groupsHtml(list)}
         </div>
       </div>`;
 

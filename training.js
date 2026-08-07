@@ -30,7 +30,8 @@ Views.training = function (mount) {
             <div style="margin-top:10px">
               ${(s.exercises || []).map(id => { const e = Store.find('exercises', id); return e ? `<div class="tag" style="margin:2px">${UI.esc(dt(e.title))}</div>` : ''; }).join('') || `<span style="color:var(--muted)">${T('common.noData')}</span>`}
             </div>
-            <div style="margin-top:12px"><button class="btn sm" data-edit="${s.id}">${T('common.edit')}</button> <button class="btn sm danger" data-del="${s.id}">${T('common.delete')}</button></div>
+            ${(s.animations || []).length ? `<div style="margin-top:8px"><span class="tag blue">▶ ${(s.animations || []).length} ${T('training.anims')}</span></div>` : ''}
+            <div style="margin-top:12px"><button class="btn sm" data-show="${s.id}">${T('common.show')}</button> <button class="btn sm" data-edit="${s.id}">${T('common.edit')}</button> <button class="btn sm danger" data-del="${s.id}">${T('common.delete')}</button></div>
           </div>`).join('') || `<div class="empty"><div class="big">${UI.icon('calendar', 40)}</div>${T('training.noSessions')}</div>`}
       </div>`;
 
@@ -53,6 +54,7 @@ Views.training = function (mount) {
     UI.bindShare(mount, 'personal', render);
     AI.bind(mount);
     mount.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => sessionForm(Store.find('training', b.dataset.edit)));
+    mount.querySelectorAll('[data-show]').forEach(b => b.onclick = () => showSession(Store.find('training', b.dataset.show)));
     mount.querySelectorAll('[data-del]').forEach(b => b.onclick = () => UI.confirm(T('training.delSession'), async () => { await Store.remove('training', b.dataset.del); render(); }));
     bindPersonal();
     // The exercise library is its own section of this page.
@@ -93,6 +95,7 @@ Views.training = function (mount) {
             </div>
             ${r.notes ? `<p style="margin:10px 0 0;color:var(--text-soft)">${UI.esc(r.notes)}</p>` : ''}
             <div style="margin-top:12px">
+              <button class="btn sm" data-pshow="${r.id}">${T('common.show')}</button>
               <button class="btn sm" data-pmax="${r.id}">🤖 ${T('personal.aiMax')}</button>
               <button class="btn sm" data-pedit="${r.id}">${T('common.edit')}</button>
               <button class="btn sm danger" data-pdel="${r.id}">${T('common.delete')}</button>
@@ -111,6 +114,7 @@ Views.training = function (mount) {
     mount.querySelector('#addPersonal').onclick = () => personalForm();
     mount.querySelector('#aiMax').onclick = () => maxTestForm();
     mount.querySelectorAll('[data-pedit]').forEach(b => b.onclick = () => personalForm(Store.find('personal', b.dataset.pedit)));
+    mount.querySelectorAll('[data-pshow]').forEach(b => b.onclick = () => showPersonal(Store.find('personal', b.dataset.pshow)));
     mount.querySelectorAll('[data-pmax]').forEach(b => b.onclick = () => {
       const r = Store.find('personal', b.dataset.pmax);
       if (r) maxTestForm(r.playerId, r.sessionId, r.playerName);
@@ -118,8 +122,72 @@ Views.training = function (mount) {
     mount.querySelectorAll('[data-pdel]').forEach(b => b.onclick = () => UI.confirm(T('personal.del'), async () => { await Store.remove('personal', b.dataset.pdel); render(); }));
   }
 
-  function testRowHtml(t) {
-    t = t || {};
+  // ---- Personal record details --------------------------------------------
+  // Which body parts a record loads is taken from the drill library: a test name
+  // that matches a drill inherits that drill's muscles, and the linked plan adds
+  // the muscles of the drills it runs.
+  function musclesFor(r) {
+    const set = new Set();
+    const lib = Store.all('exercises');
+    const norm = s => String(s || '').trim().toLowerCase();
+    const add = e => (e.muscles || []).forEach(m => set.add(m));
+    (r.tests || []).forEach(t => {
+      const n = norm(t.name);
+      if (!n) return;
+      lib.forEach(e => {
+        const a = norm(e.title), b = norm(dt(e.title));
+        if (a === n || b === n || (a && n.indexOf(a) >= 0) || (b && n.indexOf(b) >= 0)) add(e);
+      });
+    });
+    const plan = r.sessionId && Store.find('training', r.sessionId);
+    if (plan) (plan.exercises || []).forEach(id => { const e = Store.find('exercises', id); if (e) add(e); });
+    return set;
+  }
+
+  function showPersonal(r) {
+    if (!r) return;
+    const tests = r.tests || [];
+    const hit = musclesFor(r);
+    const canMap = typeof muscleBodySvg === 'function';
+    const musLabel = m => tt('mus', m);
+    const areaOf = (typeof MUSCLE_AREA_OF === 'object' && MUSCLE_AREA_OF) || {};
+    const grouped = {};
+    hit.forEach(m => { const a = areaOf[m] || 'upper'; (grouped[a] = grouped[a] || []).push(m); });
+    const plan = r.sessionId && Store.find('training', r.sessionId);
+    UI.modal({
+      title: UI.esc(r.playerName || T('personal.unknownPlayer')),
+      width: 720,
+      body: `
+        <p class="hint" style="margin-top:0">${UI.fmtDate(r.date)}${r.sessionTitle ? ' · ' + UI.esc(dt(r.sessionTitle)) : ''}</p>
+        <h4 style="margin-bottom:6px">${T('personal.tests')}</h4>
+        ${tests.length ? `<table class="table"><thead><tr>
+            <th>${T('personal.exercise')}</th><th>${T('personal.value')}</th><th>${T('personal.reps')}</th><th>1RM</th></tr></thead>
+          <tbody>${tests.map(t => `<tr>
+            <td>${UI.esc(t.name || '')}</td>
+            <td>${UI.esc(t.value == null ? '' : t.value)} ${UI.esc(t.unit || '')}</td>
+            <td>${UI.esc(t.reps || 1)}</td>
+            <td>${t.unit === 'kg' && oneRm(t.value, t.reps) ? oneRm(t.value, t.reps) + ' kg' : '—'}</td></tr>`).join('')}</tbody></table>`
+        : `<p class="hint">${T('common.noData')}</p>`}
+        ${r.notes ? `<p style="color:var(--text-soft)">${UI.esc(r.notes)}</p>` : ''}
+        ${plan ? `<p class="hint">${T('personal.plan')}: ${UI.esc(dt(plan.title))}</p>` : ''}
+        <h4 style="margin-bottom:6px">${T('personal.bodyTitle')}</h4>
+        ${canMap ? `<div class="body-modal">${muscleBodySvg(T('body.front'), T('body.back'))}</div>` : ''}
+        ${hit.size
+        ? `<div style="display:flex;gap:6px;flex-wrap:wrap">${Object.keys(grouped).map(a =>
+          `<span class="tag blue">${UI.esc(T('area.' + a))}</span>` +
+          grouped[a].map(m => `<span class="tag">${UI.esc(musLabel(m))}</span>`).join('')).join('')}</div>
+           <p class="hint">${T('personal.bodyHint')}</p>`
+        : `<p class="hint">${T('personal.noMuscles')}</p>`}`,
+      footer: `<button class="btn ghost" data-close2>${T('common.close')}</button><button class="btn primary" data-edit>${T('common.edit')}</button>`,
+      onOpen: (m, close) => {
+        m.querySelectorAll('.mus').forEach(g => g.classList.toggle('on', hit.has(g.dataset.m)));
+        m.querySelector('[data-close2]').onclick = close;
+        m.querySelector('[data-edit]').onclick = () => { close(); personalForm(r); };
+      }
+    });
+  }
+
+  function testRowHtml(t) {    t = t || {};
     return `<div class="test-row">
       <input class="cell" data-tn list="exNames" value="${UI.esc(t.name || '')}" placeholder="${UI.esc(T('personal.exercise'))}">
       <input class="cell" data-tv type="number" step="any" value="${UI.esc(t.value == null ? '' : t.value)}" placeholder="${UI.esc(T('personal.value'))}">
@@ -312,6 +380,35 @@ Views.training = function (mount) {
     return fallback.length ? fallback : [{ unit: 'kg', reps: 1 }];
   }
 
+  // ---- Session details -----------------------------------------------------
+  // Read-only view of one plan: the drills with their videos and the tactical
+  // board animations attached to it, each replayable in its own dialog.
+  function showSession(s) {
+    if (!s) return;
+    const drills = (s.exercises || []).map(id => Store.find('exercises', id)).filter(Boolean);
+    UI.modal({
+      title: UI.esc(dt(s.title || '')),
+      width: 640,
+      body: `
+        <p class="hint" style="margin-top:0">${UI.fmtDate(s.date)} · ${s.duration || 0} ${T('training.min')} · ${UI.esc(tt('focus', s.focus))}</p>
+        <h4 style="margin-bottom:6px">${T('training.drills')}</h4>
+        ${drills.length ? `<ul class="ai-guide">${drills.map(e => {
+        const url = safeUrl(e.videoYt) || safeUrl(e.videoUrl);
+        return `<li>${UI.esc(dt(e.title))} <span class="tag">${e.duration || 0} ${T('training.min')}</span>`
+          + ` <span class="tag">${UI.esc(tt('cat', e.category))}</span>`
+          + (url ? ` <a href="${UI.esc(url)}" target="_blank" rel="noopener noreferrer">▶ ${T('training.video')}</a>` : '') + '</li>';
+      }).join('')}</ul>` : `<p class="hint">${T('common.noData')}</p>`}
+        <h4 style="margin-bottom:6px">${T('training.showAnims')}</h4>
+        ${ANIM.chipsHtml(s.animations)}`,
+      footer: `<button class="btn ghost" data-close2>${T('common.close')}</button><button class="btn primary" data-edit>${T('common.edit')}</button>`,
+      onOpen: (m, close) => {
+        ANIM.bind(m);
+        m.querySelector('[data-close2]').onclick = close;
+        m.querySelector('[data-edit]').onclick = () => { close(); sessionForm(s); };
+      }
+    });
+  }
+
   function sessionForm(s = {}) {
     const dstr = new Date(s.date || Date.now()).toISOString().slice(0, 10);
     const drills = Store.all('exercises');
@@ -326,16 +423,20 @@ Views.training = function (mount) {
           <label class="field"><span>${T('training.duration')}</span><input id="t_dur" type="number" value="${s.duration || 90}"></label>
           <label class="field"><span>${T('training.focus')}</span><select id="t_focus">${foci.map(x => `<option value="${x}" ${x === s.focus ? 'selected' : ''}>${UI.esc(tt('focus', x))}</option>`).join('')}</select></label>
         </div>
-        <label class="field"><span>${T('training.drills')}</span><select id="t_ex" multiple size="5">${drills.map(e => `<option value="${e.id}" ${(s.exercises || []).includes(e.id) ? 'selected' : ''}>${UI.esc(dt(e.title))} (${UI.esc(tt('cat', e.category))})</option>`).join('')}</select></label>`,
+        <label class="field"><span>${T('training.drills')}</span><select id="t_ex" multiple size="5">${drills.map(e => `<option value="${e.id}" ${(s.exercises || []).includes(e.id) ? 'selected' : ''}>${UI.esc(dt(e.title))} (${UI.esc(tt('cat', e.category))})</option>`).join('')}</select></label>
+        <label class="field"><span>${T('training.anims')}</span>${ANIM.pickerHtml('t_anim', s.animations, sportId)}</label>
+        <p class="hint">${T('training.animsHint')}</p>`,
       footer: `<button class="btn ghost" data-close2>${T('common.cancel')}</button><button class="btn primary" data-save>${T('common.save')}</button>`,
       onOpen: (m, close) => {
         m.querySelector('[data-close2]').onclick = close;
         m.querySelector('[data-save]').onclick = async () => {
+          const anim = m.querySelector('#t_anim');
           const obj = Object.assign({}, s, {
             teamId: team && team.id, title: m.querySelector('#t_title').value.trim(),
             date: new Date(m.querySelector('#t_date').value).getTime(),
             duration: +m.querySelector('#t_dur').value, focus: m.querySelector('#t_focus').value,
-            exercises: [...m.querySelector('#t_ex').selectedOptions].map(o => o.value)
+            exercises: [...m.querySelector('#t_ex').selectedOptions].map(o => o.value),
+            animations: anim ? [...anim.selectedOptions].map(o => o.value) : (s.animations || [])
           });
           if (!obj.title) return UI.toast(T('training.titleReq'), 'error');
           await Store.save('training', obj); close(); UI.toast(T('training.saved'), 'success'); render();
@@ -357,6 +458,8 @@ Views.training = function (mount) {
           <label class="field"><span>${T('training.duration')}</span><input id="s_dur" type="number" value="90"></label>
           <label class="field"><span>${T('training.focus')}</span><select id="s_focus">${FOCI.map(x => `<option value="${x}">${UI.esc(tt('focus', x))}</option>`).join('')}</select></label>
         </div>
+        <label class="field"><span>${T('training.anims')}</span>${ANIM.pickerHtml('s_anim', [], sportId)}</label>
+        <p class="hint">${T('training.animsHint')}</p>
         <p class="hint">${T('training.aiSessionHint')}</p>`,
       footer: `<button class="btn ghost" data-close2>${T('common.cancel')}</button><button class="btn primary" data-gen>${T('training.aiGenerate')}</button>`,
       onOpen: (m, close) => {
@@ -365,17 +468,19 @@ Views.training = function (mount) {
         btn.onclick = async () => {
           const what = m.querySelector('#s_what').value.trim();
           if (!what) return UI.toast(T('training.aiSessionReq'), 'error');
+          const anim = m.querySelector('#s_anim');
+          const picked = anim ? [...anim.selectedOptions].map(o => o.value) : [];
           btn.disabled = true; btn.textContent = T('ai.asking');
           const plan = await generateSession(what, +m.querySelector('#s_dur').value, m.querySelector('#s_focus').value);
           btn.disabled = false; btn.textContent = T('training.aiGenerate');
-          if (plan) showPlan(m, close, plan);
+          if (plan) showPlan(m, close, plan, picked);
         };
       }
     });
   }
 
   // Second step of the AI session dialog: the plan with a video link per drill.
-  function showPlan(m, close, res) {
+  function showPlan(m, close, res, anims) {
     m.querySelector('.modal-body').innerHTML = `
       <h3 style="margin:0 0 4px">${UI.esc(res.title)}</h3>
       <p class="hint" style="margin-top:0">${UI.esc(tt('focus', res.focus))} · ${res.duration} ${T('training.min')}</p>
@@ -387,13 +492,16 @@ Views.training = function (mount) {
       return `<li>${UI.esc(dt(e.title))} <span class="tag">${e.duration || 0} ${T('training.min')}</span>`
         + (url ? ` <a href="${UI.esc(url)}" target="_blank" rel="noopener noreferrer">▶ ${T('training.video')}</a>` : '') + '</li>';
     }).join('')}
-      </ul>`;
+      </ul>
+      <h4 style="margin-bottom:6px">${T('training.showAnims')}</h4>
+      ${ANIM.chipsHtml(anims)}`;
+    ANIM.bind(m);
     m.querySelector('.modal-foot').innerHTML =
       `<button class="btn ghost" data-close2>${T('common.cancel')}</button><button class="btn primary" data-use>${T('training.aiUse')}</button>`;
     m.querySelector('[data-close2]').onclick = close;
     m.querySelector('[data-use]').onclick = () => {
       close();
-      sessionForm({ title: res.title, focus: res.focus, duration: res.duration, exercises: res.drills.map(e => e.id) });
+      sessionForm({ title: res.title, focus: res.focus, duration: res.duration, exercises: res.drills.map(e => e.id), animations: anims || [] });
       UI.toast(T('training.aiSessionReady'), 'success');
     };
   }

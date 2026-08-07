@@ -7,13 +7,16 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="SportTactic">
 <meta name="format-detection" content="telephone=no">
-<title>SportTactic &mdash; Classic Board</title>
+<title>SportTactic &mdash; Classic</title>
 <!--
-  Standalone tactical board for older iPads (2010, iOS 3-5 Safari).
+  Standalone build for older iPads (2010, iOS 3-6 Safari) and other legacy
+  browsers. index.html redirects here automatically when the device cannot run
+  the modern app; ?full=1 on index.html overrides that for good.
   ES5 only: no const/let, arrow functions, template literals, classes,
   IndexedDB, MediaRecorder, fetch or requestAnimationFrame. Uses var,
-  function expressions, localStorage, canvas 2D and touch events so it
-  runs on the original iPad while offering the same core board features.
+  function expressions, localStorage, canvas 2D and touch events, and carries
+  the board plus squad, matches, scouting, statistics, training, opponents,
+  reports and text-based backup transfer.
 -->
 <style>
   * { -webkit-box-sizing: border-box; box-sizing: border-box; }
@@ -30,16 +33,17 @@
   .bar .lbl { font-size: 10px; color: #7c8aa0; text-transform: uppercase; letter-spacing: .5px; margin: 0 4px 4px; }
   .row { display: block; margin-bottom: 4px; }
   .b {
-    display: inline-block; margin: 2px; padding: 8px 11px; min-width: 40px;
+    display: inline-block; margin: 2px; padding: 10px 12px; min-width: 44px;
     background: #1f2937; color: #e5e7eb; border: 1px solid #334155; border-radius: 8px;
-    font-size: 14px; text-align: center; -webkit-appearance: none; line-height: 1;
+    font-size: 14px; text-align: center; -webkit-appearance: none; line-height: 20px;
     vertical-align: middle;
   }
   .b.on { background: #0a84ff; border-color: #0a84ff; color: #fff; }
+  .b.red { border-color: #dc2626; color: #fca5a5; }
   .b.red.on { background: #ff3b30; border-color: #ff3b30; }
   .b.wide { min-width: 66px; }
-  .sw { width: 26px; min-width: 26px; height: 26px; padding: 0; border-radius: 50%; }
-  select.b { padding: 7px 8px; }
+  .sw { width: 34px; min-width: 34px; height: 34px; padding: 0; border-radius: 50%; }
+  select.b { padding: 9px 8px; }
   #wrap { text-align: center; padding: 8px 6px 20px; }
   canvas {
     width: 100%; max-width: 720px; height: auto; background: #0b1220;
@@ -49,6 +53,62 @@
   #snap img { max-width: 100%; border: 1px solid #334155; border-radius: 8px; }
   #snap p { font-size: 12px; color: #94a3b8; }
   #frameInfo { font-size: 13px; color: #cbd5e1; display: inline-block; min-width: 54px; }
+
+  /* ---- Classic shell: tab bar + the non-board modules ---- */
+  .head .topline { overflow: hidden; }
+  .head .topline .ttl { float: left; }
+  .head .topline .full { float: right; margin-top: 4px; }
+  .head a.full { color: #93c5fd; font-size: 12px; text-decoration: none; border: 1px solid #334155; border-radius: 8px; padding: 6px 9px; display: inline-block; }
+  .tabs { background: #111827; border-bottom: 1px solid #1f2937; padding: 5px 4px; white-space: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .tab { display: inline-block; margin: 2px; padding: 10px 13px; background: #1f2937; border: 1px solid #334155; border-radius: 8px; font-size: 15px; color: #e5e7eb; line-height: 20px; }
+  .tab.on { background: #0a84ff; border-color: #0a84ff; color: #fff; }
+  .view { display: none; }
+  .view.on { display: block; }
+  .card { background: #111827; border: 1px solid #1f2937; border-radius: 10px; padding: 10px 12px; margin: 8px; }
+  .card h2 { margin: 0 0 6px; font-size: 16px; }
+  .card h3 { margin: 10px 0 4px; font-size: 13px; color: #cbd5e1; }
+  .hint { font-size: 12px; color: #94a3b8; margin: 2px 0 8px; }
+  .tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .tbl th { text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: .5px; color: #7c8aa0; padding: 4px 4px; border-bottom: 1px solid #1f2937; }
+  .tbl td { padding: 7px 4px; border-bottom: 1px solid #1f2937; vertical-align: middle; }
+  .tbl td.r, .tbl th.r { text-align: right; }
+  .empty { color: #94a3b8; font-size: 13px; padding: 10px 2px; }
+  .f { display: inline-block; vertical-align: top; width: 100%; margin: 0 0 8px; }
+  .fl { display: block; font-size: 11px; color: #94a3b8; margin-bottom: 3px; }
+  .f input, .f select, .f textarea {
+    width: 100%; padding: 9px 8px; background: #0b1220; color: #e5e7eb;
+    border: 1px solid #334155; border-radius: 8px; font-size: 16px;
+    -webkit-appearance: none; font-family: inherit;
+  }
+  .frow { margin: 0 -4px; }
+  .frow .f { padding: 0 4px; }
+  .acts { margin-top: 6px; }
+  .kpis { margin: 0 -4px; overflow: hidden; }
+  .kpi { float: left; width: 50%; padding: 4px; }
+  .kpi div { background: #0b1220; border: 1px solid #1f2937; border-radius: 8px; padding: 8px; text-align: center; }
+  .kpi b { display: block; font-size: 20px; }
+  .kpi span { font-size: 11px; color: #94a3b8; }
+  .tag { display: inline-block; padding: 3px 7px; margin: 2px 2px 2px 0; border-radius: 6px; background: #1f2937; border: 1px solid #334155; font-size: 11px; }
+  .tag.g { border-color: #16a34a; color: #86efac; }
+  .tag.r { border-color: #dc2626; color: #fca5a5; }
+  .tag.a { border-color: #d97706; color: #fcd34d; }
+  .log { max-height: 220px; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+  #clock { font-size: 22px; font-weight: bold; display: inline-block; min-width: 74px; }
+  textarea#dataBox { height: 190px; font-size: 12px; font-family: Courier, monospace; }
+  /* iPad landscape (1024) gets two columns; portrait (768) stays single. */
+  @media (min-width: 820px) {
+    .f.half { width: 50%; }
+    .f.third { width: 33.33%; }
+    .kpi { width: 25%; }
+    .cols { margin: 0 -4px; overflow: hidden; }
+    .cols .col { float: left; width: 50%; padding: 0 4px; }
+  }
+  @media print {
+    .head, .tabs, .acts, .b, .tab { display: none !important; }
+    body { background: #fff; color: #000; }
+    .card { border: 1px solid #999; background: #fff; color: #000; page-break-inside: avoid; }
+    .tbl th, .tbl td { border-bottom: 1px solid #ccc; color: #000; }
+  }
 </style>
 
   <!-- Global site tag (gtag.js) - Google Analytics -->
@@ -64,10 +124,19 @@
 </head>
 <body>
 <div class="head">
-  <h1>SportTactic &mdash; Classic Board</h1>
-  <p>Tactical board optimised for older iPads. Works fully offline.</p>
+  <div class="topline">
+    <div class="ttl">
+      <h1>SportTactic &mdash; Classic</h1>
+      <p>Full coaching app for older iPads. Works entirely offline.</p>
+    </div>
+    <a class="full" href="index.html?full=1">Full version &rsaquo;</a>  </div>
 </div>
 
+<div class="tabs" id="tabs">
+  <span class="tab on" data-view="board">Board</span><span class="tab" data-view="squad">Squad</span><span class="tab" data-view="matches">Matches</span><span class="tab" data-view="scout">Scouting</span><span class="tab" data-view="stats">Stats</span><span class="tab" data-view="training">Training</span><span class="tab" data-view="opp">Opponents</span><span class="tab" data-view="reports">Reports</span><span class="tab" data-view="data">Data</span>
+</div>
+
+<div class="view on" id="v-board">
 <div class="bar">
   <div class="lbl">Sport</div>
   <div class="row" id="sportRow"></div>
@@ -100,6 +169,16 @@
   <canvas id="cv" width="700" height="560"></canvas>
   <div id="snap"></div>
 </div>
+</div>
+
+<div class="view" id="v-squad"></div>
+<div class="view" id="v-matches"></div>
+<div class="view" id="v-scout"></div>
+<div class="view" id="v-stats"></div>
+<div class="view" id="v-training"></div>
+<div class="view" id="v-opp"></div>
+<div class="view" id="v-reports"></div>
+<div class="view" id="v-data"></div>
 
 <script>
 (function () {
@@ -840,6 +919,718 @@
   updatePropRow();
   updateFrameInfo();
   draw();
+})();
+</script>
+
+<script>
+/*
+  Classic modules — squad, matches, live scouting, statistics, training,
+  opponents, reports and data transfer. ES5 only (var, function expressions,
+  onclick handlers, localStorage, no JSON download), so the original iPad and
+  2010-era Chrome can run the whole coaching workflow, not just the board.
+  Record shapes and the export envelope match the modern app, so a backup made
+  here imports straight into SportTactic and the other way round.
+*/
+(function () {
+  var KEY = 'stx_classic_v1';
+  var D = { teams: [], players: [], staff: [], matches: [], events: [], sessions: [], drills: [], opponents: [] };
+  // Classic store name -> modern app store name (used by export/import).
+  var MAP = { teams: 'teams', players: 'players', staff: 'coaches', matches: 'matches', events: 'events', sessions: 'training', drills: 'exercises', opponents: 'opponents' };
+  // The modern app filters players, staff, matches, training and opponents by
+  // teamId, so every record here carries the one team this iPad owns.
+  var SCOPED = ['players', 'staff', 'matches', 'sessions', 'opponents'];
+  var SPORT_IDS = ['handball', 'soccer', 'basketball', 'volleyball'];
+
+  var POS = ['Goalkeeper', 'Left Wing', 'Left Back', 'Centre Back', 'Pivot', 'Right Back', 'Right Wing', 'Player'];
+  var STATUS = ['active', 'injured', 'suspended'];
+  var STATUS_LBL = { active: 'Active', injured: 'Injured', suspended: 'Not active' };
+  var MTYPE = ['League', 'Cup', 'Friendly', 'Tournament'];
+  var MSTATUS = ['scheduled', 'live', 'finished'];
+  var FOCUS = ['Warm-up', 'Attack', 'Defense', 'Goalkeeper', 'Conditioning', 'Physical', 'Set Plays'];
+  var CATS = ['Attack', 'Defense', 'Goalkeeper', 'Conditioning', 'Set Plays'];
+  var INT = ['Low', 'Medium', 'High'];
+
+  // [type, label, result] — type/result strings match the modern app so the
+  // same events feed the same statistics on both builds.
+  var EVENTS = {
+    attack: [['Goal', 'Goal', 'goal'], ['Fast Break', 'Fast break', 'goal'], ['7m Throw', '7m throw', 'goal'],
+      ['Shot Missed', 'Shot missed', 'miss'], ['Shot Saved', 'Shot saved', 'save'], ['Assist', 'Assist', '']],
+    defense: [['Block', 'Block', ''], ['Steal', 'Steal', ''], ['Foul', 'Foul', 'foul'], ['2-minute suspension', '2 minutes', 'foul']],
+    turnover: [['Turnover', 'Turnover', 'turnover'], ['Bad Pass', 'Bad pass', 'turnover'], ['Steps', 'Steps', 'turnover']],
+    keeper: [['Save', 'Save', ''], ['Penalty Save', 'Penalty save', ''], ['Goal Conceded', 'Goal conceded', 'conceded']]
+  };
+  var CATLBL = { attack: 'Attack', defense: 'Defense', turnover: 'Turnovers', keeper: 'Goalkeeper' };
+
+  // ---------- storage ----------
+  function load() {
+    try {
+      var raw = localStorage.getItem(KEY);
+      if (!raw) return;
+      var o = JSON.parse(raw), k;
+      for (k in D) { if (D.hasOwnProperty(k) && o[k] && o[k].length !== undefined) D[k] = o[k]; }
+    } catch (e) { /* corrupt or blocked storage: start empty */ }
+  }
+  function save() {
+    try { localStorage.setItem(KEY, JSON.stringify(D)); }
+    catch (e) { alert('Could not save — this iPad is out of storage space.'); }
+  }
+  function uid() { return 'c' + (new Date()).getTime().toString(36) + Math.floor(Math.random() * 1679616).toString(36); }
+  function find(list, id) { for (var i = 0; i < list.length; i++) { if (list[i].id === id) return list[i]; } return null; }
+  function drop(list, id) { for (var i = 0; i < list.length; i++) { if (list[i].id === id) { list.splice(i, 1); return; } } }
+  function ensureTeam() {
+    if (!D.teams.length) D.teams.push({ id: uid(), name: 'My Team', division: '', category: 'Senior', sport: 'handball' });
+    return D.teams[0];
+  }
+  function teamId() { return ensureTeam().id; }
+  function teamSport() { return ensureTeam().sport || 'handball'; }
+  // Stamp the owning team (and the sport on players) so a backup lands in the
+  // right squad when it is imported into the modern app.
+  function stamp() {
+    var tid = teamId(), i, j, s, rows;
+    for (i = 0; i < SCOPED.length; i++) {
+      s = SCOPED[i]; rows = D[s];
+      for (j = 0; j < rows.length; j++) {
+        if (!rows[j].teamId) rows[j].teamId = tid;
+        if (s === 'players' && !rows[j].sport) rows[j].sport = teamSport();
+        if (s === 'matches' && !rows[j].sport) rows[j].sport = teamSport();
+      }
+    }
+  }
+
+  // ---------- small helpers ----------
+  function g(id) { return document.getElementById(id); }
+  function esc(s) {
+    return String(s === null || s === undefined ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+  function pad(n) { return n < 10 ? '0' + n : '' + n; }
+  function fmtDate(ms) {
+    if (!ms) return '\u2014';
+    var d = new Date(ms);
+    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+  }
+  function parseDate(s) {
+    var m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(String(s || '').replace(/[\/.]/g, '-'));
+    return m ? new Date(+m[1], +m[2] - 1, +m[3]).getTime() : 0;
+  }
+  function today() { return fmtDate((new Date()).getTime()); }
+  function num(v) { var n = parseFloat(v); return isNaN(n) ? 0 : n; }
+  function clock(sec) { return Math.floor(sec / 60) + ':' + pad(sec % 60); }
+  function name(p) { return ((p.firstName || '') + ' ' + (p.lastName || '')).replace(/^\s+|\s+$/g, '') || 'Unnamed'; }
+  // onclick binding by attribute — no addEventListener juggling, works on iOS 3.
+  function bind(root, attr, fn) {
+    var els = root.querySelectorAll('[' + attr + ']'), i;
+    for (i = 0; i < els.length; i++) {
+      (function (el) { el.onclick = function () { fn(el.getAttribute(attr), el); }; })(els[i]);
+    }
+  }
+  function val(id) { var e = g(id); return e ? e.value : ''; }
+  function opts(list, cur, labels) {
+    var h = '', i, v;
+    for (i = 0; i < list.length; i++) {
+      v = list[i];
+      h += '<option value="' + esc(v) + '"' + (v === cur ? ' selected' : '') + '>' + esc(labels ? (labels[v] || v) : v) + '</option>';
+    }
+    return h;
+  }
+  function fld(label, id, value, cls) {
+    return '<div class="f ' + (cls || '') + '"><label class="fl">' + esc(label) + '</label>' +
+      '<input id="' + id + '" type="text" value="' + esc(value) + '"></div>';
+  }
+  function sel(label, id, list, cur, cls, labels) {
+    return '<div class="f ' + (cls || '') + '"><label class="fl">' + esc(label) + '</label>' +
+      '<select id="' + id + '">' + opts(list, cur, labels) + '</select></div>';
+  }
+  function area(label, id, value) {
+    return '<div class="f"><label class="fl">' + esc(label) + '</label>' +
+      '<textarea id="' + id + '" rows="3">' + esc(value) + '</textarea></div>';
+  }
+  function rowBtns(id) {
+    return '<span class="b" data-edit="' + id + '">Edit</span> <span class="b" data-del="' + id + '">Delete</span>';
+  }
+  function confirmDel(what) { return window.confirm('Delete this ' + what + '?'); }
+
+  // ---------- squad ----------
+  var pEdit = null;
+  function renderSquad() {
+    var v = g('v-squad'), i, p, h;
+    var t = ensureTeam();
+    var fit = 0;
+    for (i = 0; i < D.players.length; i++) { if ((D.players[i].status || 'active') === 'active') fit++; }
+    h = '<div class="card"><h2>Team</h2><div class="frow">' +
+      fld('Team name', 'f_tname', t.name || '', 'third') +
+      fld('Division / league', 'f_tdiv', t.division || '', 'third') +
+      sel('Sport', 'f_tsport', SPORT_IDS, t.sport || 'handball', 'third') +
+      '</div><div class="acts"><span class="b wide on" data-team="1">Save team</span></div>' +
+      '<p class="hint">The squad, matches, sessions and opponents on this iPad all belong to this team.</p></div>';
+    h += '<div class="card"><h2>Squad</h2>' +
+      '<div class="kpis"><div class="kpi"><div><b>' + D.players.length + '</b><span>Players</span></div></div>' +
+      '<div class="kpi"><div><b>' + fit + '</b><span>Available</span></div></div>' +
+      '<div class="kpi"><div><b>' + D.staff.length + '</b><span>Staff</span></div></div>' +
+      '<div class="kpi"><div><b>' + D.matches.length + '</b><span>Matches</span></div></div></div>' +
+      '<table class="tbl"><tr><th>#</th><th>Name</th><th>Position</th><th>Status</th><th class="r">&nbsp;</th></tr>';
+    if (!D.players.length) h += '<tr><td colspan="5" class="empty">No players yet.</td></tr>';
+    for (i = 0; i < D.players.length; i++) {
+      p = D.players[i];
+      h += '<tr><td>' + esc(p.number || '') + '</td><td>' + esc(name(p)) + '</td><td>' + esc(p.position || '') + '</td>' +
+        '<td><span class="tag ' + (p.status === 'injured' ? 'r' : p.status === 'suspended' ? 'a' : 'g') + '">' +
+        esc(STATUS_LBL[p.status || 'active']) + '</span></td><td class="r">' + rowBtns(p.id) + '</td></tr>';
+    }
+    h += '</table><div class="acts"><span class="b wide" data-new="1">+ Add player</span></div>';
+    h += '<div id="pForm">' + (pEdit ? playerForm(pEdit) : '') + '</div></div>';
+    h += staffCard();
+    v.innerHTML = h;
+
+    bind(v, 'data-new', function () { pEdit = {}; renderSquad(); });
+    bind(v, 'data-team', function () {
+      var t = ensureTeam();
+      t.name = val('f_tname') || 'My Team'; t.division = val('f_tdiv'); t.sport = val('f_tsport');
+      stamp(); save(); renderSquad();
+    });
+    bind(v, 'data-edit', function (id) { pEdit = find(D.players, id); renderSquad(); });
+    bind(v, 'data-del', function (id) {
+      if (!confirmDel('player')) return;
+      drop(D.players, id); pEdit = null; save(); renderSquad();
+    });
+    bind(v, 'data-psave', function () {
+      var p = pEdit.id ? pEdit : {};
+      p.number = val('f_num'); p.firstName = val('f_first'); p.lastName = val('f_last');
+      p.position = val('f_pos'); p.height = num(val('f_h')); p.weight = num(val('f_w'));
+      p.status = val('f_st'); p.phone = val('f_ph'); p.email = val('f_em');
+      p.teamId = teamId(); p.sport = teamSport();
+      if (!p.firstName && !p.lastName) { alert('Enter a name.'); return; }
+      if (!p.id) { p.id = uid(); D.players.push(p); }
+      save(); pEdit = null; renderSquad();
+    });
+    bind(v, 'data-pcancel', function () { pEdit = null; renderSquad(); });
+    bindStaff(v);
+  }
+  function playerForm(p) {
+    return '<div class="card"><h3>' + (p.id ? 'Edit player' : 'New player') + '</h3><div class="frow">' +
+      fld('Number', 'f_num', p.number || '', 'third') +
+      fld('First name', 'f_first', p.firstName || '', 'third') +
+      fld('Last name', 'f_last', p.lastName || '', 'third') +
+      sel('Position', 'f_pos', POS, p.position || 'Player', 'third') +
+      fld('Height (cm)', 'f_h', p.height || '', 'third') +
+      fld('Weight (kg)', 'f_w', p.weight || '', 'third') +
+      sel('Status', 'f_st', STATUS, p.status || 'active', 'third', STATUS_LBL) +
+      fld('Mobile', 'f_ph', p.phone || '', 'third') +
+      fld('E-mail', 'f_em', p.email || '', 'third') +
+      '</div><div class="acts"><span class="b wide on" data-psave="1">Save</span> ' +
+      '<span class="b" data-pcancel="1">Cancel</span></div></div>';
+  }
+  var sEdit = null;
+  function staffCard() {
+    var h = '<div class="card"><h2>Staff</h2><table class="tbl"><tr><th>Name</th><th>Role</th><th class="r">&nbsp;</th></tr>', i, c;
+    if (!D.staff.length) h += '<tr><td colspan="3" class="empty">No staff yet.</td></tr>';
+    for (i = 0; i < D.staff.length; i++) {
+      c = D.staff[i];
+      h += '<tr><td>' + esc(c.name || '') + '</td><td>' + esc(c.role || '') + '</td><td class="r">' +
+        '<span class="b" data-sedit="' + c.id + '">Edit</span> <span class="b" data-sdel="' + c.id + '">Delete</span></td></tr>';
+    }
+    h += '</table><div class="acts"><span class="b wide" data-snew="1">+ Add staff</span></div>';
+    if (sEdit) {
+      h += '<div class="card"><h3>' + (sEdit.id ? 'Edit staff' : 'New staff') + '</h3><div class="frow">' +
+        fld('Name', 'f_sname', sEdit.name || '', 'half') +
+        fld('Role', 'f_srole', sEdit.role || '', 'half') +
+        fld('E-mail', 'f_smail', sEdit.email || '', 'half') +
+        fld('Mobile', 'f_sph', sEdit.phone || '', 'half') +
+        '</div><div class="acts"><span class="b wide on" data-ssave="1">Save</span> ' +
+        '<span class="b" data-scancel="1">Cancel</span></div></div>';
+    }
+    return h + '</div>';
+  }
+  function bindStaff(v) {
+    bind(v, 'data-snew', function () { sEdit = {}; renderSquad(); });
+    bind(v, 'data-sedit', function (id) { sEdit = find(D.staff, id); renderSquad(); });
+    bind(v, 'data-sdel', function (id) { if (!confirmDel('staff member')) return; drop(D.staff, id); sEdit = null; save(); renderSquad(); });
+    bind(v, 'data-scancel', function () { sEdit = null; renderSquad(); });
+    bind(v, 'data-ssave', function () {
+      var c = sEdit.id ? sEdit : {};
+      c.name = val('f_sname'); c.role = val('f_srole'); c.email = val('f_smail'); c.phone = val('f_sph');
+      c.teamId = teamId();
+      if (!c.name) { alert('Enter a name.'); return; }
+      if (!c.id) { c.id = uid(); D.staff.push(c); }
+      save(); sEdit = null; renderSquad();
+    });
+  }
+
+  // ---------- matches ----------
+  var mEdit = null;
+  function sortedMatches() {
+    var list = D.matches.slice(0);
+    list.sort(function (a, b) { return (b.date || 0) - (a.date || 0); });
+    return list;
+  }
+  function score(m) {
+    if (m.status !== 'finished' && m.status !== 'live') return '\u2014';
+    return (m.homeScore || 0) + ' \u2013 ' + (m.awayScore || 0);
+  }
+  function renderMatches() {
+    var v = g('v-matches'), list = sortedMatches(), i, m;
+    var h = '<div class="card"><h2>Matches</h2>' +
+      '<table class="tbl"><tr><th>Date</th><th>Opponent</th><th>Score</th><th>Status</th><th class="r">&nbsp;</th></tr>';
+    if (!list.length) h += '<tr><td colspan="5" class="empty">No matches yet.</td></tr>';
+    for (i = 0; i < list.length; i++) {
+      m = list[i];
+      h += '<tr><td>' + fmtDate(m.date) + '</td><td>' + (m.home ? 'vs ' : '@ ') + esc(m.opponent || '') + '</td>' +
+        '<td>' + score(m) + '</td><td>' + esc(m.status || 'scheduled') + '</td><td class="r">' + rowBtns(m.id) + '</td></tr>';
+    }
+    h += '</table><div class="acts"><span class="b wide" data-new="1">+ Add match</span></div>';
+    h += '<div>' + (mEdit ? matchForm(mEdit) : '') + '</div></div>';
+    v.innerHTML = h;
+
+    bind(v, 'data-new', function () { mEdit = { home: true, status: 'scheduled', date: (new Date()).getTime() }; renderMatches(); });
+    bind(v, 'data-edit', function (id) { mEdit = find(D.matches, id); renderMatches(); });
+    bind(v, 'data-del', function (id) {
+      if (!confirmDel('match')) return;
+      drop(D.matches, id);
+      var keep = [], i;
+      for (i = 0; i < D.events.length; i++) { if (D.events[i].matchId !== id) keep.push(D.events[i]); }
+      D.events = keep; mEdit = null; save(); renderMatches();
+    });
+    bind(v, 'data-mcancel', function () { mEdit = null; renderMatches(); });
+    bind(v, 'data-msave', function () {
+      var m = mEdit.id ? mEdit : {};
+      m.opponent = val('f_opp'); m.date = parseDate(val('f_mdate')) || (new Date()).getTime();
+      m.type = val('f_mtype'); m.venue = val('f_venue'); m.home = val('f_home') === 'Home';
+      m.homeScore = num(val('f_hs')); m.awayScore = num(val('f_as')); m.status = val('f_mst');
+      m.teamId = teamId(); m.sport = teamSport();
+      if (!m.opponent) { alert('Enter an opponent.'); return; }
+      if (!m.id) { m.id = uid(); D.matches.push(m); }
+      save(); mEdit = null; renderMatches();
+    });
+  }
+  function matchForm(m) {
+    return '<div class="card"><h3>' + (m.id ? 'Edit match' : 'New match') + '</h3><div class="frow">' +
+      fld('Opponent', 'f_opp', m.opponent || '', 'half') +
+      fld('Date (YYYY-MM-DD)', 'f_mdate', fmtDate(m.date) === '\u2014' ? today() : fmtDate(m.date), 'half') +
+      sel('Type', 'f_mtype', MTYPE, m.type || 'League', 'third') +
+      sel('Home / Away', 'f_home', ['Home', 'Away'], m.home === false ? 'Away' : 'Home', 'third') +
+      fld('Venue', 'f_venue', m.venue || '', 'third') +
+      fld('Home score', 'f_hs', m.homeScore || 0, 'third') +
+      fld('Away score', 'f_as', m.awayScore || 0, 'third') +
+      sel('Status', 'f_mst', MSTATUS, m.status || 'scheduled', 'third') +
+      '</div><div class="acts"><span class="b wide on" data-msave="1">Save</span> ' +
+      '<span class="b" data-mcancel="1">Cancel</span></div></div>';
+  }
+
+  // ---------- live scouting ----------
+  var scMatch = '', scCat = 'attack', scPlayer = '', scSec = 0, scTimer = null;
+  function renderScout() {
+    var v = g('v-scout'), list = sortedMatches(), i, h, p, ev, defs, k;
+    if (!scMatch && list.length) scMatch = list[0].id;
+    h = '<div class="card"><h2>Live scouting</h2>';
+    if (!list.length) {
+      v.innerHTML = h + '<p class="empty">Add a match first, then log events against it.</p></div>';
+      return;
+    }
+    h += '<div class="frow"><div class="f half"><label class="fl">Match</label><select id="scMatch">';
+    for (i = 0; i < list.length; i++) {
+      h += '<option value="' + esc(list[i].id) + '"' + (list[i].id === scMatch ? ' selected' : '') + '>' +
+        fmtDate(list[i].date) + ' \u2014 ' + esc(list[i].opponent || '') + '</option>';
+    }
+    h += '</select></div><div class="f half"><label class="fl">Clock</label>' +
+      '<div><span id="clock">' + clock(scSec) + '</span> ' +
+      '<span class="b" data-clock="1">' + (scTimer ? 'Stop' : 'Start') + '</span> ' +
+      '<span class="b" data-creset="1">Reset</span></div></div></div>';
+
+    h += '<h3>Player</h3><div>';
+    for (i = 0; i < D.players.length; i++) {
+      p = D.players[i];
+      if ((p.status || 'active') === 'suspended') continue;
+      h += '<span class="b' + (p.id === scPlayer ? ' on' : '') + '" data-pick="' + p.id + '">' +
+        esc((p.number ? p.number + ' ' : '') + name(p)) + '</span> ';
+    }
+    if (!D.players.length) h += '<span class="empty">No players in the squad yet.</span>';
+    h += '</div>';
+
+    h += '<h3>Category</h3><div>';
+    for (k in EVENTS) { if (EVENTS.hasOwnProperty(k)) h += '<span class="b' + (k === scCat ? ' on' : '') + '" data-cat="' + k + '">' + CATLBL[k] + '</span> '; }
+    h += '</div><h3>Event</h3><div>';
+    defs = EVENTS[scCat];
+    for (i = 0; i < defs.length; i++) h += '<span class="b wide" data-ev="' + i + '">' + esc(defs[i][1]) + '</span> ';
+    h += '</div></div>';
+
+    h += '<div class="card"><h2>Event log</h2><div class="log"><table class="tbl">';
+    var logged = 0;
+    for (i = D.events.length - 1; i >= 0; i--) {
+      ev = D.events[i];
+      if (ev.matchId !== scMatch) continue;
+      logged++;
+      p = find(D.players, ev.playerId);
+      h += '<tr><td>' + ev.minute + "'</td><td>" + esc(ev.type) + '</td><td>' + esc(p ? name(p) : '\u2014') +
+        '</td><td class="r"><span class="b" data-rm="' + ev.id + '">\u2715</span></td></tr>';
+    }
+    if (!logged) h += '<tr><td colspan="4" class="empty">Nothing logged for this match yet.</td></tr>';
+    h += '</table></div></div>';
+    v.innerHTML = h;
+
+    g('scMatch').onchange = function () { scMatch = this.value; renderScout(); };
+    bind(v, 'data-clock', function () {
+      if (scTimer) { window.clearInterval(scTimer); scTimer = null; }
+      else { scTimer = window.setInterval(function () { scSec++; var c = g('clock'); if (c) c.innerHTML = clock(scSec); }, 1000); }
+      renderScout();
+    });
+    bind(v, 'data-creset', function () {
+      if (scTimer) { window.clearInterval(scTimer); scTimer = null; }
+      scSec = 0; renderScout();
+    });
+    bind(v, 'data-pick', function (id) { scPlayer = (scPlayer === id ? '' : id); renderScout(); });
+    bind(v, 'data-cat', function (c) { scCat = c; renderScout(); });
+    bind(v, 'data-ev', function (idx) { logEvent(EVENTS[scCat][+idx]); });
+    bind(v, 'data-rm', function (id) { drop(D.events, id); save(); renderScout(); });
+  }
+  function logEvent(def) {
+    if (!scMatch) return;
+    if (!scPlayer && D.players.length) { alert('Pick a player first.'); return; }
+    D.events.push({
+      id: uid(), matchId: scMatch, playerId: scPlayer,
+      category: scCat, type: def[0], result: def[2],
+      minute: Math.floor(scSec / 60), createdAt: (new Date()).getTime()
+    });
+    if (def[2] === 'goal') {
+      var m = find(D.matches, scMatch);
+      if (m) { if (m.home === false) m.awayScore = (m.awayScore || 0) + 1; else m.homeScore = (m.homeScore || 0) + 1; }
+    }
+    save(); renderScout();
+  }
+
+  // ---------- statistics ----------
+  function countEvents(list, test) { var n = 0, i; for (i = 0; i < list.length; i++) { if (test(list[i])) n++; } return n; }
+  function statsFor(list) {
+    var goals = countEvents(list, function (e) { return e.result === 'goal'; });
+    var shots = countEvents(list, function (e) { return e.category === 'attack' && (e.result === 'goal' || e.result === 'miss' || e.result === 'save'); });
+    return {
+      goals: goals, shots: shots,
+      assists: countEvents(list, function (e) { return e.type === 'Assist'; }),
+      turnovers: countEvents(list, function (e) { return e.category === 'turnover'; }),
+      saves: countEvents(list, function (e) { return e.type === 'Save' || e.type === 'Penalty Save'; }),
+      pct: shots ? Math.round(goals / shots * 100) : 0
+    };
+  }
+  function eventsOf(playerId) {
+    var out = [], i;
+    for (i = 0; i < D.events.length; i++) { if (D.events[i].playerId === playerId) out.push(D.events[i]); }
+    return out;
+  }
+  function renderStats() {
+    var v = g('v-stats'), s = statsFor(D.events), i, p, ps, rows = [];
+    var won = 0, lost = 0, drew = 0, m, us, them;
+    for (i = 0; i < D.matches.length; i++) {
+      m = D.matches[i];
+      if (m.status !== 'finished') continue;
+      us = m.home === false ? (m.awayScore || 0) : (m.homeScore || 0);
+      them = m.home === false ? (m.homeScore || 0) : (m.awayScore || 0);
+      if (us > them) won++; else if (us < them) lost++; else drew++;
+    }
+    var h = '<div class="card"><h2>Season</h2><div class="kpis">' +
+      '<div class="kpi"><div><b>' + won + '</b><span>Won</span></div></div>' +
+      '<div class="kpi"><div><b>' + drew + '</b><span>Drawn</span></div></div>' +
+      '<div class="kpi"><div><b>' + lost + '</b><span>Lost</span></div></div>' +
+      '<div class="kpi"><div><b>' + s.goals + '</b><span>Goals</span></div></div>' +
+      '<div class="kpi"><div><b>' + s.shots + '</b><span>Shots</span></div></div>' +
+      '<div class="kpi"><div><b>' + s.pct + '%</b><span>Shot %</span></div></div>' +
+      '<div class="kpi"><div><b>' + s.assists + '</b><span>Assists</span></div></div>' +
+      '<div class="kpi"><div><b>' + s.turnovers + '</b><span>Turnovers</span></div></div>' +
+      '</div></div>';
+
+    for (i = 0; i < D.players.length; i++) {
+      p = D.players[i];
+      ps = statsFor(eventsOf(p.id));
+      rows.push({ p: p, s: ps });
+    }
+    rows.sort(function (a, b) { return b.s.goals - a.s.goals; });
+    h += '<div class="card"><h2>Leaderboard</h2><table class="tbl">' +
+      '<tr><th>#</th><th>Player</th><th class="r">Goals</th><th class="r">Shot %</th><th class="r">Assists</th><th class="r">Saves</th><th class="r">Turnovers</th></tr>';
+    if (!rows.length) h += '<tr><td colspan="7" class="empty">No players yet.</td></tr>';
+    for (i = 0; i < rows.length; i++) {
+      h += '<tr><td>' + esc(rows[i].p.number || '') + '</td><td>' + esc(name(rows[i].p)) + '</td>' +
+        '<td class="r">' + rows[i].s.goals + '</td><td class="r">' + rows[i].s.pct + '%</td>' +
+        '<td class="r">' + rows[i].s.assists + '</td><td class="r">' + rows[i].s.saves + '</td>' +
+        '<td class="r">' + rows[i].s.turnovers + '</td></tr>';
+    }
+    h += '</table></div>';
+    v.innerHTML = h;
+  }
+
+  // ---------- training ----------
+  var tEdit = null, dEdit = null;
+  function renderTraining() {
+    var v = g('v-training'), i, s, d, h, j, ex;
+    var list = D.sessions.slice(0);
+    list.sort(function (a, b) { return (a.date || 0) - (b.date || 0); });
+    h = '<div class="card"><h2>Training sessions</h2><table class="tbl">' +
+      '<tr><th>Date</th><th>Title</th><th>Focus</th><th class="r">Min</th><th class="r">&nbsp;</th></tr>';
+    if (!list.length) h += '<tr><td colspan="5" class="empty">No sessions yet.</td></tr>';
+    for (i = 0; i < list.length; i++) {
+      s = list[i];
+      h += '<tr><td>' + fmtDate(s.date) + '</td><td>' + esc(s.title || '') + '</td><td>' + esc(s.focus || '') +
+        '</td><td class="r">' + (s.duration || 0) + '</td><td class="r">' +
+        '<span class="b" data-tshow="' + s.id + '">Show</span> <span class="b" data-tedit="' + s.id + '">Edit</span> ' +
+        '<span class="b" data-tdel="' + s.id + '">Delete</span></td></tr>';
+    }
+    h += '</table><div class="acts"><span class="b wide" data-tnew="1">+ Add session</span></div>';
+    h += (tEdit ? sessionForm(tEdit) : '') + '</div>';
+
+    h += '<div class="card"><h2>Drill library</h2><table class="tbl">' +
+      '<tr><th>Drill</th><th>Category</th><th class="r">Min</th><th>Intensity</th><th class="r">&nbsp;</th></tr>';
+    if (!D.drills.length) h += '<tr><td colspan="5" class="empty">No drills yet.</td></tr>';
+    for (i = 0; i < D.drills.length; i++) {
+      d = D.drills[i];
+      h += '<tr><td>' + esc(d.title || '') + '</td><td>' + esc(d.category || '') + '</td>' +
+        '<td class="r">' + (d.duration || 0) + '</td><td>' + esc(d.intensity || '') + '</td><td class="r">' +
+        '<span class="b" data-dedit="' + d.id + '">Edit</span> <span class="b" data-ddel="' + d.id + '">Delete</span></td></tr>';
+    }
+    h += '</table><div class="acts"><span class="b wide" data-dnew="1">+ Add drill</span></div>';
+    h += (dEdit ? drillForm(dEdit) : '') + '</div>';
+    v.innerHTML = h;
+
+    bind(v, 'data-tnew', function () { tEdit = { date: (new Date()).getTime(), duration: 90, exercises: [] }; dEdit = null; renderTraining(); });
+    bind(v, 'data-tedit', function (id) { tEdit = find(D.sessions, id); dEdit = null; renderTraining(); });
+    bind(v, 'data-tdel', function (id) { if (!confirmDel('session')) return; drop(D.sessions, id); tEdit = null; save(); renderTraining(); });
+    bind(v, 'data-tcancel', function () { tEdit = null; renderTraining(); });
+    bind(v, 'data-tshow', function (id) { showSession(find(D.sessions, id)); });
+    bind(v, 'data-tsave', function () {
+      var s = tEdit.id ? tEdit : {}, box = g('f_tex'), picked = [], i;
+      s.title = val('f_ttl'); s.date = parseDate(val('f_tdate')) || (new Date()).getTime();
+      s.duration = num(val('f_tdur')); s.focus = val('f_tfocus');
+      s.teamId = teamId();
+      if (box) { for (i = 0; i < box.options.length; i++) { if (box.options[i].selected) picked.push(box.options[i].value); } s.exercises = picked; }
+      if (!s.title) { alert('Enter a title.'); return; }
+      if (!s.id) { s.id = uid(); D.sessions.push(s); }
+      save(); tEdit = null; renderTraining();
+    });
+    bind(v, 'data-dnew', function () { dEdit = { duration: 15, intensity: 'Medium' }; tEdit = null; renderTraining(); });
+    bind(v, 'data-dedit', function (id) { dEdit = find(D.drills, id); tEdit = null; renderTraining(); });
+    bind(v, 'data-ddel', function (id) { if (!confirmDel('drill')) return; drop(D.drills, id); dEdit = null; save(); renderTraining(); });
+    bind(v, 'data-dcancel', function () { dEdit = null; renderTraining(); });
+    bind(v, 'data-dsave', function () {
+      var d = dEdit.id ? dEdit : {};
+      d.title = val('f_dttl'); d.category = val('f_dcat'); d.duration = num(val('f_ddur'));
+      d.intensity = val('f_dint'); d.description = val('f_ddesc');
+      if (!d.title) { alert('Enter a title.'); return; }
+      if (!d.id) { d.id = uid(); D.drills.push(d); }
+      save(); dEdit = null; renderTraining();
+    });
+  }
+  function sessionForm(s) {
+    var h = '<div class="card"><h3>' + (s.id ? 'Edit session' : 'New session') + '</h3><div class="frow">' +
+      fld('Title', 'f_ttl', s.title || '', 'half') +
+      fld('Date (YYYY-MM-DD)', 'f_tdate', fmtDate(s.date) === '\u2014' ? today() : fmtDate(s.date), 'half') +
+      fld('Duration (min)', 'f_tdur', s.duration || 90, 'half') +
+      sel('Focus', 'f_tfocus', FOCUS, s.focus || 'Warm-up', 'half') +
+      '<div class="f"><label class="fl">Drills (tap to select several)</label><select id="f_tex" multiple size="5">';
+    var picked = s.exercises || [], i, j, on;
+    for (i = 0; i < D.drills.length; i++) {
+      on = false;
+      for (j = 0; j < picked.length; j++) { if (picked[j] === D.drills[i].id) on = true; }
+      h += '<option value="' + esc(D.drills[i].id) + '"' + (on ? ' selected' : '') + '>' + esc(D.drills[i].title) + '</option>';
+    }
+    if (!D.drills.length) h += '<option value="" disabled>Add drills below first</option>';
+    h += '</select></div></div><div class="acts"><span class="b wide on" data-tsave="1">Save</span> ' +
+      '<span class="b" data-tcancel="1">Cancel</span></div></div>';
+    return h;
+  }
+  function drillForm(d) {
+    return '<div class="card"><h3>' + (d.id ? 'Edit drill' : 'New drill') + '</h3><div class="frow">' +
+      fld('Title', 'f_dttl', d.title || '', 'half') +
+      sel('Category', 'f_dcat', CATS, d.category || 'Attack', 'half') +
+      fld('Duration (min)', 'f_ddur', d.duration || 15, 'half') +
+      sel('Intensity', 'f_dint', INT, d.intensity || 'Medium', 'half') +
+      area('Description', 'f_ddesc', d.description || '') +
+      '</div><div class="acts"><span class="b wide on" data-dsave="1">Save</span> ' +
+      '<span class="b" data-dcancel="1">Cancel</span></div></div>';
+  }
+  function showSession(s) {
+    if (!s) return;
+    var lines = [s.title, fmtDate(s.date) + ' \u00b7 ' + (s.duration || 0) + ' min \u00b7 ' + (s.focus || ''), ''], i, d;
+    var picked = s.exercises || [];
+    for (i = 0; i < picked.length; i++) {
+      d = find(D.drills, picked[i]);
+      if (d) lines.push('\u2022 ' + d.title + ' (' + (d.duration || 0) + ' min, ' + (d.intensity || '') + ')' + (d.description ? '\n   ' + d.description : ''));
+    }
+    if (!picked.length) lines.push('No drills picked.');
+    alert(lines.join('\n'));
+  }
+
+  // ---------- opponents ----------
+  var oEdit = null;
+  function renderOpp() {
+    var v = g('v-opp'), i, o;
+    var h = '<div class="card"><h2>Opponent analysis</h2><table class="tbl">' +
+      '<tr><th>Opponent</th><th>Formation</th><th class="r">&nbsp;</th></tr>';
+    if (!D.opponents.length) h += '<tr><td colspan="3" class="empty">No opponents scouted yet.</td></tr>';
+    for (i = 0; i < D.opponents.length; i++) {
+      o = D.opponents[i];
+      h += '<tr><td>' + esc(o.name || '') + '</td><td>' + esc(o.formation || '') + '</td><td class="r">' + rowBtns(o.id) + '</td></tr>';
+      if (o.keyPlayers || o.tendencies) {
+        h += '<tr><td colspan="3">' + (o.keyPlayers ? '<div class="hint">Key players: ' + esc(o.keyPlayers) + '</div>' : '') +
+          (o.tendencies ? '<div class="hint">' + esc(o.tendencies) + '</div>' : '') + '</td></tr>';
+      }
+    }
+    h += '</table><div class="acts"><span class="b wide" data-new="1">+ Add opponent</span></div>';
+    if (oEdit) {
+      h += '<div class="card"><h3>' + (oEdit.id ? 'Edit opponent' : 'New opponent') + '</h3><div class="frow">' +
+        fld('Name', 'f_oname', oEdit.name || '', 'half') +
+        fld('Formation', 'f_oform', oEdit.formation || '', 'half') +
+        fld('Key players', 'f_okey', oEdit.keyPlayers || '') +
+        area('Tendencies', 'f_otend', oEdit.tendencies || '') +
+        '</div><div class="acts"><span class="b wide on" data-osave="1">Save</span> ' +
+        '<span class="b" data-ocancel="1">Cancel</span></div></div>';
+    }
+    v.innerHTML = h + '</div>';
+
+    bind(v, 'data-new', function () { oEdit = {}; renderOpp(); });
+    bind(v, 'data-edit', function (id) { oEdit = find(D.opponents, id); renderOpp(); });
+    bind(v, 'data-del', function (id) { if (!confirmDel('opponent')) return; drop(D.opponents, id); oEdit = null; save(); renderOpp(); });
+    bind(v, 'data-ocancel', function () { oEdit = null; renderOpp(); });
+    bind(v, 'data-osave', function () {
+      var o = oEdit.id ? oEdit : {};
+      o.name = val('f_oname'); o.formation = val('f_oform');
+      o.keyPlayers = val('f_okey'); o.tendencies = val('f_otend');
+      o.teamId = teamId();
+      if (!o.name) { alert('Enter a name.'); return; }
+      if (!o.id) { o.id = uid(); D.opponents.push(o); }
+      save(); oEdit = null; renderOpp();
+    });
+  }
+
+  // ---------- reports ----------
+  function renderReports() {
+    var v = g('v-reports'), i, p, s, m, ps;
+    var h = '<div class="card"><h2>Team report</h2>' +
+      '<p class="hint">Everything on this iPad in one page. Use Print to send it to AirPrint or to save a PDF.</p>' +
+      '<div class="acts"><span class="b wide" data-print="1">Print</span></div></div>';
+
+    s = statsFor(D.events);
+    h += '<div class="card"><h3>Season totals</h3><table class="tbl">' +
+      '<tr><td>Matches</td><td class="r">' + D.matches.length + '</td></tr>' +
+      '<tr><td>Goals</td><td class="r">' + s.goals + '</td></tr>' +
+      '<tr><td>Shots</td><td class="r">' + s.shots + ' (' + s.pct + '%)</td></tr>' +
+      '<tr><td>Assists</td><td class="r">' + s.assists + '</td></tr>' +
+      '<tr><td>Saves</td><td class="r">' + s.saves + '</td></tr>' +
+      '<tr><td>Turnovers</td><td class="r">' + s.turnovers + '</td></tr></table></div>';
+
+    h += '<div class="card"><h3>Squad</h3><table class="tbl">' +
+      '<tr><th>#</th><th>Name</th><th>Position</th><th>Status</th><th class="r">Goals</th></tr>';
+    for (i = 0; i < D.players.length; i++) {
+      p = D.players[i]; ps = statsFor(eventsOf(p.id));
+      h += '<tr><td>' + esc(p.number || '') + '</td><td>' + esc(name(p)) + '</td><td>' + esc(p.position || '') +
+        '</td><td>' + esc(STATUS_LBL[p.status || 'active']) + '</td><td class="r">' + ps.goals + '</td></tr>';
+    }
+    if (!D.players.length) h += '<tr><td colspan="5" class="empty">No players.</td></tr>';
+    h += '</table></div>';
+
+    h += '<div class="card"><h3>Matches</h3><table class="tbl">' +
+      '<tr><th>Date</th><th>Opponent</th><th>Score</th><th>Status</th></tr>';
+    var list = sortedMatches();
+    for (i = 0; i < list.length; i++) {
+      m = list[i];
+      h += '<tr><td>' + fmtDate(m.date) + '</td><td>' + (m.home ? 'vs ' : '@ ') + esc(m.opponent || '') +
+        '</td><td>' + score(m) + '</td><td>' + esc(m.status || '') + '</td></tr>';
+    }
+    if (!list.length) h += '<tr><td colspan="4" class="empty">No matches.</td></tr>';
+    h += '</table></div>';
+
+    h += '<div class="card"><h3>Training</h3><table class="tbl">' +
+      '<tr><th>Date</th><th>Title</th><th>Focus</th><th class="r">Min</th></tr>';
+    for (i = 0; i < D.sessions.length; i++) {
+      h += '<tr><td>' + fmtDate(D.sessions[i].date) + '</td><td>' + esc(D.sessions[i].title || '') +
+        '</td><td>' + esc(D.sessions[i].focus || '') + '</td><td class="r">' + (D.sessions[i].duration || 0) + '</td></tr>';
+    }
+    if (!D.sessions.length) h += '<tr><td colspan="4" class="empty">No sessions.</td></tr>';
+    h += '</table></div>';
+    v.innerHTML = h;
+    bind(v, 'data-print', function () { window.print(); });
+  }
+
+  // ---------- data transfer ----------
+  function buildDump() {
+    stamp();
+    var out = { app: 'SportTactic', format: 2, exportedAt: (new Date()).toString(), source: 'classic', stores: [], data: {} }, k;
+    for (k in MAP) { if (MAP.hasOwnProperty(k)) { out.stores.push(MAP[k]); out.data[MAP[k]] = D[k]; } }
+    return out;
+  }
+  function renderData() {
+    var v = g('v-data'), k, n = 0;
+    for (k in D) { if (D.hasOwnProperty(k)) n += D[k].length; }
+    var h = '<div class="card"><h2>Backup &amp; transfer</h2>' +
+      '<p class="hint">' + n + ' records are stored on this iPad. Older iPads cannot download files, so the backup is plain text: ' +
+      'select it all, copy it and mail it to yourself. The same text pastes into SportTactic on a newer device under ' +
+      'Settings &rsaquo; Import Backup, and a backup from a newer device pastes in here.</p>' +
+      '<div class="acts"><span class="b wide" data-export="1">Show backup text</span> ' +
+      '<span class="b wide" data-import="1">Import pasted text</span> ' +
+      '<span class="b" data-selall="1">Select all</span> ' +
+      '<span class="b red" data-reset="1">Erase all data</span></div>' +
+      '<div class="f"><label class="fl">Backup text</label><textarea id="dataBox"></textarea></div>' +
+      '<p class="hint" id="dataMsg"></p></div>';
+    h += '<div class="card"><h2>About this build</h2>' +
+      '<p class="hint">This is the classic build for iPads from 2010 and other browsers without IndexedDB or modern JavaScript. ' +
+      'It stores everything in this browser only \u2014 no account, no server, no internet needed. ' +
+      'A newer device should use the <a class="full" href="index.html?full=1">full version</a>, which adds video analysis, ' +
+      'AI assistance, e-mail and the encrypted messenger. Opening this page again always brings you back here, ' +
+      'and index.html?classic=1 forces the classic build on any device.</p></div>';
+    v.innerHTML = h;
+
+    bind(v, 'data-export', function () {
+      g('dataBox').value = JSON.stringify(buildDump());
+      g('dataMsg').innerHTML = 'Backup ready. Tap Select all, then Copy.';
+    });
+    bind(v, 'data-selall', function () { var b = g('dataBox'); b.focus(); b.select(); });
+    bind(v, 'data-import', function () {
+      var txt = g('dataBox').value, dump, src, k, rows;
+      if (!txt) { g('dataMsg').innerHTML = 'Paste a backup into the box first.'; return; }
+      try { dump = JSON.parse(txt); } catch (e) { g('dataMsg').innerHTML = 'That is not a readable backup.'; return; }
+      src = dump && dump.data ? dump.data : dump;
+      if (!src || typeof src !== 'object') { g('dataMsg').innerHTML = 'That is not a readable backup.'; return; }
+      if (!window.confirm('Replace everything on this iPad with the pasted backup?')) return;
+      var got = 0;
+      for (k in MAP) {
+        if (!MAP.hasOwnProperty(k)) continue;
+        rows = src[MAP[k]] || src[k];
+        if (rows && rows.length !== undefined) { D[k] = rows; got += rows.length; }
+      }
+      save();
+      g('dataMsg').innerHTML = got + ' records imported.';
+      renderAll();
+    });
+    bind(v, 'data-reset', function () {
+      if (!window.confirm('Erase every player, match, session and event on this iPad?')) return;
+      var k;
+      for (k in D) { if (D.hasOwnProperty(k)) D[k] = []; }
+      save(); renderAll(); g('dataMsg').innerHTML = 'All data erased.';
+    });
+  }
+
+  // ---------- shell ----------
+  var VIEWS = {
+    squad: renderSquad, matches: renderMatches, scout: renderScout, stats: renderStats,
+    training: renderTraining, opp: renderOpp, reports: renderReports, data: renderData
+  };
+  function renderAll() {
+    var k;
+    for (k in VIEWS) { if (VIEWS.hasOwnProperty(k)) VIEWS[k](); }
+  }
+  function show(id) {
+    var views = document.querySelectorAll('.view'), tabs = document.querySelectorAll('.tab'), i;
+    for (i = 0; i < views.length; i++) views[i].className = 'view' + (views[i].id === 'v-' + id ? ' on' : '');
+    for (i = 0; i < tabs.length; i++) tabs[i].className = 'tab' + (tabs[i].getAttribute('data-view') === id ? ' on' : '');
+    if (VIEWS[id]) VIEWS[id]();
+    try { localStorage.setItem('stx_classic_tab', id); } catch (e) {}
+    window.scrollTo(0, 0);
+  }
+
+  load();
+  ensureTeam();
+  // Landing here again clears the "always use the full version" override, so a
+  // device that cannot run the modern app can never get stuck on it.
+  try { localStorage.removeItem('stx_force_full'); } catch (e) {}
+  renderAll();
+  bind(document.getElementById('tabs'), 'data-view', function (id) { show(id); });
+  var last = '';
+  try { last = localStorage.getItem('stx_classic_tab') || ''; } catch (e) {}
+  if (last && (last === 'board' || VIEWS[last])) show(last);
 })();
 </script>
 </body>
