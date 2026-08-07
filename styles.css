@@ -329,7 +329,6 @@ body {
 .bm-acts { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
 .bm-comment { margin: 4px 0 0; font-size: 13px; color: var(--text-soft); line-height: 1.45; }
 .video-panel.fs { position: fixed; inset: 0; z-index: 200; margin: 0; border-radius: 0; overflow: auto; padding: 18px; background: var(--surface); }
-.video-panel.fs #mediaWrap { max-width: 1100px; margin: 0 auto; }
 .video-panel.fs #mediaWrap video { max-height: 68vh; object-fit: contain; }
 .video-panel.fs #localControls, .video-panel.fs .bm-section { max-width: 1100px; margin-left: auto; margin-right: auto; width: 100%; }
 .video-panel.fs .bm-list { max-height: 22vh; }
@@ -481,6 +480,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--primary); }
 .staff-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); }
 .staff-row:last-child { border-bottom: 0; }
 .staff-name { flex: 1; min-width: 0; }
+.staff-mail { display: block; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
 .staff-actions { display: flex; gap: 6px; white-space: nowrap; }
 
 /* Scroll-to-top button */
@@ -576,6 +576,21 @@ body.board-fs { overflow: hidden; }
 .board-wrap.fs .board-stage { justify-content: center; }
 .board-wrap.fs #tacticalCanvas { max-height: calc(100vh - 60px); }
 .board-wrap.fs .frames-anim { flex-basis: 150px; width: 150px; }
+
+/* Board only: the court and the players, nothing else — made for an iPad.
+   It pins itself rather than relying on the Fullscreen API, which iPadOS
+   Safari refuses for ordinary elements. */
+.board-wrap.zen { position: fixed; inset: 0; z-index: 200; background: var(--bg); overflow: hidden; grid-template-columns: 1fr; padding: 0; gap: 0; }
+.board-wrap.zen > .tool-panel,
+.board-wrap.zen .frames-anim,
+.board-wrap.zen .timeline,
+.board-wrap.zen .name-bar { display: none !important; }
+.board-wrap.zen .board-stage { justify-content: center; height: 100%; }
+.board-wrap.zen .stage-row { justify-content: center; }
+.board-wrap.zen #tacticalCanvas { max-height: calc(100vh - 8px); max-width: 100%; }
+#zenExit { position: fixed; top: 10px; right: 12px; z-index: 210; opacity: .35; }
+#zenExit:hover, #zenExit:focus { opacity: 1; }
+.board-wrap:not(.zen) #zenExit { display: none; }
 /* Add-name bar shown directly under the court */
 .name-bar { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px; margin-top: 10px; width: 100%; }
 .name-bar #playerNameInput { width: 180px; max-width: 60%; }
@@ -658,7 +673,7 @@ body.board-fs { overflow: hidden; }
 .stage-row > .timeline { flex: 0 0 148px; width: 148px; margin-top: 0; align-self: stretch; display: flex; flex-direction: column; min-height: 0; }
 .stage-row > .timeline .tl-head { flex-direction: column; align-items: stretch; gap: 6px; }
 .stage-row > .timeline .tl-actions { flex-direction: column; }
-.stage-row > .timeline .tl-grid { grid-template-columns: 1fr; max-height: none; flex: 1 1 auto; min-height: 60px; align-content: start; }
+.stage-row > .timeline .tl-grid { grid-template-columns: 1fr; max-height: none; flex: 1 1 auto; min-height: 60px; overflow-y: auto; align-content: start; }
 @media (max-width: 900px) {
   .stage-row { flex-wrap: wrap; }
   .stage-row #tacticalCanvas { order: 1; }
@@ -802,6 +817,7 @@ body { overscroll-behavior-y: contain; }
   .board-wrap.fs { grid-template-columns: 1fr; overflow: auto; }
   .board-wrap.fs .board-stage { order: -1; }
   .board-wrap.fs #tacticalCanvas { max-height: 60vh; }
+  .board-wrap.zen #tacticalCanvas { max-height: calc(100vh - 8px); }
   .video-panel.fs #mediaWrap video { max-height: 52vh; }
 }
 @media (max-width: 768px) {
@@ -876,17 +892,26 @@ td.col-num .cell, td.col-h .cell, td.col-w .cell { max-width: 92px; }
 /* ---- Max-test rows (Personal training) ---- */
 .test-row { display: grid; grid-template-columns: 2fr 1fr 1fr .8fr auto; gap: 6px; margin-bottom: 6px; align-items: center; }
 
+/* ---- Video telestration (video.js) ---- */
+#mediaWrap { position: relative; }
+.v-stage { display: flex; flex-direction: column; gap: 10px; }
+.draw-layer { position: absolute; left: 0; top: 0; pointer-events: none; touch-action: none; border-radius: 10px; }
+.draw-layer.armed { pointer-events: auto; cursor: crosshair; box-shadow: inset 0 0 0 2px var(--accent); }
+.draw-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 10px; }
+.draw-colors { display: flex; gap: 6px; }
+.swatch { width: 26px; height: 26px; border-radius: 6px; border: 2px solid var(--border); background: var(--sw); cursor: pointer; padding: 0; }
+.swatch.on { border-color: var(--text); }
+
+/* Fullscreen: the tools move to a column on the left of the picture. */
+.video-panel.fs .v-stage { flex-direction: row; align-items: flex-start; gap: 14px; max-width: 1240px; margin: 0 auto; width: 100%; }
+.video-panel.fs .v-stage .draw-bar { order: -1; flex: 0 0 136px; flex-direction: column; align-items: stretch; margin-top: 0; }
+.video-panel.fs .v-stage .draw-bar .tool-group { display: flex; flex-direction: column; gap: 6px; }
+.video-panel.fs .v-stage .draw-colors { flex-wrap: wrap; justify-content: center; }
+.video-panel.fs .v-stage #mediaWrap { flex: 1 1 auto; min-width: 0; margin: 0; }
+
 /* ---- Mail dialog ---- */
 .mail-picker { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 4px 12px; margin-bottom: 12px; }
 .mail-picker .check-row { margin: 0; }
-.mailsrv-h { margin: 18px 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
-.send-mode { margin-top: 4px; }
-.code-block {
-  margin: 10px 0 0; padding: 12px; max-height: 320px; overflow: auto;
-  background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 12px; line-height: 1.5; white-space: pre; color: var(--text);
-}
 .pick-list {
   max-height: 230px; overflow: auto; border: 1px solid var(--border);
   border-radius: 10px; padding: 6px; margin-bottom: 12px; background: var(--surface-2);
@@ -905,6 +930,14 @@ td.col-num .cell, td.col-h .cell, td.col-w .cell { max-width: 92px; }
 .big-log { width: 100%; min-height: 52px; font-size: 17px; }
 
 .mail-note { border-left: 3px solid var(--warning); background: var(--surface-2); padding: 8px 10px; border-radius: 6px; margin: 0 0 10px; }
+
+/* ---- Send to Coach picker (settings.js) ---- */
+.tag.warn { color: var(--warning); border-color: var(--warning); }
+.share-row { align-items: flex-start; margin: 8px 0; }
+.share-row input { margin-top: 2px; }
+.share-row .tag { margin-left: 6px; }
+.share-n { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
+.share-row input:disabled + span { opacity: .55; }
 
 .combo { display: flex; gap: 6px; align-items: stretch; }
 .combo > input { flex: 1 1 auto; min-width: 0; }

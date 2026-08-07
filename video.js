@@ -51,8 +51,72 @@ Views.video = function (mount) {
     } catch (e) { return null; }
   }
 
-  const streamCard = `
-      <p style="color:var(--muted);font-size:13px;margin-bottom:8px">${T('video.streamHint')}</p>
+  // ---- Telestration ------------------------------------------------------
+  // Shapes belong to a bookmark and are stored in fractions of the frame, so the
+  // same drawing lands in the right place on the preview and in the export,
+  // whatever the video resolution is.
+  const DRAW_TOOLS = ['arrow', 'line', 'free', 'circle', 'rect', 'text'];
+  const DRAW_COLORS = ['#ffd400', '#ff3b30', '#34c759', '#0a84ff', '#ffffff', '#101010'];
+  let dTool = 'arrow';
+  let dColor = DRAW_COLORS[0];
+
+  function drawShapes(cx, w, h, bm) {
+    const list = (bm && bm.shapes) || [];
+    if (!list.length) return;
+    const unit = Math.max(2, Math.round(Math.min(w, h) * 0.006));
+    cx.save();
+    cx.lineCap = 'round';
+    cx.lineJoin = 'round';
+    for (const s of list) {
+      const p = s.p || [];
+      if (!p.length) continue;
+      cx.strokeStyle = s.c || '#ffd400';
+      cx.fillStyle = s.c || '#ffd400';
+      cx.lineWidth = unit;
+      const X = i => p[i][0] * w, Y = i => p[i][1] * h;
+      if (s.k === 'text') {
+        // Haloed so it stays readable over a light or a dark patch of pitch.
+        const px = Math.max(12, Math.round(h * 0.055));
+        cx.save();
+        cx.font = 'bold ' + px + 'px Arial, Helvetica, sans-serif';
+        cx.textAlign = 'center';
+        cx.textBaseline = 'middle';
+        cx.lineJoin = 'round';
+        cx.lineWidth = Math.max(2, Math.round(px * 0.2));
+        cx.strokeStyle = 'rgba(0,0,0,.7)';
+        cx.strokeText(s.txt || '', X(0), Y(0));
+        cx.fillText(s.txt || '', X(0), Y(0));
+        cx.restore();
+      } else if (s.k === 'free') {
+        cx.beginPath();
+        cx.moveTo(X(0), Y(0));
+        for (let i = 1; i < p.length; i++) cx.lineTo(X(i), Y(i));
+        cx.stroke();
+      } else if (p.length >= 2) {
+        const x1 = X(0), y1 = Y(0), x2 = X(1), y2 = Y(1);
+        if (s.k === 'rect') {
+          cx.strokeRect(Math.min(x1, x2), Math.min(y1, y2), Math.abs(x2 - x1), Math.abs(y2 - y1));
+        } else if (s.k === 'circle') {
+          cx.beginPath();
+          cx.ellipse((x1 + x2) / 2, (y1 + y2) / 2, Math.abs(x2 - x1) / 2, Math.abs(y2 - y1) / 2, 0, 0, Math.PI * 2);
+          cx.stroke();
+        } else {
+          cx.beginPath(); cx.moveTo(x1, y1); cx.lineTo(x2, y2); cx.stroke();
+          if (s.k === 'arrow') {
+            const a = Math.atan2(y2 - y1, x2 - x1), head = unit * 4.5;
+            cx.beginPath();
+            cx.moveTo(x2, y2);
+            cx.lineTo(x2 - head * Math.cos(a - 0.42), y2 - head * Math.sin(a - 0.42));
+            cx.lineTo(x2 - head * Math.cos(a + 0.42), y2 - head * Math.sin(a + 0.42));
+            cx.closePath(); cx.fill();
+          }
+        }
+      }
+    }
+    cx.restore();
+  }
+
+  const streamCard = `      <p style="color:var(--muted);font-size:13px;margin-bottom:8px">${T('video.streamHint')}</p>
       <div class="row" style="flex:0">
         <input id="streamUrl" type="url" placeholder="https://youtube.com/watch?v=… , twitch.tv/… , vimeo.com/…" style="min-width:260px">
         <button class="btn primary" id="loadStream">${T('video.watch')}</button>
@@ -68,9 +132,22 @@ Views.video = function (mount) {
         <h3 style="margin:0">${T('video.title')}</h3>
         <button class="btn sm" id="videoFs" title="${T('video.fullscreen')}">⛶ ${T('video.fullscreen')}</button>
       </div>
-      <div id="mediaWrap">
-        <video id="player" controls style="width:100%;border-radius:10px;background:#000"></video>
+      <div class="v-stage" id="vStage">
+        <div id="mediaWrap">
+          <video id="player" controls style="width:100%;border-radius:10px;background:#000"></video>
+        </div>
+        <div class="draw-bar" id="drawBar">
+          <span class="tool-group">
+            ${DRAW_TOOLS.map(t => `<button class="btn sm" data-dtool="${t}">${T('video.d' + t)}</button>`).join('')}
+          </span>
+          <span class="draw-colors">${DRAW_COLORS.map(c => `<button class="swatch" data-dcolor="${c}" style="--sw:${c}" title="${c}"></button>`).join('')}</span>
+          <span class="tool-group">
+            <button class="btn sm" id="drawUndo">\u21b6 ${T('tactics.undo')}</button>
+            <button class="btn sm danger" id="drawClear">${T('video.drawClear')}</button>
+          </span>
+        </div>
       </div>
+      <p class="hint" id="drawHint"></p>
       <div class="row" style="margin-top:10px;flex:0" id="localControls">
         <button class="btn sm local-only" data-seek="-5">« 5s</button>
         <button class="btn sm local-only" data-rate="0.5">0.5×</button>
@@ -117,6 +194,7 @@ Views.video = function (mount) {
     v = mount.querySelector('#player');
     showPlaybackBtns(true);
     bindLocalControls();
+    mountOverlay();
   }
   function showEmbed(src) {
     wrap.innerHTML = `<div class="embed-frame"><iframe src="${UI.esc(src)}" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen frameborder="0"></iframe></div>`;
@@ -141,6 +219,159 @@ Views.video = function (mount) {
     mount.querySelectorAll('[data-rate]').forEach(b => b.onclick = () => { if (v) v.playbackRate = +b.dataset.rate; });
     mount.querySelector('#bm').onclick = createBookmark;
   }
+
+  // ---- The drawing overlay -----------------------------------------------
+  // It sits exactly over the picture, and everything drawn on it belongs to the
+  // bookmark picked with Go — which is also the clip it gets burnt into.
+  let overlay = null, octx = null, drawing = null;
+
+  function mountOverlay() {
+    overlay = document.createElement('canvas');
+    overlay.className = 'draw-layer';
+    overlay.id = 'vdraw';
+    wrap.classList.add('has-draw');
+    wrap.appendChild(overlay);
+    octx = overlay.getContext('2d');
+    overlay.addEventListener('pointerdown', onDrawDown);
+    overlay.addEventListener('pointermove', onDrawMove);
+    overlay.addEventListener('pointerup', onDrawUp);
+    overlay.addEventListener('pointercancel', onDrawUp);
+    if (v) {
+      v.addEventListener('loadedmetadata', sizeOverlay);
+      v.addEventListener('seeked', renderOverlay);
+    }
+    sizeOverlay();
+  }
+
+  // The picture is letterboxed inside the element, so the overlay is pinned to
+  // the picture itself rather than to the box around it.
+  function videoBox() {
+    if (!v) return null;
+    const r = v.getBoundingClientRect();
+    const vw = v.videoWidth || 16, vh = v.videoHeight || 9;
+    const scale = Math.min(r.width / vw, r.height / vh) || 0;
+    const w = vw * scale, h = vh * scale;
+    return { left: (r.width - w) / 2, top: (r.height - h) / 2, w, h };
+  }
+  function sizeOverlay() {
+    if (!overlay || !v) return;
+    const b = videoBox();
+    if (!b || !b.w || !b.h) return;
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    overlay.width = Math.round(b.w * dpr);
+    overlay.height = Math.round(b.h * dpr);
+    overlay.style.left = b.left + 'px';
+    overlay.style.top = b.top + 'px';
+    overlay.style.width = b.w + 'px';
+    overlay.style.height = b.h + 'px';
+    renderOverlay();
+  }
+  function renderOverlay() {
+    if (!overlay || !octx) return;
+    octx.setTransform(1, 0, 0, 1, 0, 0);
+    octx.clearRect(0, 0, overlay.width, overlay.height);
+    const bm = drawTarget();
+    if (bm) drawShapes(octx, overlay.width, overlay.height, bm);
+    if (drawing) drawShapes(octx, overlay.width, overlay.height, { shapes: [drawing] });
+    if (overlay) overlay.classList.toggle('armed', !!bm);
+    const hint = mount.querySelector('#drawHint');
+    if (hint) {
+      hint.textContent = bm
+        ? T('video.drawOn') + ' ' + UI.fmtClock(Math.floor(bm.t)) + ' ' + (bm.tag || '')
+        : T('video.drawPick');
+    }
+  }
+  const drawTarget = () => (selectedBm && bookmarks.indexOf(selectedBm) >= 0) ? selectedBm : null;
+
+  function pt(e) {
+    const r = overlay.getBoundingClientRect();
+    return [Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)),
+      Math.min(1, Math.max(0, (e.clientY - r.top) / r.height))];
+  }
+  function onDrawDown(e) {
+    if (!drawTarget()) { UI.toast(T('video.drawPick'), 'error'); return; }
+    e.preventDefault();
+    if (dTool === 'text') { askDrawText(pt(e)); return; }
+    overlay.setPointerCapture(e.pointerId);
+    drawing = { k: dTool, c: dColor, p: [pt(e), pt(e)] };
+    renderOverlay();
+  }
+
+  function askDrawText(at) {
+    UI.modal({
+      title: T('video.textAsk'),
+      body: `<label class="field"><span>${T('video.dtext')}</span>
+        <input id="vd_txt" maxlength="60" placeholder="${UI.esc(T('video.textPh'))}"></label>`,
+      footer: `<button class="btn ghost" data-close2>${T('common.cancel')}</button>
+        <button class="btn primary" data-save>${T('common.save')}</button>`,
+      onOpen: (m, close) => {
+        const inp = m.querySelector('#vd_txt');
+        inp.focus();
+        const save = async () => {
+          const txt = inp.value.trim();
+          if (!txt) return close();
+          const bm = drawTarget();
+          if (bm) {
+            bm.shapes = (bm.shapes || []).concat([{ k: 'text', c: dColor, txt, p: [at] }]);
+            await saveBookmarks();
+            renderBm();
+          }
+          close();
+          renderOverlay();
+        };
+        inp.onkeydown = ev => { if (ev.key === 'Enter') save(); };
+        m.querySelector('[data-close2]').onclick = close;
+        m.querySelector('[data-save]').onclick = save;
+      }
+    });
+  }
+  function onDrawMove(e) {
+    if (!drawing) return;
+    e.preventDefault();
+    if (drawing.k === 'free') drawing.p.push(pt(e));
+    else drawing.p[1] = pt(e);
+    renderOverlay();
+  }
+  async function onDrawUp() {
+    if (!drawing) return;
+    const bm = drawTarget();
+    const shape = drawing;
+    drawing = null;
+    const moved = shape.p.length > 2 ||
+      Math.hypot(shape.p[1][0] - shape.p[0][0], shape.p[1][1] - shape.p[0][1]) > 0.01;
+    if (bm && moved) {
+      bm.shapes = (bm.shapes || []).concat([shape]);
+      await saveBookmarks();
+      renderBm();
+    }
+    renderOverlay();
+  }
+
+  function bindDrawBar() {
+    const bar = mount.querySelector('#drawBar');
+    const sync = () => {
+      bar.querySelectorAll('[data-dtool]').forEach(b => b.classList.toggle('primary', b.dataset.dtool === dTool));
+      bar.querySelectorAll('[data-dcolor]').forEach(b => b.classList.toggle('on', b.dataset.dcolor === dColor));
+    };
+    bar.querySelectorAll('[data-dtool]').forEach(b => b.onclick = () => { dTool = b.dataset.dtool; sync(); });
+    bar.querySelectorAll('[data-dcolor]').forEach(b => b.onclick = () => { dColor = b.dataset.dcolor; sync(); });
+    mount.querySelector('#drawUndo').onclick = async () => {
+      const bm = drawTarget();
+      if (!bm || !(bm.shapes || []).length) return;
+      bm.shapes.pop();
+      await saveBookmarks(); renderOverlay(); renderBm();
+    };
+    mount.querySelector('#drawClear').onclick = () => {
+      const bm = drawTarget();
+      if (!bm || !(bm.shapes || []).length) return;
+      UI.confirm(T('video.drawClearAsk'), async () => {
+        bm.shapes = [];
+        await saveBookmarks(); renderOverlay(); renderBm();
+      });
+    };
+    sync();
+  }
+  bindDrawBar();
 
   // "12:34", "1:02:03" or plain seconds -> seconds.
   function parseClock(s) {
@@ -198,11 +429,13 @@ Views.video = function (mount) {
     const fs = document.fullscreenElement === el;
     if (el) el.classList.toggle('fs', fs);
     if (btn) btn.innerHTML = '⛶ ' + (fs ? T('video.exitFullscreen') : T('video.fullscreen'));
+    setTimeout(sizeOverlay, 80);          // the picture is a different size now
   }
   document.addEventListener('fullscreenchange', onVideoFsChange);
   const vfsBtn = mount.querySelector('#videoFs');
   if (vfsBtn) vfsBtn.onclick = toggleVideoFullscreen;
   bindLocalControls();
+  mountOverlay();
 
   loadBookmarks();
 
@@ -286,7 +519,12 @@ Views.video = function (mount) {
       // A timer drives the compositor, not requestAnimationFrame: rAF stops when
       // the tab loses visibility and the export would silently go black.
       const paint = () => {
-        try { cx.drawImage(v, 0, 0, cv.width, cv.height); drawCaption(cx, cv.width, cv.height, bm, v.currentTime - start); } catch (e) {}
+        try {
+          cx.drawImage(v, 0, 0, cv.width, cv.height);
+          // The drawing stays for the whole clip; only the caption fades out.
+          drawShapes(cx, cv.width, cv.height, bm);
+          drawCaption(cx, cv.width, cv.height, bm, v.currentTime - start);
+        } catch (e) {}
       };
       paint();
       const timer = setInterval(paint, 33);
@@ -414,7 +652,7 @@ Views.video = function (mount) {
     l.innerHTML = bookmarks.length ? bookmarks.map((b, i) =>
       `<div class="bm-item${b === selectedBm ? ' sel' : ''}">
         <div class="bm-main">
-          <span><span class="tag blue">${UI.fmtClock(Math.floor(b.t))}</span> ${UI.esc(b.tag)}</span>
+          <span><span class="tag blue">${UI.fmtClock(Math.floor(b.t))}</span> ${UI.esc(b.tag)}${(b.shapes || []).length ? ` <span class="tag green">✎ ${(b.shapes || []).length}</span>` : ''}</span>
           <span class="bm-acts">
             <button class="btn sm" data-go="${i}">${T('common.go')}</button>
             <button class="btn sm primary" data-webm="${i}">${T('video.exportWebm')}</button>
@@ -430,6 +668,7 @@ Views.video = function (mount) {
       selectedBm = bm;
       v.currentTime = bm.t; v.play();
       renderBm();
+      renderOverlay();
     });
     l.querySelectorAll('[data-webm]').forEach(b => b.onclick = () => {
       selectedBm = bookmarks[+b.dataset.webm]; renderBm();
@@ -445,8 +684,15 @@ Views.video = function (mount) {
       await saveBookmarks(); renderBm();
     });
     renderScope();
+    renderOverlay();
   }
   renderBm();
 
-  return () => { document.removeEventListener('fullscreenchange', onVideoFsChange); };
+  const onVResize = () => sizeOverlay();
+  window.addEventListener('resize', onVResize);
+
+  return () => {
+    document.removeEventListener('fullscreenchange', onVideoFsChange);
+    window.removeEventListener('resize', onVResize);
+  };
 };

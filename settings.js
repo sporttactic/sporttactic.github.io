@@ -6,10 +6,11 @@ window.Views = window.Views || {};
 // and Blobs are base64-encoded by Store.pack, because JSON.stringify silently
 // turns a Blob into `{}` — that is how recorded animation clips used to vanish.
 const BACKUP_FORMAT = 2;
-async function buildBackup() {
+async function buildBackup(stores) {
+  const list = stores && stores.length ? stores : DB.STORES;
   const data = {};
   const counts = {};
-  for (const s of DB.STORES) {
+  for (const s of list) {
     const rows = await DB.getAll(s);
     data[s] = await Store.pack(rows);
     counts[s] = rows.length;
@@ -17,7 +18,7 @@ async function buildBackup() {
   return {
     app: 'SportTactic', format: BACKUP_FORMAT,
     exportedAt: new Date().toISOString(),
-    stores: DB.STORES.slice(), counts, data
+    stores: list.slice(), counts, data
   };
 }
 async function restoreBackup(dump) {
@@ -36,6 +37,195 @@ function downloadJson(json, name) {
   a.href = URL.createObjectURL(new Blob([json], { type: 'application/json' }));
   a.download = name; a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 20000);
+}
+
+// ---- "Send to Coach": pick what actually leaves the device ---------------
+// Grouped the way a coach thinks about the data, not the way it is stored.
+const SHARE_GROUPS = [
+  { id: 'squad', stores: ['clubs', 'teams', 'players', 'coaches', 'seasons'], key: 'settings.shareGSquad', def: 'Squad, staff and teams', sensitive: true },
+  { id: 'matches', stores: ['matches', 'events'], key: 'settings.shareGMatches', def: 'Matches and logged events' },
+  { id: 'training', stores: ['training', 'exercises'], key: 'settings.shareGTraining', def: 'Training sessions and drill library' },
+  { id: 'personal', stores: ['personal'], key: 'settings.shareGPersonal', def: 'Personal training and max tests', sensitive: true },
+  { id: 'opponents', stores: ['opponents'], key: 'settings.shareGOpponents', def: 'Opponent analysis' },
+  { id: 'reports', stores: ['reports'], key: 'settings.shareGReports', def: 'Saved reports' }
+];
+
+// ---- The readable report ------------------------------------------------
+// What gets mailed is written for a person, not for a parser: the file download
+// stays the machine-readable backup.
+function shareReport(groups) {
+  const tt = (k, f) => { const r = T(k); return r === k ? f : r; };
+  const has = id => groups.some(g => g.id === id);
+  const d = v => { const x = new Date(v); return isNaN(x) ? '\u2014' : x.toISOString().slice(0, 10); };
+  const pad = (s, n) => String(s == null ? '' : s).padEnd(n).slice(0, n);
+  const out = [];
+  const head = t => { out.push('', '=== ' + t.toUpperCase() + ' ===', ''); };
+
+  const team = Store.activeTeam();
+  out.push('SportTactic \u2014 ' + tt('settings.shareReportTitle', 'shared data'));
+  if (team) out.push(tt('settings.shareReportTeam', 'Team') + ': ' + team.name + (team.division ? ' \u00b7 ' + team.division : '') + (team.category ? ' \u00b7 ' + team.category : ''));
+  out.push(tt('tactics.sport', 'Sport') + ': ' + SPORTS.name(App.getSport(), I18N.getLang()));
+  out.push(tt('settings.shareReportDate', 'Exported') + ': ' + d(Date.now()));
+
+  if (has('squad')) {
+    const players = Store.players();
+    head(tt('teams.squad', 'Squad') + ' (' + players.length + ')');
+    players.slice().sort((a, b) => (+a.number || 0) - (+b.number || 0)).forEach(p => {
+      out.push('#' + pad(p.number || '?', 4) + pad([p.firstName, p.lastName].filter(Boolean).join(' '), 24)
+        + pad(p.position || '', 16)
+        + pad(p.height ? p.height + ' cm' : '', 9) + pad(p.weight ? p.weight + ' kg' : '', 9)
+        + pad(tt('status.' + (p.status || 'active'), p.status || 'active'), 12)
+        + (p.email || ''));
+      if (p.status === 'injured' && p.injuryNote) out.push('      \u21b3 ' + p.injuryNote);
+    });
+    const staff = Store.coaches();
+    if (staff.length) {
+      out.push('', tt('teams.staff', 'Staff') + ':');
+      staff.forEach(c => out.push('  ' + pad(c.name || '', 24) + pad(c.role || '', 20) + (c.email || '')));
+    }
+  }
+
+  if (has('matches')) {
+    const list = Store.matches().slice().sort((a, b) => (a.date || 0) - (b.date || 0));
+    head(tt('matches.title', 'Matches') + ' (' + list.length + ')');
+    list.forEach(m => {
+      const played = m.status === 'finished' || m.homeScore || m.awayScore;
+      const score = played ? m.homeScore + ':' + m.awayScore : '\u2013';
+      out.push(pad(d(m.date), 12) + pad((m.home ? tt('common.vs', 'vs') : tt('common.at', '@')) + ' ' + (m.opponent || ''), 26)
+        + pad(score, 9) + pad(m.type || '', 14) + (m.venue || ''));
+      const evs = Store.matchEvents(m.id) || [];
+      if (evs.length) {
+        const tally = {};
+        evs.forEach(e => { tally[e.type] = (tally[e.type] || 0) + 1; });
+        out.push('      ' + Object.keys(tally).map(k => k + ' ' + tally[k]).join(', '));
+      }
+    });
+  }
+
+  if (has('training')) {
+    const list = Store.scoped('training').slice().sort((a, b) => (a.date || 0) - (b.date || 0));
+    head(tt('training.title', 'Training') + ' (' + list.length + ')');
+    list.forEach(s => {
+      out.push(pad(d(s.date), 12) + pad(s.title || '', 30) + pad(s.duration ? s.duration + ' min' : '', 10) + (s.focus || ''));
+      const names = (s.exercises || []).map(id => { const e = Store.find('exercises', id); return e && e.title; }).filter(Boolean);
+      if (names.length) out.push('      ' + names.join(', '));
+    });
+  }
+
+  if (has('personal')) {
+    const list = Store.scoped('personal').slice().sort((a, b) => (a.date || 0) - (b.date || 0));
+    head(tt('personal.title', 'Personal tests') + ' (' + list.length + ')');
+    list.forEach(r => {
+      out.push(pad(d(r.date), 12) + pad(r.playerName || '', 22) + (r.sessionTitle || ''));
+      (r.tests || []).forEach(t => {
+        const rm = (t.unit === 'kg' && t.value > 0 && t.reps > 1) ? '  (1RM \u2248 ' + Math.round(t.value * (1 + t.reps / 30)) + ' kg)' : '';
+        out.push('      ' + pad(t.name, 26) + t.value + ' ' + (t.unit || '') + (t.reps > 1 ? ' \u00d7 ' + t.reps : '') + rm);
+      });
+      if (r.notes) out.push('      ' + r.notes);
+    });
+  }
+
+  if (has('opponents')) {
+    const list = Store.scoped('opponents');
+    head(tt('opponents.title', 'Opponents') + ' (' + list.length + ')');
+    list.forEach(o => {
+      out.push(o.name || '');
+      if (o.formation) out.push('      ' + tt('opponents.formation', 'Formation') + ': ' + o.formation);
+      if (o.keyPlayers) out.push('      ' + tt('opponents.keyPlayers', 'Key players') + ': ' + o.keyPlayers);
+      if (o.tendencies) out.push('      ' + tt('opponents.tendencies', 'Tendencies') + ': ' + o.tendencies);
+    });
+  }
+
+  if (has('reports')) {
+    const list = Store.all('reports');
+    head(tt('reports.title', 'Saved reports') + ' (' + list.length + ')');
+    list.forEach(r => out.push(pad(d(r.date || r.updatedAt), 12) + (r.title || r.type || '')));
+  }
+
+  return out.join('\n');
+}
+
+function shareDialog() {
+  const tt = (k, f) => { const r = T(k); return r === k ? f : r; };
+  const count = g => g.stores.reduce((n, s) => n + (Store.all(s) || []).length, 0);
+  const row = g => {
+    const n = count(g);
+    return `<label class="check-row share-row">
+      <input type="checkbox" data-grp="${g.id}" ${g.off || !n ? '' : 'checked'} ${n ? '' : 'disabled'}>
+      <span>${UI.esc(tt(g.key, g.def))}
+        ${g.sensitive ? `<span class="tag warn">${UI.esc(tt('settings.shareSensitive', 'personal data'))}</span>` : ''}
+        <span class="share-n">${n ? n + ' ' + UI.esc(tt('settings.shareRecords', 'records')) : UI.esc(tt('settings.shareEmpty', 'nothing saved yet'))}</span>
+      </span>
+    </label>`;
+  };
+  UI.modal({
+    title: T('settings.sendCoach'),
+    width: 620,
+    body: `<p>${UI.esc(tt('settings.shareIntro', 'Tick what should go in the file. Anything left unticked never leaves this device.'))}</p>
+      <div class="row" style="flex:0;margin-bottom:6px">
+        <button type="button" class="btn sm" data-all>${UI.esc(tt('settings.shareAll', 'Select all'))}</button>
+        <button type="button" class="btn sm" data-none>${UI.esc(tt('settings.shareNone', 'Select none'))}</button>
+      </div>
+      ${SHARE_GROUPS.map(row).join('')}
+      <p class="hint mail-note">${UI.esc(tt('settings.shareWarn', 'The squad block carries mobile numbers, e-mail addresses, injury notes and each person\u2019s private chat key. Only send it to someone entitled to see them, and only over a channel you trust.'))}</p>
+      <label class="field"><span>${UI.esc(tt('settings.shareTo', 'Send to'))}</span>
+        <input id="shareTo" type="email" autocomplete="off" spellcheck="false" placeholder="traener@klub.dk">
+        <span class="hint">${UI.esc(MAIL.canSendDirect()
+      ? tt('settings.shareToHint', 'Send writes a readable report into the mail. Download file writes the same data as a backup the other coach can import.')
+      : tt('settings.shareToOff', 'Sending is switched off until EmailJS is set up under Send e-mail. You can still download the file.'))}</span></label>
+      <p class="hint" id="shareTotal"></p>`,
+    footer: `<button class="btn ghost" data-close2>${T('common.cancel')}</button>
+      <button class="btn" data-go>${UI.esc(tt('settings.shareDownload', 'Download file'))}</button>
+      <button class="btn primary" data-send>${UI.esc(tt('settings.shareSend', 'Send'))}</button>`,
+    onOpen: (m, close) => {
+      const boxes = [...m.querySelectorAll('[data-grp]')];
+      const chosen = () => SHARE_GROUPS.filter(g => { const b = boxes.find(x => x.dataset.grp === g.id); return b && b.checked && !b.disabled; });
+      const stores = () => [...new Set(chosen().flatMap(g => g.stores))];
+      const total = () => {
+        const picked = chosen();
+        const n = picked.reduce((sum, g) => sum + count(g), 0);
+        m.querySelector('#shareTotal').textContent = n + ' ' + tt('settings.shareRecords', 'records') + ' \u00b7 ' + picked.length + '/' + SHARE_GROUPS.length;
+        m.querySelector('[data-go]').disabled = !picked.length;
+        m.querySelector('[data-send]').disabled = !picked.length || !MAIL.canSendDirect();
+      };
+      boxes.forEach(b => b.onchange = total);
+      m.querySelector('[data-all]').onclick = () => { boxes.forEach(b => { if (!b.disabled) b.checked = true; }); total(); };
+      m.querySelector('[data-none]').onclick = () => { boxes.forEach(b => b.checked = false); total(); };
+      total();
+      // Locked dialog: Cancel is the only way out, so nothing is lost by a stray click.
+      m.querySelector('[data-close2]').onclick = close;
+      m.querySelector('[data-go]').onclick = async () => {
+        if (!stores().length) return;
+        try {
+          const json = JSON.stringify(await buildBackup(stores()), null, 2);
+          downloadJson(json, 'sporttactic-share-' + new Date().toISOString().slice(0, 10) + '.json');
+          close();
+          UI.toast(T('settings.shareDownloaded'), 'success');
+        } catch (e) { UI.toast(T('settings.exportFailed'), 'error'); }
+      };
+      const send = m.querySelector('[data-send]');
+      send.onclick = async () => {
+        const to = MAIL.normEmail(m.querySelector('#shareTo').value.trim());
+        if (!to) return UI.toast(tt('settings.shareNeedTo', 'Write the address to send it to'), 'error');
+        const picked = chosen();
+        if (!picked.length) return;
+        send.disabled = true;
+        try {
+          const body = shareReport(picked);
+          // EmailJS caps a request at 50 KB.
+          if (body.length > 45000) {
+            UI.toast(tt('settings.shareTooBig', 'Too much to put in a mail \u2014 untick a block or use Download file'), 'error');
+            return;
+          }
+          await MAIL.sendDirect(to, tt('settings.shareMailSubject', 'SportTactic data'), body);
+          close();
+          UI.toast(tt('settings.shareSent', 'Sent') + ' \u00b7 ' + to, 'success');
+        } catch (e) {
+          UI.toast(T('mail.sendFailed') + ': ' + String(e && e.message ? e.message : e).slice(0, 160), 'error');
+        } finally { send.disabled = false; }
+      };
+    }
+  });
 }
 
 // ---- Spreadsheet export -----------------------------------------------
@@ -97,7 +287,6 @@ Views.settings = async function (mount) {
       <div class="row" style="flex:0;margin-top:8px;flex-wrap:wrap">
         <button class="btn primary" id="mailSetup">${T('mail.setup')}</button>
         <button class="btn" id="mailServers">${T('mailsrv.title')}</button>
-        <button class="btn" id="mailRef">❓ ${T('mailsrv.reference')}</button>
       </div>`)}
     ${UI.acc('setKeys', T('settings.shortcuts'), `
       <p style="font-size:13px;line-height:1.9">
@@ -123,7 +312,6 @@ Views.settings = async function (mount) {
   const refreshMailSrv = () => { mailSrvState.textContent = MAIL.serverLabel(); };
   mount.querySelector('#mailSetup').onclick = () => MAIL.setupDialog(refreshMailSrv);
   mount.querySelector('#mailServers').onclick = () => MAIL.serverDialog(refreshMailSrv);
-  mount.querySelector('#mailRef').onclick = () => MAIL.serverGuide();
 
   mount.querySelector('#csvSquad').onclick = () => {
     downloadCsv(squadCsv(), 'sporttactic-squad-' + new Date().toISOString().slice(0, 10) + '.csv');
@@ -148,12 +336,7 @@ Views.settings = async function (mount) {
     };
     r.readAsText(f);
   };
-  mount.querySelector('#emailAll').onclick = async () => {
-    // Writes the share file only; sending it on is the coach's own business.
-    const json = JSON.stringify(await buildBackup(), null, 2);
-    downloadJson(json, 'sporttactic-share.json');
-    UI.toast(T('settings.shareDownloaded'), 'success');
-  };
+  mount.querySelector('#emailAll').onclick = () => shareDialog();
   mount.querySelector('#wipe').onclick = () => UI.confirm(T('settings.resetConfirm'), async () => {
     for (const s of DB.STORES) await DB.clear(s);
     await Store.loadAll(); await Store.seedIfEmpty(); UI.toast(T('settings.resetDone'), 'success'); App.render();

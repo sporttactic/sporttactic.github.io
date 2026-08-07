@@ -86,7 +86,7 @@ Views.teams = function (mount) {
 
     const staffList = coaches.map(c => `
       <div class="staff-row">
-        <span class="staff-name">${UI.esc(c.name)}</span>
+        <span class="staff-name">${UI.esc(c.name)}${c.email ? `<span class="staff-mail">${UI.esc(c.email)}</span>` : ''}</span>
         <span class="tag blue">${UI.esc(tt('coachRole', c.role))}</span>
         <span class="staff-actions">
           <button class="btn sm" data-staffchat="${c.id}">💬 ${T('teams.chat')}</button>
@@ -332,15 +332,20 @@ Views.teams = function (mount) {
       title: c.id ? T('teams.editStaff') : T('teams.newStaff'),
       body: `
         <label class="field"><span>${T('teams.staffName')}</span><input id="s_name" value="${UI.esc(c.name || '')}"></label>
-        <label class="field"><span>${T('teams.staffRole')}</span><select id="s_role">${roles.map(x => `<option value="${x}" ${x === c.role ? 'selected' : ''}>${UI.esc(tt('coachRole', x))}</option>`).join('')}</select></label>`,
+        <label class="field"><span>${T('teams.staffRole')}</span><select id="s_role">${roles.map(x => `<option value="${x}" ${x === c.role ? 'selected' : ''}>${UI.esc(tt('coachRole', x))}</option>`).join('')}</select></label>
+        <label class="field"><span>${T('teams.email')}</span><input id="s_email" type="email" autocomplete="off" spellcheck="false" value="${UI.esc(c.email || '')}" placeholder="traener@klub.dk">
+          <span class="hint">${T('teams.staffEmailHint')}</span></label>`,
       footer: `<button class="btn ghost" data-close2>${T('common.cancel')}</button><button class="btn primary" data-save>${T('common.save')}</button>`,
       onOpen: (m, close) => {
         m.querySelector('[data-close2]').onclick = close;
         m.querySelector('[data-save]').onclick = async () => {
+          const email = m.querySelector('#s_email').value.trim();
+          if (email && !MAIL.normEmail(email)) return UI.toast(T('teams.badEmail'), 'error');
           const obj = Object.assign({}, c, {
             teamId: team.id,
             name: m.querySelector('#s_name').value.trim(),
-            role: m.querySelector('#s_role').value
+            role: m.querySelector('#s_role').value,
+            email: MAIL.normEmail(email) || ''
           });
           if (!obj.name) return UI.toast(T('teams.reqStaffName'), 'error');
           await Store.save('coaches', obj);

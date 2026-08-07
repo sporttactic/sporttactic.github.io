@@ -146,9 +146,11 @@ Views.tactics = function (mount) {
         ${UI.shareBar('tactics')}
         <button class="btn sm" id="shotBtn" title="${T('tactics.screenshot')}">📷 ${T('tactics.screenshot')}</button>
         <button class="btn sm" id="fullscreenBtn">⛶ ${T('tactics.fullscreen')}</button>
+        <button class="btn sm" id="zenBtn" title="${T('tactics.boardOnlyHint')}">▣ ${T('tactics.boardOnly')}</button>
       </div>
     </div>
     <div class="board-wrap" id="boardWrap">
+      <button class="btn sm" id="zenExit">✕ ${T('tactics.boardOnlyExit')}</button>
       <div class="tool-panel card">
         <h3>${T('tactics.sport')}</h3>
         <div class="tool-group sport-group" id="sports">
@@ -1324,8 +1326,22 @@ Views.tactics = function (mount) {
     if (fsElement()) fauxFs = false;
     const on = fsActive();
     if (wrap) wrap.classList.toggle('fs', on);
-    document.body.classList.toggle('board-fs', on);
+    document.body.classList.toggle('board-fs', on || zen);
     if (btn) btn.textContent = on ? '⛶ ' + T('tactics.exitFullscreen') : '⛶ ' + T('tactics.fullscreen');
+    fitCanvas();
+  }
+
+  // Board only: the court and the players, nothing else. It pins itself with CSS
+  // rather than asking for fullscreen — iPadOS Safari refuses that for ordinary
+  // elements, and a late refusal used to fight with this toggle.
+  let zen = false;
+  function setZen(on) {
+    zen = !!on;
+    const wrap = mount.querySelector('#boardWrap');
+    if (wrap) wrap.classList.toggle('zen', zen);
+    document.body.classList.toggle('board-fs', zen || fsActive());
+    const b = mount.querySelector('#zenBtn');
+    if (b) b.textContent = '▣ ' + (zen ? T('tactics.boardOnlyExit') : T('tactics.boardOnly'));
     fitCanvas();
   }
   document.addEventListener('fullscreenchange', onFsChange);
@@ -1371,6 +1387,10 @@ Views.tactics = function (mount) {
     if (availH > 140 && h > availH) { h = availH; w = h / ratio; }
     canvas.style.width = Math.round(w) + 'px';
     canvas.style.height = Math.round(h) + 'px';
+    // Beside the court the strip is stretched by the row, and the row is as tall
+    // as its tallest child — so without a cap it grows on every added frame and
+    // never scrolls. Keep it well short of the court and let it scroll.
+    if (strip) strip.style.maxHeight = beside ? Math.round(Math.min(h * 0.55, 300)) + 'px' : '';
     draw();
   }
   const roResize = () => fitCanvas();
@@ -1578,6 +1598,8 @@ Views.tactics = function (mount) {
     UI.toast(T('tactics.resetDone'), 'success');
   });
   mount.querySelector('#fullscreenBtn').onclick = toggleFullscreen;
+  mount.querySelector('#zenBtn').onclick = () => setZen(!zen);
+  mount.querySelector('#zenExit').onclick = () => setZen(false);
   mount.querySelector('#savePlay').onclick = async () => {
     current.name = mount.querySelector('#playName').value.trim() || 'Untitled Play';
     current.sport = sportId;
@@ -1835,6 +1857,10 @@ Views.tactics = function (mount) {
     if (autoRec) { if (autoRec.rec && autoRec.rec.state !== 'inactive') { try { autoRec.rec.stop(); } catch (e) {} } clearInterval(recTimer); }
     document.removeEventListener('keydown', onKey);
     document.removeEventListener('fullscreenchange', onFsChange);
+    document.removeEventListener('webkitfullscreenchange', onFsChange);
+    // Leaving the view while pinned would strand the page with overflow hidden.
+    document.body.classList.remove('board-fs');
+    if (fsElement()) (document.exitFullscreen || document.webkitExitFullscreen || function () {}).call(document);
     window.removeEventListener('resize', roResize);
   };
 };
