@@ -117,6 +117,9 @@ function shareReport(groups) {
     head(tt('personal.title', 'Personal tests') + ' (' + list.length + ')');
     list.forEach(r => {
       out.push(pad(d(r.date), 12) + pad(r.playerName || '', 22) + (r.sessionTitle || ''));
+      (r.exercises || []).forEach(e => {
+        out.push('      ' + pad(e.name, 26) + e.sets + ' \u00d7 ' + e.reps + (e.value > 0 ? ' @ ' + e.value + ' ' + (e.unit || '') : ''));
+      });
       (r.tests || []).forEach(t => {
         const rm = (t.unit === 'kg' && t.value > 0 && t.reps > 1) ? '  (1RM \u2248 ' + Math.round(t.value * (1 + t.reps / 30)) + ' kg)' : '';
         out.push('      ' + pad(t.name, 26) + t.value + ' ' + (t.unit || '') + (t.reps > 1 ? ' \u00d7 ' + t.reps : '') + rm);

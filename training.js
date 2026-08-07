@@ -87,12 +87,18 @@ Views.training = function (mount) {
             <div style="display:flex;justify-content:space-between;align-items:start;gap:8px">
               <div><h3 style="margin:0">${UI.esc(r.playerName || T('personal.unknownPlayer'))}</h3>
                 <p style="color:var(--muted);margin:2px 0 0">${UI.fmtDate(r.date)}${r.sessionTitle ? ' · ' + UI.esc(dt(r.sessionTitle)) : ''}</p></div>
-              <span class="tag blue">${(r.tests || []).length} ${T('personal.tests')}</span>
+              <div style="text-align:right">
+                ${(r.exercises || []).length ? `<span class="tag">🏋 ${(r.exercises || []).length} ${T('personal.exercises')}</span>` : ''}
+                ${(r.tests || []).length ? `<span class="tag blue">🏆 ${(r.tests || []).length} ${T('personal.tests')}</span>` : ''}
+              </div>
             </div>
-            <div style="margin-top:10px">
-              ${(r.tests || []).map(t => `<div class="tag" style="margin:2px">${UI.esc(testLine(t))}</div>`).join('')
-            || `<span style="color:var(--muted)">${T('common.noData')}</span>`}
-            </div>
+            ${(r.exercises || []).length ? `<div style="margin-top:10px">
+              ${(r.exercises || []).map(e => `<div class="tag" style="margin:2px">${UI.esc(exLine(e))}</div>`).join('')}
+            </div>` : ''}
+            ${(r.tests || []).length ? `<div style="margin-top:6px">
+              ${(r.tests || []).map(t => `<div class="tag blue" style="margin:2px">${UI.esc(testLine(t))}</div>`).join('')}
+            </div>` : ''}
+            ${!(r.exercises || []).length && !(r.tests || []).length ? `<div style="margin-top:10px;color:var(--muted)">${T('common.noData')}</div>` : ''}
             ${r.notes ? `<p style="margin:10px 0 0;color:var(--text-soft)">${UI.esc(r.notes)}</p>` : ''}
             <div style="margin-top:12px">
               <button class="btn sm" data-pshow="${r.id}">${T('common.show')}</button>
@@ -131,7 +137,7 @@ Views.training = function (mount) {
     const lib = Store.all('exercises');
     const norm = s => String(s || '').trim().toLowerCase();
     const add = e => (e.muscles || []).forEach(m => set.add(m));
-    (r.tests || []).forEach(t => {
+    (r.tests || []).concat(r.exercises || []).forEach(t => {
       const n = norm(t.name);
       if (!n) return;
       lib.forEach(e => {
@@ -147,6 +153,7 @@ Views.training = function (mount) {
   function showPersonal(r) {
     if (!r) return;
     const tests = r.tests || [];
+    const exs = r.exercises || [];
     const hit = musclesFor(r);
     const canMap = typeof muscleBodySvg === 'function';
     const musLabel = m => tt('mus', m);
@@ -159,7 +166,17 @@ Views.training = function (mount) {
       width: 720,
       body: `
         <p class="hint" style="margin-top:0">${UI.fmtDate(r.date)}${r.sessionTitle ? ' · ' + UI.esc(dt(r.sessionTitle)) : ''}</p>
-        <h4 style="margin-bottom:6px">${T('personal.tests')}</h4>
+        <h4 style="margin-bottom:6px">🏋 ${T('personal.exercises')}</h4>
+        ${exs.length ? `<table class="table"><thead><tr>
+            <th>${T('personal.exercise')}</th><th>${T('personal.sets')}</th><th>${T('personal.reps')}</th><th>${T('personal.load')}</th><th>${T('personal.volume')}</th></tr></thead>
+          <tbody>${exs.map(e => `<tr>
+            <td>${UI.esc(e.name || '')}</td>
+            <td>${UI.esc(e.sets || 1)}</td>
+            <td>${UI.esc(e.reps || 1)}</td>
+            <td>${e.value > 0 ? UI.esc(e.value) + ' ' + UI.esc(e.unit || '') : '—'}</td>
+            <td>${volume(e) ? volume(e) + ' kg' : '—'}</td></tr>`).join('')}</tbody></table>`
+        : `<p class="hint">${T('common.noData')}</p>`}
+        <h4 style="margin-bottom:6px">🏆 ${T('personal.tests')}</h4>
         ${tests.length ? `<table class="table"><thead><tr>
             <th>${T('personal.exercise')}</th><th>${T('personal.value')}</th><th>${T('personal.reps')}</th><th>1RM</th></tr></thead>
           <tbody>${tests.map(t => `<tr>
@@ -187,7 +204,8 @@ Views.training = function (mount) {
     });
   }
 
-  function testRowHtml(t) {    t = t || {};
+  function testRowHtml(t) {
+    t = t || {};
     return `<div class="test-row">
       <input class="cell" data-tn list="exNames" value="${UI.esc(t.name || '')}" placeholder="${UI.esc(T('personal.exercise'))}">
       <input class="cell" data-tv type="number" step="any" value="${UI.esc(t.value == null ? '' : t.value)}" placeholder="${UI.esc(T('personal.value'))}">
@@ -196,6 +214,21 @@ Views.training = function (mount) {
       <button type="button" class="btn sm danger" data-trm>✕</button>
     </div>`;
   }
+  // A session of ordinary work: sets × reps at a load, not a one-off maximum.
+  function exRowHtml(e) {
+    e = e || {};
+    return `<div class="ex-row">
+      <input class="cell" data-en list="exNames" value="${UI.esc(e.name || '')}" placeholder="${UI.esc(T('personal.exercise'))}">
+      <input class="cell" data-es type="number" value="${UI.esc(e.sets || 3)}" title="${UI.esc(T('personal.sets'))}" placeholder="${UI.esc(T('personal.sets'))}">
+      <input class="cell" data-er type="number" value="${UI.esc(e.reps || 10)}" title="${UI.esc(T('personal.reps'))}" placeholder="${UI.esc(T('personal.reps'))}">
+      <input class="cell" data-ev type="number" step="any" value="${UI.esc(e.value == null ? '' : e.value)}" title="${UI.esc(T('personal.load'))}" placeholder="${UI.esc(T('personal.load'))}">
+      <select class="cell" data-eu>${UNITS.map(u => `<option ${u === e.unit ? 'selected' : ''}>${u}</option>`).join('')}</select>
+      <button type="button" class="btn sm danger" data-erm>✕</button>
+    </div>`;
+  }
+  // sets × reps × load — only meaningful for a weight.
+  const volume = e => (e.unit === 'kg' && e.value > 0) ? Math.round(e.sets * e.reps * e.value) : 0;
+  const exLine = e => `${e.name}: ${e.sets} × ${e.reps}${e.value > 0 ? ' @ ' + e.value + ' ' + e.unit : ''}`;
 
   function personalForm(r = {}) {
     const players = squad();
@@ -208,7 +241,7 @@ Views.training = function (mount) {
       : `<label class="field"><span>${T('personal.player')}</span><select id="p_player">${players.map(p => `<option value="${p.id}" ${p.id === r.playerId ? 'selected' : ''}>#${p.number} ${UI.esc(p.lastName || p.firstName)}</option>`).join('')}</select></label>`;
     UI.modal({
       title: r.id ? T('personal.edit') : T('personal.new'),
-      width: 640,
+      width: 700,
       body: `
         <datalist id="exNames">${drills.map(e => `<option value="${UI.esc(dt(e.title))}"></option>`).join('')}</datalist>
         <div class="row">
@@ -216,7 +249,12 @@ Views.training = function (mount) {
           <label class="field"><span>${T('personal.plan')}</span><select id="p_plan"><option value="">${T('personal.noPlan')}</option>${sessions.map(s => `<option value="${s.id}" ${s.id === r.sessionId ? 'selected' : ''}>${UI.esc(dt(s.title))}</option>`).join('')}</select></label>
           <label class="field"><span>${T('training.date')}</span><input id="p_date" type="date" value="${dstr}"></label>
         </div>
-        <label class="field"><span>${T('personal.tests')}</span></label>
+        <h4 class="pt-head">🏋 ${T('personal.exercises')}</h4>
+        <p class="hint">${T('personal.exHint')}</p>
+        <div id="p_ex">${((r.exercises && r.exercises.length) ? r.exercises : [{ sets: 3, reps: 10, unit: 'kg' }]).map(exRowHtml).join('')}</div>
+        <button type="button" class="btn sm" id="p_addEx">+ ${T('personal.addExercise')}</button>
+        <h4 class="pt-head">🏆 ${T('personal.tests')}</h4>
+        <p class="hint">${T('personal.testHint')}</p>
         <div id="p_tests">${((r.tests && r.tests.length) ? r.tests : [{ unit: 'kg', reps: 1 }]).map(testRowHtml).join('')}</div>
         <button type="button" class="btn sm" id="p_addTest">+ ${T('personal.addTest')}</button>
         <label class="field" style="margin-top:12px"><span>${T('personal.notes')}</span><textarea id="p_notes" rows="3">${UI.esc(r.notes || '')}</textarea></label>
@@ -224,11 +262,16 @@ Views.training = function (mount) {
       footer: `<button class="btn ghost" data-close2>${T('common.cancel')}</button><button class="btn primary" data-save>${T('common.save')}</button>`,
       onOpen: (m, close) => {
         const list = m.querySelector('#p_tests');
+        const exList = m.querySelector('#p_ex');
         const bindRm = () => list.querySelectorAll('[data-trm]').forEach(b => b.onclick = () => {
           if (list.children.length > 1) b.closest('.test-row').remove();
         });
-        bindRm();
+        const bindExRm = () => exList.querySelectorAll('[data-erm]').forEach(b => b.onclick = () => {
+          if (exList.children.length > 1) b.closest('.ex-row').remove();
+        });
+        bindRm(); bindExRm();
         m.querySelector('#p_addTest').onclick = () => { list.insertAdjacentHTML('beforeend', testRowHtml({ unit: 'kg', reps: 1 })); bindRm(); };
+        m.querySelector('#p_addEx').onclick = () => { exList.insertAdjacentHTML('beforeend', exRowHtml({ sets: 3, reps: 10, unit: 'kg' })); bindExRm(); };
         m.querySelector('[data-close2]').onclick = close;
         m.querySelector('[data-save]').onclick = async () => {
           const nameEl = m.querySelector('#p_name');
@@ -244,8 +287,15 @@ Views.training = function (mount) {
             unit: row.querySelector('[data-tu]').value,
             reps: Math.max(1, Math.min(100, +row.querySelector('[data-tr]').value || 1))
           })).filter(t => t.name && t.value > 0);
+          const exercises = [...exList.querySelectorAll('.ex-row')].map(row => ({
+            name: row.querySelector('[data-en]').value.trim().slice(0, 80),
+            sets: Math.max(1, Math.min(50, +row.querySelector('[data-es]').value || 1)),
+            reps: Math.max(1, Math.min(200, +row.querySelector('[data-er]').value || 1)),
+            value: +row.querySelector('[data-ev]').value || 0,
+            unit: row.querySelector('[data-eu]').value
+          })).filter(e => e.name);
           if (!nameEl && !p) return UI.toast(T('personal.noPlayers'), 'error');
-          if (!tests.length) return UI.toast(T('personal.testReq'), 'error');
+          if (!tests.length && !exercises.length) return UI.toast(T('personal.rowReq'), 'error');
           if (nameEl) rememberAthlete(who);
           const obj = Object.assign({}, r, {
             playerId: p ? p.id : '',
@@ -256,7 +306,7 @@ Views.training = function (mount) {
             sessionId: sid, sessionTitle: s ? s.title : '',
             date: new Date(m.querySelector('#p_date').value).getTime() || Date.now(),
             notes: m.querySelector('#p_notes').value.trim().slice(0, 1000),
-            tests
+            exercises, tests
           });
           await Store.save('personal', obj);
           close(); UI.toast(T('personal.saved'), 'success'); render();
@@ -324,8 +374,12 @@ Views.training = function (mount) {
         ? 'Exercises in that plan:\n' + planDrills.map(e => `- ${dt(e.title)} (${tt('cat', e.category)}, ${e.intensity || 'Low'}, ${(e.muscles || []).join('/') || 'unspecified muscles'})`).join('\n')
         : 'The plan lists no exercises.',
       history.length
-        ? 'Max tests already recorded, newest first:\n' + history.map(r => `- ${new Date(r.date).toISOString().slice(0, 10)}: ` + (r.tests || []).map(testLine).join('; ')).join('\n')
+        ? 'Max tests already recorded, newest first:\n' + history.map(r => `- ${new Date(r.date).toISOString().slice(0, 10)}: ` + ((r.tests || []).map(testLine).join('; ') || 'none')).join('\n')
         : 'No max tests recorded yet.',
+      history.some(r => (r.exercises || []).length)
+        ? 'Training work already recorded, newest first:\n' + history.filter(r => (r.exercises || []).length)
+          .map(r => `- ${new Date(r.date).toISOString().slice(0, 10)}: ` + (r.exercises || []).map(exLine).join('; ')).join('\n')
+        : '',
       goal ? `The player wants: ${goal}` : ''
     ].filter(Boolean).join('\n');
 

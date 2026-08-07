@@ -901,6 +901,8 @@ td.col-num .cell, td.col-h .cell, td.col-w .cell { max-width: 92px; }
 
 /* ---- Max-test rows (Personal training) ---- */
 .test-row { display: grid; grid-template-columns: 2fr 1fr 1fr .8fr auto; gap: 6px; margin-bottom: 6px; align-items: center; }
+.ex-row { display: grid; grid-template-columns: 2fr .7fr .7fr 1fr 1fr auto; gap: 6px; margin-bottom: 6px; align-items: center; }
+.pt-head { margin: 16px 0 2px; padding-top: 10px; border-top: 1px solid var(--border); font-size: 14px; }
 
 /* ---- Video telestration (video.js) ---- */
 #mediaWrap { position: relative; }
@@ -962,5 +964,6 @@ td.col-num .cell, td.col-h .cell, td.col-w .cell { max-width: 92px; }
 @media (pointer: coarse) {
   .cell { font-size: 16px; }  /* iOS won't zoom the page at >=16px */
   .test-row { grid-template-columns: 1fr 1fr; }
+  .ex-row { grid-template-columns: 1fr 1fr; }
   .pick-row { padding: 11px 8px; }
 }
