@@ -32,15 +32,14 @@ Views.reports = function (mount) {
 
   const out = mount.querySelector('#reportOut');
 
-  function showReport(title, html, exportRows, sms) {
+  function showReport(title, html, exportRows, chat) {
     out.innerHTML = `<div class="card"><div style="display:flex;justify-content:space-between;align-items:center">
       <h3 style="margin:0">${UI.esc(title)}</h3>
-      <div><button class="btn sm" id="expSms">📱 ${T('sms.title')}</button> <button class="btn sm" id="expCsv">${T('reports.csv')}</button> <button class="btn sm" id="expPrint">${T('reports.print')}</button></div></div>
+      <div><button class="btn sm" id="expChat">💬 ${T('chat.title')}</button> <button class="btn sm" id="expCsv">${T('reports.csv')}</button> <button class="btn sm" id="expPrint">${T('reports.print')}</button></div></div>
       <div id="repBody" style="margin-top:12px">${html}</div></div>`;
-    out.querySelector('#expSms').onclick = () => SMS.compose({
-      players: (sms && sms.players) || players,
-      title: T('sms.title') + ' — ' + title,
-      text: (sms && sms.text) || title
+    out.querySelector('#expChat').onclick = () => App.go('messenger', {
+      from: 'reports',
+      draft: (chat && chat.text) || title
     });
     out.querySelector('#expPrint').onclick = () => {
       const w = window.open('', '_blank');
@@ -63,7 +62,7 @@ Views.reports = function (mount) {
     const s = Store.teamStats(m.id);
     const rows = [[T('stat.metric'), T('stat.value')], [T('stat.score'), m.homeScore + ':' + m.awayScore], [T('stat.goals'), s.goals], [T('stat.shootingPct'), s.shotPct + '%'], [T('stat.assists'), s.assists], [T('stat.turnovers'), s.turnovers], [T('stat.fastBreaks'), s.fastbreaks], [T('stat.saves'), s.saves]];
     showReport(T('reports.matchReport') + ' — ' + m.opponent, tableHtml(rows), rows, {
-      text: `${m.opponent} ${m.homeScore}:${m.awayScore} — ${s.goals} ${T('sms.goals')} (${s.shotPct}%), ${s.assists} ${T('sms.assists')}, ${s.turnovers} ${T('sms.turnovers')}.`
+      text: `${m.opponent} ${m.homeScore}:${m.awayScore} — ${s.goals} ${T('stat.goals')} (${s.shotPct}%), ${s.assists} ${T('stat.assists')}, ${s.turnovers} ${T('stat.turnovers')}.`
     });
   };
   mount.querySelector('#genPlayer').onclick = () => {
@@ -72,7 +71,7 @@ Views.reports = function (mount) {
     const rows = [[T('stat.metric'), T('stat.value')], [T('stat.name'), p.firstName + ' ' + p.lastName], [T('stat.position'), p.position], [T('stat.goals'), s.goals], [T('stat.attempts'), s.attempts], [T('stat.shootingPct'), s.shotPct + '%'], [T('stat.assists'), s.assists], [T('stat.turnovers'), s.turnovers], [T('stat.saves'), s.saves], [T('stat.mvpRating'), s.rating]];
     showReport(T('reports.playerReport') + ' — ' + p.lastName, tableHtml(rows), rows, {
       players: [p],
-      text: `${p.firstName}: ${s.goals} ${T('sms.goals')} / ${s.attempts} (${s.shotPct}%), ${s.assists} ${T('sms.assists')}, ${T('sms.rating')} ${s.rating}.`
+      text: `${p.firstName}: ${s.goals} ${T('stat.goals')} / ${s.attempts} (${s.shotPct}%), ${s.assists} ${T('stat.assists')}, ${T('stat.mvpRating')} ${s.rating}.`
     });
   };
   mount.querySelector('#genSeason').onclick = () => {
@@ -81,7 +80,7 @@ Views.reports = function (mount) {
     const wins = matches.filter(m => m.home ? m.homeScore > m.awayScore : m.awayScore > m.homeScore).length;
     const rows = [[T('stat.metric'), T('stat.value')], [T('stat.matches'), matches.length], [T('stat.wins'), wins], [T('stat.goals'), agg.goals], [T('stat.assists'), agg.assists], [T('stat.turnovers'), agg.turnovers], [T('stat.saves'), agg.saves]];
     showReport(T('reports.seasonReport') + ' — ' + (team ? team.name : ''), tableHtml(rows), rows, {
-      text: `${matches.length} ${T('sms.matches')}, ${wins} ${T('sms.wins')}, ${agg.goals} ${T('sms.goals')}, ${agg.assists} ${T('sms.assists')}.`
+      text: `${matches.length} ${T('stat.matches')}, ${wins} ${T('stat.wins')}, ${agg.goals} ${T('stat.goals')}, ${agg.assists} ${T('stat.assists')}.`
     });
   };
 

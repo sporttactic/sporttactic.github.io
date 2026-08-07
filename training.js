@@ -64,6 +64,11 @@ Views.training = function (mount) {
   // own store so it can be exported on its own and handed to another coach.
   const UNITS = ['kg', 'reps', 'sec', 'm', 'cm'];
   const squad = () => Store.players(team && team.id);
+  // CrossFit and bodybuilding are trained by one person, not by a squad, so the
+  // records are labelled with a free-text name instead of a roster pick.
+  const solo = () => ['crossfit', 'bodybuilding'].indexOf(sportId) >= 0;
+  const athleteName = () => { try { return (localStorage.getItem('stx_athlete_name') || '').trim() || T('personal.me'); } catch { return T('personal.me'); } };
+  function rememberAthlete(n) { try { localStorage.setItem('stx_athlete_name', n); } catch { /* private mode */ } }
   const entries = () => Store.scoped('personal')
     .filter(r => !r.sport || r.sport === sportId)
     .slice().sort((a, b) => (b.date || 0) - (a.date || 0));
@@ -108,7 +113,7 @@ Views.training = function (mount) {
     mount.querySelectorAll('[data-pedit]').forEach(b => b.onclick = () => personalForm(Store.find('personal', b.dataset.pedit)));
     mount.querySelectorAll('[data-pmax]').forEach(b => b.onclick = () => {
       const r = Store.find('personal', b.dataset.pmax);
-      if (r) maxTestForm(r.playerId, r.sessionId);
+      if (r) maxTestForm(r.playerId, r.sessionId, r.playerName);
     });
     mount.querySelectorAll('[data-pdel]').forEach(b => b.onclick = () => UI.confirm(T('personal.del'), async () => { await Store.remove('personal', b.dataset.pdel); render(); }));
   }
@@ -129,14 +134,17 @@ Views.training = function (mount) {
     const sessions = Store.scoped('training').slice().sort((a, b) => a.date - b.date);
     const drills = Store.all('exercises');
     const dstr = new Date(r.date || Date.now()).toISOString().slice(0, 10);
-    if (!players.length) return UI.toast(T('personal.noPlayers'), 'error');
+    if (!solo() && !players.length) return UI.toast(T('personal.noPlayers'), 'error');
+    const whoField = solo()
+      ? `<label class="field"><span>${T('personal.athlete')}</span><input id="p_name" maxlength="60" value="${UI.esc(r.playerName || athleteName())}"></label>`
+      : `<label class="field"><span>${T('personal.player')}</span><select id="p_player">${players.map(p => `<option value="${p.id}" ${p.id === r.playerId ? 'selected' : ''}>#${p.number} ${UI.esc(p.lastName || p.firstName)}</option>`).join('')}</select></label>`;
     UI.modal({
       title: r.id ? T('personal.edit') : T('personal.new'),
       width: 640,
       body: `
         <datalist id="exNames">${drills.map(e => `<option value="${UI.esc(dt(e.title))}"></option>`).join('')}</datalist>
         <div class="row">
-          <label class="field"><span>${T('personal.player')}</span><select id="p_player">${players.map(p => `<option value="${p.id}" ${p.id === r.playerId ? 'selected' : ''}>#${p.number} ${UI.esc(p.lastName || p.firstName)}</option>`).join('')}</select></label>
+          ${whoField}
           <label class="field"><span>${T('personal.plan')}</span><select id="p_plan"><option value="">${T('personal.noPlan')}</option>${sessions.map(s => `<option value="${s.id}" ${s.id === r.sessionId ? 'selected' : ''}>${UI.esc(dt(s.title))}</option>`).join('')}</select></label>
           <label class="field"><span>${T('training.date')}</span><input id="p_date" type="date" value="${dstr}"></label>
         </div>
@@ -155,8 +163,11 @@ Views.training = function (mount) {
         m.querySelector('#p_addTest').onclick = () => { list.insertAdjacentHTML('beforeend', testRowHtml({ unit: 'kg', reps: 1 })); bindRm(); };
         m.querySelector('[data-close2]').onclick = close;
         m.querySelector('[data-save]').onclick = async () => {
-          const pid = m.querySelector('#p_player').value;
-          const p = Store.find('players', pid);
+          const nameEl = m.querySelector('#p_name');
+          const p = nameEl ? null : Store.find('players', m.querySelector('#p_player').value);
+          const who = nameEl
+            ? (nameEl.value.trim().slice(0, 60) || T('personal.me'))
+            : (p ? ('#' + (p.number || '?') + ' ' + [p.firstName, p.lastName].filter(Boolean).join(' ')).trim() : '');
           const sid = m.querySelector('#p_plan').value;
           const s = sid ? Store.find('training', sid) : null;
           const tests = [...list.querySelectorAll('.test-row')].map(row => ({
@@ -165,13 +176,14 @@ Views.training = function (mount) {
             unit: row.querySelector('[data-tu]').value,
             reps: Math.max(1, Math.min(100, +row.querySelector('[data-tr]').value || 1))
           })).filter(t => t.name && t.value > 0);
-          if (!p) return UI.toast(T('personal.noPlayers'), 'error');
+          if (!nameEl && !p) return UI.toast(T('personal.noPlayers'), 'error');
           if (!tests.length) return UI.toast(T('personal.testReq'), 'error');
+          if (nameEl) rememberAthlete(who);
           const obj = Object.assign({}, r, {
-            playerId: p.id,
+            playerId: p ? p.id : '',
             // The name is stored too, so an exported file still reads correctly
             // for a coach who does not have this squad.
-            playerName: ('#' + (p.number || '?') + ' ' + [p.firstName, p.lastName].filter(Boolean).join(' ')).trim(),
+            playerName: who,
             sport: r.sport || sportId,
             sessionId: sid, sessionTitle: s ? s.title : '',
             date: new Date(m.querySelector('#p_date').value).getTime() || Date.now(),
@@ -187,16 +199,19 @@ Views.training = function (mount) {
 
   // Reads this player's own recorded numbers and the drills of the chosen plan,
   // then asks for a max-test protocol and the loads to train at.
-  function maxTestForm(playerId, sessionId) {
+  function maxTestForm(playerId, sessionId, name) {
     const players = squad();
     const sessions = Store.scoped('training').slice().sort((a, b) => a.date - b.date);
-    if (!players.length) return UI.toast(T('personal.noPlayers'), 'error');
+    if (!solo() && !players.length) return UI.toast(T('personal.noPlayers'), 'error');
+    const whoField = solo()
+      ? `<label class="field"><span>${T('personal.athlete')}</span><input id="mx_name" maxlength="60" value="${UI.esc(name || athleteName())}"></label>`
+      : `<label class="field"><span>${T('personal.player')}</span><select id="mx_player">${players.map(p => `<option value="${p.id}" ${p.id === playerId ? 'selected' : ''}>#${p.number} ${UI.esc(p.lastName || p.firstName)}</option>`).join('')}</select></label>`;
     UI.modal({
       title: T('personal.aiMax'),
       width: 620,
       body: `<p style="color:var(--muted);font-size:13px">${T('personal.aiIntro')}</p>
         <div class="row">
-          <label class="field"><span>${T('personal.player')}</span><select id="mx_player">${players.map(p => `<option value="${p.id}" ${p.id === playerId ? 'selected' : ''}>#${p.number} ${UI.esc(p.lastName || p.firstName)}</option>`).join('')}</select></label>
+          ${whoField}
           <label class="field"><span>${T('personal.plan')}</span><select id="mx_plan"><option value="">${T('personal.noPlan')}</option>${sessions.map(s => `<option value="${s.id}" ${s.id === sessionId ? 'selected' : ''}>${UI.esc(dt(s.title))}</option>`).join('')}</select></label>
         </div>
         <label class="field"><span>${T('personal.goal')}</span><textarea id="mx_goal" rows="2" placeholder="${UI.esc(T('personal.goalPh'))}"></textarea></label>
@@ -205,8 +220,16 @@ Views.training = function (mount) {
       onOpen: (m, close) => {
         m.querySelector('[data-close2]').onclick = close;
         m.querySelector('[data-gen]').onclick = () => {
-          const p = Store.find('players', m.querySelector('#mx_player').value);
-          if (!p) return UI.toast(T('personal.noPlayers'), 'error');
+          const nameEl = m.querySelector('#mx_name');
+          let p;
+          if (nameEl) {
+            const nm = nameEl.value.trim().slice(0, 60) || T('personal.me');
+            rememberAthlete(nm);
+            p = { id: '', name: nm };
+          } else {
+            p = Store.find('players', m.querySelector('#mx_player').value);
+            if (!p) return UI.toast(T('personal.noPlayers'), 'error');
+          }
           const s = Store.find('training', m.querySelector('#mx_plan').value);
           const goal = m.querySelector('#mx_goal').value.trim().slice(0, 300);
           close();
@@ -217,12 +240,17 @@ Views.training = function (mount) {
   }
 
   function runMaxTest(p, s, goal) {
-    const history = Store.scoped('personal').filter(r => r.playerId === p.id)
+    // A solo athlete has no squad record, so entries are matched by the name.
+    const who = p.name || ('#' + (p.number || '?') + ' ' + [p.firstName, p.lastName].filter(Boolean).join(' ')).trim();
+    const history = Store.scoped('personal')
+      .filter(r => p.id ? r.playerId === p.id : (r.playerName || '') === who)
       .sort((a, b) => (b.date || 0) - (a.date || 0)).slice(0, 8);
     const planDrills = s ? (s.exercises || []).map(id => Store.find('exercises', id)).filter(Boolean) : [];
+    const profile = p.name
+      ? `Athlete: ${who}. No squad record — body data unknown.`
+      : `Player: ${who} — ${p.position || 'unknown position'}, ${p.height || '?'} cm, ${p.weight || '?'} kg, status ${p.status || 'active'}.`;
     const lines = [
-      `Player: #${p.number || '?'} ${[p.firstName, p.lastName].filter(Boolean).join(' ')} — ${p.position || 'unknown position'}`
-      + `, ${p.height || '?'} cm, ${p.weight || '?'} kg, status ${p.status || 'active'}.`,
+      profile,
       s ? `Chosen training plan: ${dt(s.title)} (${tt('focus', s.focus)}, ${s.duration || 0} min).` : 'No training plan chosen.',
       planDrills.length
         ? 'Exercises in that plan:\n' + planDrills.map(e => `- ${dt(e.title)} (${tt('cat', e.category)}, ${e.intensity || 'Low'}, ${(e.muscles || []).join('/') || 'unspecified muscles'})`).join('\n')
@@ -234,7 +262,7 @@ Views.training = function (mount) {
     ].filter(Boolean).join('\n');
 
     AI.report({
-      title: T('personal.aiMax') + ' — #' + (p.number || '?') + ' ' + (p.lastName || p.firstName),
+      title: T('personal.aiMax') + ' — ' + who,
       maxTokens: 1100,
       hide: /TESTS:.*$/im,
       // The report is advice; nothing is stored until the coach presses Create.
@@ -243,7 +271,8 @@ Views.training = function (mount) {
         onClick: (text, close) => {
           close();
           personalForm({
-            playerId: p.id,
+            playerId: p.id || '',
+            playerName: who,
             sessionId: s ? s.id : '',
             tests: suggestedTests(text, planDrills)
           });

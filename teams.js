@@ -6,6 +6,17 @@ Views.teams = function (mount) {
   const tt = (p, v) => { const k = p + '.' + v; const r = T(k); return r === k ? v : r; };
   let editing = false;   // squad table switched to inline editing
 
+  // Accepts what a coach actually types (+45 12 34 56 78, 0045-…) and stores
+  // E.164, so every view reads back the same string. '' means "not a number".
+  function normPhone(v) {
+    const raw = String(v == null ? '' : v).trim();
+    if (!raw) return '';
+    const plus = raw[0] === '+' || raw.slice(0, 2) === '00';
+    const digits = raw.replace(/\D/g, '').replace(/^00/, '');
+    if (digits.length < 8 || digits.length > 15) return '';
+    return (plus ? '+' : '') + digits;
+  }
+
   const posBadgeHtml = (pos) => {
     const b = SPORTS.posBadge(sportId, pos);
     return `<span class="pos-badge role-${b.role}" style="--pos:${b.color}" title="${UI.esc(tt('pos', pos || ''))}">${UI.esc(b.ab)}</span>`;
@@ -32,8 +43,7 @@ Views.teams = function (mount) {
           ${p.status === 'injured' && p.injuryNote ? `<div class="injury-note">${UI.esc(p.injuryNote)}</div>` : ''}
         </td>
         <td style="text-align:right;white-space:nowrap">
-          <button class="btn sm" data-sms="${p.id}" title="${UI.esc(T('sms.title'))}">📱</button>
-          <button class="btn sm" data-mail="${p.id}" title="${UI.esc(T('mail.title'))}">✉</button>
+          <button class="btn sm" data-mail="${p.id}">✉ ${T('mail.mail')}</button>
           <button class="btn sm" data-chat="${p.id}">💬 ${T('teams.chat')}</button>
           <button class="btn sm" data-edit="${p.id}">${T('common.edit')}</button>
         </td>
@@ -88,7 +98,9 @@ Views.teams = function (mount) {
     const squadActions = editing
       ? `<button class="btn ghost" id="cancelSquad">${T('common.cancel')}</button>
          <button class="btn primary" id="saveSquad">${T('teams.saveSquad')}</button>`
-      : `<button class="btn sm" id="editSquad">✎ ${T('teams.editSquad')}</button>
+      : `<button class="btn sm" id="mailSquad">✉ ${T('mail.title')}</button>
+         <button class="btn sm" id="chatSquad">💬 ${T('chat.squad')}</button>
+         <button class="btn sm" id="editSquad">✎ ${T('teams.editSquad')}</button>
          <button class="btn primary" id="addPlayer">+ ${T('teams.addPlayer')}</button>`;
 
     const teamBar = `
@@ -147,10 +159,10 @@ Views.teams = function (mount) {
     } else {
       q('#addPlayer').onclick = () => team ? form(team) : UI.toast(T('teams.noTeamFirst'), 'error');
       q('#editSquad').onclick = () => { editing = true; render(); };
-      mount.querySelectorAll('[data-sms]').forEach(b => b.onclick = () => {
-        const p = Store.find('players', b.dataset.sms);
-        if (p) SMS.compose({ players: [p], title: T('sms.title') + ' — ' + (p.firstName + ' ' + p.lastName).trim() });
+      q('#mailSquad').onclick = () => MAIL.compose({
+        players, title: T('mail.title') + ' — ' + T('teams.squad')
       });
+      q('#chatSquad').onclick = () => App.go('messenger', { from: 'teams' });
       mount.querySelectorAll('[data-mail]').forEach(b => b.onclick = () => {
         const p = Store.find('players', b.dataset.mail);
         if (p) MAIL.compose({ players: [p], title: T('mail.title') + ' — ' + (p.firstName + ' ' + p.lastName).trim() });
@@ -184,7 +196,7 @@ Views.teams = function (mount) {
       if (!first) { bad++; continue; }
       const raw = get('phone');
       // Stored in E.164, so every view sends to the same string.
-      const phone = raw ? SMS.normNumber(raw) : '';
+      const phone = raw ? normPhone(raw) : '';
       if (raw && !phone) { bad++; continue; }
       const rawMail = get('email');
       const email = rawMail ? MAIL.normEmail(rawMail) : '';
@@ -241,7 +253,7 @@ Views.teams = function (mount) {
         m.querySelector('[data-save]').onclick = async () => {
           const injured = st.value === 'injured';
           const raw = m.querySelector('#f_ph').value.trim();
-          const phone = raw ? SMS.normNumber(raw) : '';
+          const phone = raw ? normPhone(raw) : '';
           const rawMail = m.querySelector('#f_em').value.trim();
           const email = rawMail ? MAIL.normEmail(rawMail) : '';
           const obj = Object.assign({}, p, {
@@ -273,16 +285,26 @@ Views.teams = function (mount) {
   // `fresh` starts a brand new squad instead of editing the active one.
   function teamForm(team, fresh) {
     const t = fresh ? {} : (team || {});
+    // The text field stays authoritative; the select beside it only fills it in,
+    // so a league SportTactic has never heard of is still allowed.
+    const combo = (id, val, list) => `<div class="combo">
+      <input id="${id}" value="${UI.esc(val || '')}">
+      <select id="${id}Pick"><option value="">${T('teams.pick')}</option>${list.map(x => `<option value="${UI.esc(x)}" ${x === val ? 'selected' : ''}>${UI.esc(x)}</option>`).join('')}</select>
+    </div>`;
     UI.modal({
       title: fresh ? T('teams.newTeam') : T('teams.editTeam'),
       body: `
         <label class="field"><span>${T('teams.teamName')}</span><input id="t_name" value="${UI.esc(t.name || '')}"></label>
-        <div class="row"><label class="field"><span>${T('teams.division')}</span><input id="t_div" value="${UI.esc(t.division || '')}"></label>
-        <label class="field"><span>${T('teams.category')}</span><input id="t_cat" value="${UI.esc(t.category || '')}"></label></div>
+        <div class="row"><label class="field"><span>${T('teams.division')}</span>${combo('t_div', t.division, SPORTS.divisions(sportId))}</label>
+        <label class="field"><span>${T('teams.category')}</span>${combo('t_cat', t.category, SPORTS.categories(sportId))}</label></div>
         ${fresh ? `<p class="hint">${T('teams.newTeamHint')}</p>` : ''}`,
       footer: `<button class="btn ghost" data-close2>${T('common.cancel')}</button><button class="btn primary" data-save>${T('common.save')}</button>`,
       onOpen: (m, close) => {
         m.querySelector('[data-close2]').onclick = close;
+        ['t_div', 't_cat'].forEach(id => {
+          const pick = m.querySelector('#' + id + 'Pick');
+          pick.onchange = () => { if (pick.value) m.querySelector('#' + id).value = pick.value; };
+        });
         m.querySelector('[data-save]').onclick = async () => {
           const name = m.querySelector('#t_name').value.trim();
           if (!name) return UI.toast(T('teams.reqTeamName'), 'error');

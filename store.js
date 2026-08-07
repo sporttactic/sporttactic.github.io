@@ -112,6 +112,38 @@ const Store = (() => {
   // Titles of the drills that shipped before the default library existed.
   const OLD_DEMO_DRILLS = ['3v3 Continuous Attack', 'Goalkeeper Reaction Wall', 'Fast Break Waves', '6-0 Defensive Shifting'];
 
+  // Starter libraries for the two strength disciplines. Their categories come from
+  // SPORTS.exerciseCategories, so these only ever surface under their own sport.
+  const STRENGTH_DRILLS = [
+    // ---- CrossFit ----
+    { title: 'Back Squat 5x5', category: 'Strength', duration: 25, intensity: 'High', tags: ['squat', 'legs', 'barbell'], muscles: ['quads', 'glutes', 'hamstrings', 'lowerback'], videoYt: YT('back squat technique tutorial'), description: 'Five sets of five at a load you can hold form on for every rep. Add 2.5 kg once all five sets move cleanly. Brace before you unrack, knees track over the toes, depth before weight.' },
+    { title: 'Deadlift 5x3', category: 'Strength', duration: 25, intensity: 'High', tags: ['hinge', 'posterior', 'barbell'], muscles: ['hamstrings', 'glutes', 'lowerback', 'traps'], videoYt: YT('conventional deadlift technique tutorial'), description: 'Five sets of three, heavy but never grinding. Bar over mid-foot, lats locked, hips and shoulders rise together. Reset every rep instead of bouncing off the floor.' },
+    { title: 'Clean & Jerk Technique', category: 'Olympic Lifting', duration: 30, intensity: 'High', tags: ['olympic', 'power', 'barbell'], muscles: ['quads', 'glutes', 'traps', 'shoulders'], videoYt: YT('clean and jerk technique progression'), description: 'Technique before load: hang power clean, then full clean, then the jerk. Ten minutes of empty-bar work first. Stop the session the moment the bar path drifts forward.' },
+    { title: 'Snatch Progression', category: 'Olympic Lifting', duration: 30, intensity: 'High', tags: ['olympic', 'mobility', 'barbell'], muscles: ['shoulders', 'traps', 'quads', 'glutes'], videoYt: YT('snatch progression drills beginner'), description: 'Overhead squat, snatch balance, hang snatch, full snatch. The hardest lift in the gym to fake — keep the load light until the overhead position is stable.' },
+    { title: 'Pull-Up & Muscle-Up Ladder', category: 'Gymnastics', duration: 20, intensity: 'High', tags: ['pull', 'gymnastics', 'bar'], muscles: ['lats', 'biceps', 'abs', 'shoulders'], videoYt: YT('strict pull up to muscle up progression'), description: 'Strict pull-ups, then kipping, then transition work. Band-assisted if strict is not there yet. Quality over volume: stop the set two reps before failure.' },
+    { title: 'Handstand & Wall Walk', category: 'Gymnastics', duration: 15, intensity: 'Medium', tags: ['handstand', 'shoulders', 'core'], muscles: ['shoulders', 'triceps', 'abs'], videoYt: YT('wall walk handstand hold progression'), description: 'Wall walks into a handstand hold. Builds the overhead strength and midline control every pressing movement needs. Hollow body, ribs down, look at your hands.' },
+    { title: 'Cindy (AMRAP 20)', category: 'Metcon', duration: 20, intensity: 'High', tags: ['amrap', 'bodyweight', 'benchmark'], muscles: ['chest', 'lats', 'quads', 'abs'], videoYt: YT('crossfit cindy workout standard'), description: 'As many rounds as possible in 20 minutes: 5 pull-ups, 10 push-ups, 15 air squats. A benchmark — write the score down and chase it again in eight weeks.' },
+    { title: 'Fran (21-15-9)', category: 'Metcon', duration: 12, intensity: 'High', tags: ['for time', 'benchmark', 'barbell'], muscles: ['quads', 'shoulders', 'lats', 'glutes'], videoYt: YT('crossfit fran workout standard'), description: '21-15-9 thrusters and pull-ups, for time. Scale the bar so the first set of 21 is unbroken. Short, brutal and the classic measure of engine plus strength.' },
+    { title: 'EMOM Engine Builder', category: 'Conditioning', duration: 20, intensity: 'Medium', tags: ['emom', 'rowing', 'engine'], muscles: ['quads', 'lats', 'hamstrings', 'calves'], videoYt: YT('emom rowing bike workout'), description: 'Every minute on the minute for 20: odd minutes 15 calories on the rower or bike, even minutes 12 kettlebell swings. Rest is whatever is left of the minute.' },
+    { title: 'Rowing Intervals 500 m', category: 'Conditioning', duration: 25, intensity: 'High', tags: ['rowing', 'intervals', 'engine'], muscles: ['lats', 'quads', 'glutes', 'lowerback'], videoYt: YT('rowing 500m interval technique'), description: '6 x 500 m with 2 minutes rest. Hold the same split on every piece; if the last one falls apart, the first was too fast. Legs, hips, arms — then the reverse.' },
+    { title: 'Shoulder & Hip Mobility Flow', category: 'Mobility', duration: 15, intensity: 'Low', tags: ['mobility', 'warm-up', 'overhead'], muscles: ['shoulders', 'hipflexors', 'adductors', 'lowerback'], videoYt: YT('shoulder hip mobility flow crossfit warm up'), description: 'Run this before anything overhead: banded shoulder dislocates, thoracic openers, deep squat holds and couch stretch. Ten minutes here buys a clean overhead position.' },
+    { title: 'Post-Session Recovery', category: 'Recovery', duration: 15, intensity: 'Low', tags: ['recovery', 'stretching', 'foam roll'], muscles: ['quads', 'hamstrings', 'calves', 'lats'], videoYt: YT('post workout recovery stretching routine'), description: 'Easy bike or walk for five minutes, then foam roll quads, glutes and lats and hold each stretch 60 seconds. Do it on the hard days, not just the easy ones.' },
+
+    // ---- Bodybuilding ----
+    { title: 'Barbell Bench Press', category: 'Chest', duration: 20, intensity: 'High', tags: ['press', 'chest', 'barbell'], muscles: ['chest', 'triceps', 'shoulders'], videoYt: YT('barbell bench press proper form'), description: '4 sets of 6-10. Shoulder blades pinned back and down, bar to the lower chest, feet driving into the floor. Leave one rep in reserve on the first three sets.' },
+    { title: 'Incline Dumbbell Press', category: 'Chest', duration: 15, intensity: 'Medium', tags: ['chest', 'dumbbell', 'upper chest'], muscles: ['chest', 'shoulders', 'triceps'], videoYt: YT('incline dumbbell press technique'), description: '3 sets of 8-12 at 30 degrees. Higher than that and it becomes a shoulder press. Control the descent for three seconds and stop just short of locking out.' },
+    { title: 'Barbell Row', category: 'Back', duration: 20, intensity: 'High', tags: ['row', 'back', 'barbell'], muscles: ['lats', 'traps', 'biceps', 'lowerback'], videoYt: YT('barbell row proper form'), description: '4 sets of 8. Torso around 45 degrees, bar to the navel, no jerking with the lower back. If the weight needs body English, it is too heavy.' },
+    { title: 'Lat Pulldown & Pull-Up', category: 'Back', duration: 18, intensity: 'Medium', tags: ['pull', 'lats', 'width'], muscles: ['lats', 'biceps', 'forearms'], videoYt: YT('lat pulldown vs pull up technique'), description: '4 sets of 10-12. Pull the elbows down and back rather than the hands, and let the lats stretch fully at the top of every rep.' },
+    { title: 'Overhead Press', category: 'Shoulders', duration: 18, intensity: 'High', tags: ['press', 'shoulders', 'barbell'], muscles: ['shoulders', 'triceps', 'traps'], videoYt: YT('overhead press standing barbell technique'), description: '4 sets of 6-8, standing. Squeeze the glutes so the lower back does not take the load, and move the head through as the bar passes the forehead.' },
+    { title: 'Lateral Raise Triple Set', category: 'Shoulders', duration: 12, intensity: 'Medium', tags: ['shoulders', 'isolation', 'dumbbell'], muscles: ['shoulders', 'traps'], videoYt: YT('lateral raise side delt technique'), description: '3 rounds of side, front and rear raises with no rest between them. Light weight, slow tempo, no swinging — the side delt responds to time under tension, not load.' },
+    { title: 'Barbell Curl & Skullcrusher', category: 'Arms', duration: 18, intensity: 'Medium', tags: ['biceps', 'triceps', 'superset'], muscles: ['biceps', 'triceps', 'forearms'], videoYt: YT('barbell curl skullcrusher superset'), description: 'Superset: 10 curls straight into 10 skullcrushers, 4 rounds. Elbows stay pinned to the sides on the curl and pointed at the ceiling on the extension.' },
+    { title: 'Back Squat Hypertrophy', category: 'Legs', duration: 25, intensity: 'High', tags: ['squat', 'quads', 'barbell'], muscles: ['quads', 'glutes', 'hamstrings'], videoYt: YT('back squat hypertrophy 8 to 12 reps'), description: '4 sets of 8-12 with two minutes rest. Lighter and deeper than a strength day — the goal is the stretch under load, not the number on the bar.' },
+    { title: 'Romanian Deadlift', category: 'Legs', duration: 18, intensity: 'Medium', tags: ['hinge', 'hamstrings', 'barbell'], muscles: ['hamstrings', 'glutes', 'lowerback'], videoYt: YT('romanian deadlift technique hamstrings'), description: '4 sets of 10. Push the hips back, keep the bar against the legs and stop when the hamstrings run out of stretch, not when the bar hits the floor.' },
+    { title: 'Leg Press & Calf Raise', category: 'Legs', duration: 18, intensity: 'Medium', tags: ['quads', 'calves', 'machine'], muscles: ['quads', 'glutes', 'calves'], videoYt: YT('leg press calf raise technique'), description: '4 sets of 12 on the press, then 4 sets of 15 calf raises with a two-second pause at the top. Never lock the knees out under load.' },
+    { title: 'Core Circuit', category: 'Core', duration: 12, intensity: 'Medium', tags: ['abs', 'core', 'circuit'], muscles: ['abs', 'obliques', 'hipflexors'], videoYt: YT('abs core circuit plank hanging leg raise'), description: '3 rounds: 45 s plank, 15 hanging leg raises, 20 cable crunches, 30 s side plank each side. Breathe out hard at the top of every crunch.' },
+    { title: 'Steady-State Cardio', category: 'Cardio', duration: 30, intensity: 'Low', tags: ['cardio', 'conditioning', 'fat loss'], muscles: ['quads', 'calves', 'hamstrings'], videoYt: YT('low intensity steady state cardio guide'), description: '30 minutes at a pace where you can still hold a conversation. Keeps conditioning and appetite in check without eating into recovery from the lifting days.' }
+  ];
+
   async function seedIfEmpty() {
     if (all('clubs').length) return;
     const club = { id: uid('clu'), name: 'Metropolis HC', country: 'Germany', founded: 1974 };
@@ -217,6 +249,16 @@ const Store = (() => {
     }
     if (fixed.length) { await DB.bulkPut('exercises', fixed); await loadAll(); }
     await setSetting('drillsV4', true);
+  }
+
+  // Starter workouts for CrossFit and bodybuilding. Their categories belong to
+  // those sports only, so the library stays empty for every other sport.
+  async function installStrengthDrills() {
+    if (await getSetting('drillsStrengthV1', false)) return;
+    const have = new Set(all('exercises').map(e => e.title));
+    const add = STRENGTH_DRILLS.filter(d => !have.has(d.title)).map(d => Object.assign({ id: uid('exe') }, d));
+    if (add.length) { await DB.bulkPut('exercises', add); await loadAll(); }
+    await setSetting('drillsStrengthV1', true);
   }
 
   // ---- Sport-bound squads ------------------------------------------------
@@ -355,7 +397,7 @@ const Store = (() => {
   return {
     uid, loadAll, all, find, save, remove, onChange,
     getSetting, setSetting, teamStats, playerStats, matchEvents,
-    seedIfEmpty, purgeDemoPlayers, installDefaultDrills, repairDrillLinks,
+    seedIfEmpty, purgeDemoPlayers, installDefaultDrills, repairDrillLinks, installStrengthDrills,
     players, stampSquadSport,
     teams, activeTeam, activeTeamId, setActiveTeam, scoped, matches, coaches, stampTeamScope,
     pack, unpack, packKinds, exportPack, importPack, GOAL_TYPES

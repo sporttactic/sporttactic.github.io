@@ -266,6 +266,31 @@ const SPORTS = (() => {
       ctx.beginPath(); ctx.moveTo(34, headY); ctx.lineTo(W - 34, headY); ctx.stroke();
       ctx.fillStyle = 'rgba(255,255,255,.5)'; ctx.beginPath(); ctx.arc(W / 2, 34 + (H - 68) * 0.25, 2, 0, 7); ctx.fill();
     },
+    // Strength disciplines have no court. The board still needs a surface, so it
+    // gets a plain training floor with lifting platforms to arrange stations on.
+    gym(ctx, W, H) {
+      const g = ctx.createLinearGradient(0, 0, 0, H);
+      g.addColorStop(0, '#26292e'); g.addColorStop(1, '#191b1f');
+      ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+      const m = 12;
+      ctx.strokeStyle = 'rgba(255,255,255,.28)'; ctx.lineWidth = 3;
+      ctx.strokeRect(m, m, W - 2 * m, H - 2 * m);
+      // rubber-tile grid
+      ctx.strokeStyle = 'rgba(255,255,255,.06)'; ctx.lineWidth = 1;
+      const step = Math.max(40, Math.round(W / 14));
+      for (let x = m + step; x < W - m; x += step) { ctx.beginPath(); ctx.moveTo(x, m); ctx.lineTo(x, H - m); ctx.stroke(); }
+      for (let y = m + step; y < H - m; y += step) { ctx.beginPath(); ctx.moveTo(m, y); ctx.lineTo(W - m, y); ctx.stroke(); }
+      // four lifting platforms down the middle
+      const pw = (W - 2 * m) * 0.19, ph = (H - 2 * m) * 0.34;
+      const py = H / 2 - ph / 2;
+      for (let i = 0; i < 4; i++) {
+        const px = m + (W - 2 * m) * (0.045 + i * 0.238);
+        ctx.fillStyle = 'rgba(255,255,255,.05)';
+        ctx.fillRect(px, py, pw, ph);
+        ctx.strokeStyle = 'rgba(255,255,255,.34)'; ctx.lineWidth = 2;
+        ctx.strokeRect(px, py, pw, ph);
+      }
+    },
     darts(ctx, W, H) {
       ctx.fillStyle = '#0b0f1a'; ctx.fillRect(0, 0, W, H);
       const cx = W / 2, cy = H / 2, R = Math.min(W, H) / 2 - 34, num = 20;
@@ -795,6 +820,14 @@ const SPORTS = (() => {
       place(24, 2, 'atk', 'w'); place(13, 5, 'atk', 'w'); place(8, 3, 'atk', 'w'); place(6, 5, 'atk', 'w');
       place(1, 2, 'def', 'b'); place(12, 5, 'def', 'b'); place(17, 3, 'def', 'b'); place(19, 5, 'def', 'b');
       return o;
+    },
+    // Strength disciplines: athletes on the four platforms, ready to be moved
+    // into whatever station layout the session needs.
+    gym() {
+      const o = [];
+      [[15, 50], [37, 50], [59, 50], [81, 50]].forEach((c, i) =>
+        o.push({ id: 'a' + i, kind: 'player', team: 'atk', label: i + 1, x: c[0], y: c[1] }));
+      return o;
     }
   };
 
@@ -844,10 +877,17 @@ const SPORTS = (() => {
     { id: 'chess', name: { en: 'Chess', da: 'Skak' }, icon: icon('<path d="M10.5 4a1.5 1.5 0 1 1 3 0c0 .8-.6 1.3-1 1.8.9.5 1.5 1.4 1.5 2.7 0 1.4-.7 2.3-1.4 3l.9 4.7H9.5l.9-4.7c-.7-.7-1.4-1.6-1.4-3 0-1.3.6-2.2 1.5-2.7-.4-.5-1-1-1-1.8Z"/><path d="M7 20h10"/>') },
     { id: 'bridge', name: { en: 'Bridge', da: 'Bridge' }, icon: icon('<rect x="3" y="7" width="10" height="13" rx="1.6"/><rect x="9" y="4" width="10" height="13" rx="1.6"/><path d="M14 8.6c.9 0 1.4 1 .7 1.8L14 11.4l-.7-1c-.7-.8-.2-1.8.7-1.8Z"/>') },
     { id: 'poker', name: { en: 'Poker', da: 'Poker' }, icon: icon('<rect x="3" y="5" width="11" height="15" rx="1.6"/><path d="M8.5 8.5c1.3 0 2 1.6 1 2.6L8.5 12.4 7 11.1c-1-1-.3-2.6 1-2.6Z"/><path d="M14 8l5 1.5a1.6 1.6 0 0 1 1.1 2l-2.6 8.4"/>') },
-    { id: 'backgammon', name: { en: 'Backgammon', da: 'Backgammon' }, icon: icon('<rect x="3" y="4" width="18" height="16" rx="1.5"/><path d="M6 4l1.5 6L9 4M10 4l1.5 6L13 4M6 20l1.5-6L9 20M10 20l1.5-6L13 20M15 4v16"/>') }
+    { id: 'backgammon', name: { en: 'Backgammon', da: 'Backgammon' }, icon: icon('<rect x="3" y="4" width="18" height="16" rx="1.5"/><path d="M6 4l1.5 6L9 4M10 4l1.5 6L13 4M6 20l1.5-6L9 20M10 20l1.5-6L13 20M15 4v16"/>') },
+    { id: 'crossfit', name: { en: 'CrossFit', da: 'CrossFit' }, icon: icon('<path d="M3 9v6M6 7v10M18 7v10M21 9v6M6 12h12"/>') },
+    { id: 'bodybuilding', name: { en: 'Bodybuilding', da: 'Bodybuilding' }, icon: icon('<path d="M12 4v3M8.5 7.5 12 7l3.5.5M6 11c1.5-2 3.5-3 6-3s4.5 1 6 3M6 11l-1.5 6M18 11l1.5 6M9 12v8M15 12v8"/>') }
   ];
 
   LIST.forEach(s => { s.court = courts[s.id]; s.formation = formations[s.id]; s.halfCourt = halfCourts[s.id]; });
+  // The two strength disciplines share one plain training floor.
+  ['crossfit', 'bodybuilding'].forEach(id => {
+    const s = LIST.find(x => x.id === id);
+    if (s) { s.court = courts.gym; s.formation = formations.gym; }
+  });
 
   function get(id) { return LIST.find(s => s.id === id) || LIST[0]; }
   function halfCourt(id) { return halfCourts[id]; }
@@ -872,7 +912,10 @@ const SPORTS = (() => {
     chess: ['Player'],
     bridge: ['North', 'East', 'South', 'West'],
     poker: ['Button', 'Small Blind', 'Big Blind', 'Under the Gun', 'Middle', 'Cutoff'],
-    backgammon: ['Player']
+    backgammon: ['Player'],
+    // Strength disciplines have no playing positions — an athlete trains a focus.
+    crossfit: ['Athlete', 'Weightlifting', 'Gymnastics', 'Metcon', 'Endurance'],
+    bodybuilding: ['Athlete', 'Upper Body', 'Lower Body', 'Push', 'Pull', 'Core']
   };
   function positions(id) { return POSITIONS[id] || POSITIONS.handball; }
 
@@ -899,7 +942,9 @@ const SPORTS = (() => {
     chess: { 'Player': ['P', 'util'] },
     bridge: { 'North': ['N', 'util'], 'East': ['E', 'mid'], 'South': ['S', 'att'], 'West': ['W', 'def'] },
     poker: { 'Button': ['BTN', 'att'], 'Small Blind': ['SB', 'mid'], 'Big Blind': ['BB', 'mid'], 'Under the Gun': ['UTG', 'def'], 'Middle': ['MP', 'util'], 'Cutoff': ['CO', 'att'] },
-    backgammon: { 'Player': ['P', 'util'] }
+    backgammon: { 'Player': ['P', 'util'] },
+    crossfit: { 'Athlete': ['ATH', 'util'], 'Weightlifting': ['WL', 'att'], 'Gymnastics': ['GYM', 'mid'], 'Metcon': ['MET', 'def'], 'Endurance': ['END', 'gk'] },
+    bodybuilding: { 'Athlete': ['ATH', 'util'], 'Upper Body': ['UB', 'att'], 'Lower Body': ['LB', 'def'], 'Push': ['PSH', 'mid'], 'Pull': ['PLL', 'mid'], 'Core': ['CR', 'gk'] }
   };
   // { ab, role, color } for a position; a neutral '?' badge when unset.
   function posBadge(id, pos) {
@@ -927,7 +972,9 @@ const SPORTS = (() => {
     chess: ['Openings', 'Tactics', 'Endgames', 'Strategy', 'Calculation'],
     bridge: ['Bidding', 'Declarer Play', 'Defense', 'Conventions', 'Endplay'],
     poker: ['Preflop', 'Postflop', 'Pot Odds', 'Bluffing', 'Bankroll'],
-    backgammon: ['Opening', 'Priming', 'Backgame', 'Bearing Off', 'Doubling']
+    backgammon: ['Opening', 'Priming', 'Backgame', 'Bearing Off', 'Doubling'],
+    crossfit: ['Strength', 'Olympic Lifting', 'Gymnastics', 'Metcon', 'Conditioning', 'Mobility', 'Recovery'],
+    bodybuilding: ['Chest', 'Back', 'Shoulders', 'Arms', 'Legs', 'Core', 'Cardio', 'Mobility', 'Recovery']
   };
   function exerciseCategories(id) { return EXCATS[id] || EXCATS.handball; }
 
@@ -950,13 +997,31 @@ const SPORTS = (() => {
     chess: ['Aggressive', 'Positional', 'Defensive', 'Gambit', 'Hypermodern'],
     bridge: ['Standard American', 'Acol', '2/1 Game Force', 'Precision', 'Weak NT'],
     poker: ['Tight-Aggressive', 'Loose-Aggressive', 'Tight-Passive', 'Loose-Passive', 'Maniac'],
-    backgammon: ['Blitz', 'Priming Game', 'Backgame', 'Holding Game', 'Running Game']
+    backgammon: ['Blitz', 'Priming Game', 'Backgame', 'Holding Game', 'Running Game'],
+    // Not opponents but training splits — the same picker, a useful meaning.
+    crossfit: ['AMRAP', 'EMOM', 'For Time', 'Chipper', 'Strength Cycle'],
+    bodybuilding: ['Full Body', 'Upper / Lower', 'Push Pull Legs', 'Bro Split', 'Cutting', 'Bulking']
   };
   function oppFormations(id) { return OPP_FORMATIONS[id] || OPP_FORMATIONS.handball; }
 
   // Team sports have a coach-managed squad (roster) — used to gate team sync features.
   const TEAM_SPORTS = ['handball', 'soccer', 'basketball', 'volleyball', 'baseball', 'rugby', 'football', 'icehockey', 'floorball'];
   function isTeam(id) { return TEAM_SPORTS.indexOf(id) >= 0; }
+
+  // Suggestions for the team form. The fields stay free text — the picker beside
+  // each one only fills it in, so any league name is still possible.
+  const DIVISIONS = {
+    default: ['Premier League', '1st Division', '2nd Division', '3rd Division', 'Regional League', 'Local League', 'Youth League', 'Cup', 'Friendly'],
+    crossfit: ['Rx', 'Scaled', 'Foundations', 'Masters', 'Teens', 'Team', 'Open', 'Quarterfinals'],
+    bodybuilding: ['Novice', 'Amateur', 'National', 'Pro Qualifier', 'Pro', 'Off-season', 'Contest prep']
+  };
+  const CATEGORIES = {
+    default: ['Senior Men', 'Senior Women', 'U21', 'U19', 'U17', 'U15', 'U13', 'U11', 'Mixed', 'Veterans'],
+    crossfit: ['Men', 'Women', 'Masters 35+', 'Masters 40+', 'Masters 50+', 'Teens', 'Mixed team', 'Beginners'],
+    bodybuilding: ['Men\u2019s Physique', 'Classic Physique', 'Men\u2019s Bodybuilding', 'Bikini', 'Wellness', 'Figure', 'Women\u2019s Physique', 'Masters']
+  };
+  function divisions(id) { return DIVISIONS[id] || DIVISIONS.default; }
+  function categories(id) { return CATEGORIES[id] || CATEGORIES.default; }
 
   // ---- Training props / equipment (sport-category based) ----
   // Reusable coaching equipment that can be dropped on the tactical board.
@@ -985,7 +1050,9 @@ const SPORTS = (() => {
     icehockey: ['cone', 'disc', 'pole', 'ring', 'minigoal', 'target'],
     floorball: ['cone', 'disc', 'pole', 'ring', 'minigoal', 'target'],
     tennis: ['cone', 'disc', 'target', 'ladder', 'ring'],
-    badminton: ['cone', 'disc', 'target', 'ladder', 'ring']
+    badminton: ['cone', 'disc', 'target', 'ladder', 'ring'],
+    crossfit: ['cone', 'disc', 'hurdle', 'ladder', 'ring', 'medicineball'],
+    bodybuilding: ['cone', 'disc', 'medicineball']
   };
   // Returns a list of {type, name} props for the sport (empty for board/cue games).
   function props(id) {
@@ -994,6 +1061,6 @@ const SPORTS = (() => {
     return list.map(t => ({ type: t, name: PROP_TYPES[t] || { en: t, da: t } }));
   }
 
-  return { LIST, get, name, positions, posBadge, exerciseCategories, oppFormations, isTeam, halfFormation, halfCourt, props };
+  return { LIST, get, name, positions, posBadge, exerciseCategories, oppFormations, isTeam, divisions, categories, halfFormation, halfCourt, props };
 })();
 if (typeof window !== 'undefined') window.SPORTS = SPORTS;

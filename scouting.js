@@ -8,6 +8,10 @@ Views.scouting = function (mount, params) {
   const players = Store.players(team && team.id).filter(p => p.status !== 'suspended');
   const sport = (window.App && App.getSport && App.getSport()) || 'handball';
 
+  // A strength discipline has no match and no opponent, so live scouting there
+  // means logging the sets as they happen instead of counting goals.
+  if (sport === 'crossfit' || sport === 'bodybuilding') return strengthScout(mount, sport);
+
   // Per-sport event catalogue. Each category: {id, en, da, ev:[[en, da, result, cls], …]}.
   const SPORT_EVENTS = {
     handball: [
@@ -190,3 +194,175 @@ Views.scouting = function (mount, params) {
   render();
   return () => stopClock(); // cleanup on route change
 };
+
+/* ---------------------------------------------------------------------------
+   Live scouting for CrossFit and bodybuilding: a set logger for the gym floor.
+   Big buttons, no squad required, and the session survives a page reload because
+   the working list is kept in localStorage until it is filed away.
+--------------------------------------------------------------------------- */
+function strengthScout(mount, sport) {
+  const DRAFT = 'stx_scout_sets';
+  const oneRm = (kg, reps) => (kg > 0 && reps > 1) ? Math.round(kg * (1 + reps / 30)) : Math.round(kg || 0);
+  const esc = s => UI.esc(s);
+  const dt = v => { const r = T('seed.' + v); return r === 'seed.' + v ? v : r; };
+
+  const readDraft = () => { try { return JSON.parse(localStorage.getItem(DRAFT) || '[]'); } catch { return []; } };
+  const writeDraft = () => { try { localStorage.setItem(DRAFT, JSON.stringify(sets)); } catch { /* private mode */ } };
+  const athlete = () => { try { return (localStorage.getItem('stx_athlete_name') || '').trim() || T('personal.me'); } catch { return T('personal.me'); } };
+
+  let sets = readDraft();
+  let clock = 0, timer = null, lastSet = 0;
+
+  // Only the drills that belong to this sport, so the picker is not a wall of text.
+  const cats = SPORTS.exerciseCategories(sport);
+  const drills = Store.all('exercises').filter(e => cats.indexOf(e.category) >= 0)
+    .sort((a, b) => dt(a.title).localeCompare(dt(b.title)));
+
+  // One row per exercise: what has been done so far, newest session only.
+  function totals() {
+    const map = new Map();
+    for (const s of sets) {
+      const cur = map.get(s.ex) || { ex: s.ex, sets: 0, reps: 0, volume: 0, best: 0, bestReps: 0 };
+      cur.sets++; cur.reps += s.reps; cur.volume += s.kg * s.reps;
+      if (s.kg > cur.best) { cur.best = s.kg; cur.bestReps = s.reps; }
+      map.set(s.ex, cur);
+    }
+    return [...map.values()];
+  }
+
+  function render() {
+    const rows = totals();
+    const totalVolume = rows.reduce((n, r) => n + r.volume, 0);
+    mount.innerHTML = `
+      <div class="page-head">
+        <div><h1>${T('scout.title')}</h1><p>${T('scout.strengthSub')} · ${esc(SPORTS.name(sport, I18N.getLang()))}</p></div>
+      </div>
+
+      <div class="scoreboard">
+        <div style="text-align:center"><div style="color:var(--muted);font-size:12px">${T('scout.setsDone')}</div><div class="score">${sets.length}</div></div>
+        <div style="text-align:center"><div class="clock" id="clock">${UI.fmtClock(clock)}</div>
+          <div style="margin-top:8px"><button class="btn sm primary" id="startBtn">${T('scout.start')}</button> <button class="btn sm" id="resetBtn">${T('scout.reset')}</button></div>
+          <div style="color:var(--muted);font-size:12px;margin-top:6px" id="restLine">${T('scout.rest')}: ${UI.fmtClock(0)}</div></div>
+        <div style="text-align:center"><div style="color:var(--muted);font-size:12px">${T('scout.volume')}</div><div class="score">${Math.round(totalVolume)}<span style="font-size:14px"> kg</span></div></div>
+      </div>
+
+      <div class="scout-grid">
+        <div class="card">
+          <div class="row">
+            <label class="field"><span>${T('personal.athlete')}</span><input id="sc_who" maxlength="60" value="${esc(athlete())}"></label>
+            <label class="field"><span>${T('scout.workout')}</span><input id="sc_wod" maxlength="80" placeholder="${esc(T('scout.workoutPh'))}"></label>
+          </div>
+          <label class="field"><span>${T('scout.exercise')}</span>
+            <div class="combo">
+              <input id="sc_ex" list="scEx" placeholder="${esc(T('scout.exercisePh'))}">
+              <select id="sc_exPick"><option value="">${T('teams.pick')}</option>${drills.map(e => `<option value="${esc(dt(e.title))}">${esc(dt(e.title))}</option>`).join('')}</select>
+            </div>
+          </label>
+          <datalist id="scEx">${drills.map(e => `<option value="${esc(dt(e.title))}"></option>`).join('')}</datalist>
+
+          <div class="set-input">
+            <label class="field"><span>${T('scout.weight')} (kg)</span>
+              <div class="stepper"><button type="button" class="btn" data-step="kg:-2.5" aria-label="-2.5 kg">−</button>
+                <input id="sc_kg" type="number" step="any" min="0" value="60" aria-label="${esc(T('scout.weight'))} (kg)">
+                <button type="button" class="btn" data-step="kg:2.5" aria-label="+2.5 kg">+</button></div></label>
+            <label class="field"><span>${T('scout.reps')}</span>
+              <div class="stepper"><button type="button" class="btn" data-step="reps:-1" aria-label="-1 ${esc(T('scout.reps'))}">−</button>
+                <input id="sc_reps" type="number" min="1" max="200" value="5" aria-label="${esc(T('scout.reps'))}">
+                <button type="button" class="btn" data-step="reps:1" aria-label="+1 ${esc(T('scout.reps'))}">+</button></div></label>
+          </div>
+          <button class="btn primary block big-log" id="sc_log">＋ ${T('scout.logSet')}</button>
+          <p class="hint">${T('scout.logHint')}</p>
+
+          <div class="row" style="flex:0;margin-top:10px;flex-wrap:wrap">
+            <button class="btn primary" id="sc_save">${T('scout.saveRecords')}</button>
+            <button class="btn danger" id="sc_clear">${T('scout.clearSets')}</button>
+          </div>
+        </div>
+
+        ${UI.acc('scoutSets', T('scout.sessionTotals'), `
+          <div class="table-wrap"><table>
+            <thead><tr><th>${T('scout.exercise')}</th><th>${T('scout.sets')}</th><th>${T('scout.reps')}</th><th>${T('scout.volume')}</th><th>${T('scout.best')}</th><th>${T('scout.est1rm')}</th></tr></thead>
+            <tbody>${rows.map(r => `<tr>
+              <td><strong>${esc(r.ex)}</strong></td><td>${r.sets}</td><td>${r.reps}</td>
+              <td>${Math.round(r.volume)} kg</td><td>${r.best} kg × ${r.bestReps}</td>
+              <td><span class="tag green">${oneRm(r.best, r.bestReps)} kg</span></td></tr>`).join('')
+        || `<tr><td colspan="6" class="empty">${T('scout.noSets')}</td></tr>`}</tbody>
+          </table></div>
+          <div class="event-log" style="margin-top:12px">
+            ${sets.slice().reverse().map((s, i) => `<div class="log-item">
+              <span><span class="log-time">${UI.fmtClock(s.at || 0)}</span> ${esc(s.ex)} — <b>${s.kg} kg × ${s.reps}</b></span>
+              <button class="btn sm danger" data-rmset="${sets.length - 1 - i}">${T('scout.remove')}</button></div>`).join('')
+        || `<p style="color:var(--muted)">${T('scout.noSets')}</p>`}
+          </div>`, { sub: sets.length + ' ' + T('scout.sets') })}
+      </div>`;
+
+    UI.bindAcc(mount);
+    const q = id => mount.querySelector('#' + id);
+    q('sc_exPick').onchange = e => { if (e.target.value) q('sc_ex').value = e.target.value; };
+    mount.querySelectorAll('[data-step]').forEach(b => b.onclick = () => {
+      const [what, by] = b.dataset.step.split(':');
+      const el = q(what === 'kg' ? 'sc_kg' : 'sc_reps');
+      const next = (+el.value || 0) + parseFloat(by);
+      el.value = Math.max(what === 'kg' ? 0 : 1, Math.round(next * 100) / 100);
+    });
+    q('sc_log').onclick = logSet;
+    q('sc_save').onclick = saveRecords;
+    q('sc_clear').onclick = () => UI.confirm(T('scout.clearAsk'), () => { sets = []; writeDraft(); render(); });
+    q('startBtn').onclick = toggleClock;
+    q('resetBtn').onclick = () => { clock = 0; lastSet = 0; stopClock(); render(); };
+    mount.querySelectorAll('[data-rmset]').forEach(b => b.onclick = () => {
+      sets.splice(+b.dataset.rmset, 1); writeDraft(); render();
+    });
+    if (timer) { const b = q('startBtn'); b.textContent = T('scout.pause'); b.classList.remove('primary'); }
+  }
+
+  function logSet() {
+    const ex = mount.querySelector('#sc_ex').value.trim().slice(0, 80);
+    if (!ex) return UI.toast(T('scout.needEx'), 'error');
+    const kg = Math.max(0, +mount.querySelector('#sc_kg').value || 0);
+    const reps = Math.max(1, Math.min(200, +mount.querySelector('#sc_reps').value || 1));
+    sets.push({ ex, kg, reps, at: clock });
+    lastSet = clock;
+    writeDraft();
+    if (!timer) toggleClock();          // the first set starts the session clock
+    UI.toast(ex + ' ' + kg + ' kg × ' + reps, 'success');
+    render();
+  }
+
+  // Files the best set of every exercise into the same Personal records the
+  // training planner reads, then clears the working list.
+  async function saveRecords() {
+    const rows = totals();
+    if (!rows.length) return UI.toast(T('scout.noSets'), 'error');
+    const who = mount.querySelector('#sc_who').value.trim().slice(0, 60) || T('personal.me');
+    const wod = mount.querySelector('#sc_wod').value.trim().slice(0, 80);
+    try { localStorage.setItem('stx_athlete_name', who); } catch { /* private mode */ }
+    await Store.save('personal', {
+      playerId: '', playerName: who, sport,
+      sessionId: '', sessionTitle: wod,
+      date: Date.now(),
+      notes: T('scout.fromLive') + (wod ? ' — ' + wod : '') + ' · ' + sets.length + ' ' + T('scout.sets'),
+      tests: rows.map(r => ({ name: r.ex, value: r.best, unit: 'kg', reps: r.bestReps }))
+    });
+    sets = []; writeDraft(); stopClock(); clock = 0;
+    UI.toast(T('scout.saved'), 'success');
+    render();
+  }
+
+  function toggleClock() {
+    if (timer) { stopClock(); return; }
+    timer = setInterval(() => {
+      clock++;
+      const c = mount.querySelector('#clock'); if (c) c.textContent = UI.fmtClock(clock);
+      const r = mount.querySelector('#restLine'); if (r) r.textContent = T('scout.rest') + ': ' + UI.fmtClock(clock - lastSet);
+    }, 1000);
+    const b = mount.querySelector('#startBtn'); if (b) { b.textContent = T('scout.pause'); b.classList.remove('primary'); }
+  }
+  function stopClock() {
+    clearInterval(timer); timer = null;
+    const b = mount.querySelector('#startBtn'); if (b) { b.textContent = T('scout.start'); b.classList.add('primary'); }
+  }
+
+  render();
+  return () => stopClock();
+}

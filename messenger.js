@@ -1,27 +1,32 @@
 /* messenger.js — Peer-to-Peer, end-to-end encrypted private messenger.
 
-   Privacy-focused, Signal-like, but fully serverless:
+   Privacy-focused, Signal-like, and serverless where it counts:
    • Identity keys (ECDH P-256) are generated on-device with the Web Crypto API,
      stored in an ISOLATED IndexedDB, and never leave the device (the private
      key is non-extractable, so it cannot be exported or uploaded).
-   • Messages are end-to-end encrypted with AES-GCM using a shared secret derived
-     via ECDH — only the two contacts can read them.
-   • WebRTC data channels carry messages, files and voice/video directly between
-     peers. Connection setup uses copy/paste (QR-able) invite codes, so there is
-     NO central signaling server and no account. A public STUN server is only
-     used to discover public addresses for NAT traversal.
+   • WebRTC carries everything directly between the two browsers: text, files,
+     voice and video. PeerJS is only the switchboard that introduces them, and
+     it is handed nothing but a hash of the shared key.
+   • Text and files are end-to-end encrypted with AES-GCM under a key derived
+     from the shared room key, on top of the DTLS/SRTP encryption WebRTC already
+     applies to every byte and every call.
    • Messages are encrypted at rest and support disappearing timers.
    • Safety numbers let two people verify no key was swapped (anti-impersonation).
 
    Hardening notes:
-   • Shared-key rooms run PBKDF2 (310k) into HKDF, giving separate keys for signaling
-     and for chat content, plus a room id and relay topic that cannot be brute-forced
-     from the public broker without paying the full KDF cost per guess.
+   • Shared-key rooms run PBKDF2 (310k) into HKDF, giving the chat key, the local
+     room id and the PeerJS rendezvous address as independent values, so the
+     address the broker sees costs a full KDF run per guess to walk back.
    • Weak shared keys are refused outright — the key is the only access control.
    • The shared key is held in memory and stored encrypted at rest, never in clear.
+   • A connection is not "connected" until the far end returns a frame that
+     decrypts under the shared key; AES-GCM is authenticated, so that is proof.
+     Calls are only answered from a peer that has already passed that check, and
+     the media path's DTLS fingerprint is compared with the one the peer
+     published over the encrypted channel.
    • Chat bubbles are built with DOM APIs; nothing a peer sends is parsed as HTML.
-   • Every relay and data-channel frame is size- and shape-checked before it can
-     allocate memory, and a session locks onto a single peer id.
+   • Every data-channel frame is size- and shape-checked before it can allocate
+     memory, and a session locks onto a single peer.
 */
 window.Views = window.Views || {};
 Views.messenger = function (mount, params) {
@@ -31,6 +36,8 @@ Views.messenger = function (mount, params) {
     ? { id: params.playerId, name: String(params.playerName || ''), store: params.memberStore === 'coaches' ? 'coaches' : 'players' }
     : null;
   const backRoute = (params && params.from) || 'settings';
+  // A view can hand over a ready-written message (a report line, a tactic note).
+  let draft = String((params && params.draft) || '').slice(0, 4000);
   const back = () => (window.App && App.go ? App.go(backRoute) : null);
 
   // Unsupported (very old browsers / insecure context) — fail gracefully.
@@ -84,6 +91,11 @@ Views.messenger = function (mount, params) {
       noPeerYet: 'No one joined yet. Share the key, then tap Reconnect when they’re ready.', relayUnavailable: 'Couldn’t reach the connection helper. Check your internet and try again, or use “Invite a friend”.',
       keyNeeded: 'Type a key first, or tap the dice to create one.', keyHint: 'Both people must enter the exact same key. Anyone with the key can join — keep it private.',
       keyTooWeak: 'That key is too easy to guess. Use at least 12 varied characters — tap the dice for a strong one.',
+      verifying: 'Checking you both hold the same key…', askingMedia: 'Waiting for microphone / camera permission…',
+      noCamera: 'No microphone or camera was found on this device.',
+      voiceCall: 'Start a voice call', videoCall: 'Start a video call', endCall: 'End call', calling: 'Calling…',
+      callFailed: 'The call could not be started', micOn: 'Mic on', micOff: 'Mic off', camOn: 'Camera on', camOff: 'Camera off',
+      callMitm: 'The call did not come from the device holding your key — it was dropped. Make a new key before trying again.',
       shareKeyMsg: 'Let’s chat privately on SportTactic. Open Secure Messenger → Quick connect → enter this key:'
     };
     const DA = {
@@ -124,6 +136,11 @@ Views.messenger = function (mount, params) {
       noPeerYet: 'Ingen er kommet endnu. Del nøglen, og tryk Forbind igen, når de er klar.', relayUnavailable: 'Kunne ikke nå forbindelses-hjælperen. Tjek internettet og prøv igen, eller brug “Inviter en ven”.',
       keyNeeded: 'Skriv en nøgle først, eller tryk på terningen for at lave en.', keyHint: 'Begge skal indtaste præcis samme nøgle. Alle med nøglen kan deltage — hold den privat.',
       keyTooWeak: 'Den nøgle er for nem at gætte. Brug mindst 12 varierede tegn — tryk på terningen for en stærk nøgle.',
+      verifying: 'Tjekker at I begge har samme nøgle…', askingMedia: 'Venter på tilladelse til mikrofon / kamera…',
+      noCamera: 'Der blev ikke fundet nogen mikrofon eller kamera på denne enhed.',
+      voiceCall: 'Start et taleopkald', videoCall: 'Start et videoopkald', endCall: 'Afslut opkald', calling: 'Ringer op…',
+      callFailed: 'Opkaldet kunne ikke startes', micOn: 'Mikrofon til', micOff: 'Mikrofon fra', camOn: 'Kamera til', camOff: 'Kamera fra',
+      callMitm: 'Opkaldet kom ikke fra enheden med din nøgle — det blev afvist. Lav en ny nøgle, før du prøver igen.',
       shareKeyMsg: 'Lad os chatte privat på SportTactic. Åbn Sikre Beskeder → Hurtig forbindelse → indtast denne nøgle:'
     };
     return (da ? DA : EN)[k] || k;
@@ -247,13 +264,28 @@ Views.messenger = function (mount, params) {
   let active = null;                 // active contact id
   let pc = null, dc = null, wireKey = null;
   let dcContact = null;              // contact the open data channel belongs to
-  let sig = null;                    // active shared-key relay signaling session
+  let sig = null;                    // active shared-key rendezvous session
   let localStream = null;
+  let peerLib = null;                // cached PeerJS <script> load
+  let peerObj = null;                // the PeerJS Peer for this session
+  let dataConn = null;               // PeerJS DataConnection (text + files)
+  let mediaConn = null;              // PeerJS MediaConnection (voice + video)
+  let authed = false;                // the peer has proved it holds the shared key
+  let callMode = 'chat';             // what the user asked for when connecting
+  let pendingCall = null;            // call to place as soon as the peer is verified
   const incoming = {};               // in-flight file transfers by id
   const roomSecrets = {};            // contactId -> shared key, in memory only (never persisted in clear)
   const blobUrls = [];               // object URLs to revoke
   const contact = id => contacts.find(c => c.id === id);
-  const dcReady = () => dc && dc.readyState === 'open';
+  // Nothing may be sent before the far end has decrypted a frame under the shared
+  // key: an unauthenticated channel is just a stranger who found the same room.
+  const dcReady = () => !!(wireKey && authed && ((dataConn && dataConn.open) || (dc && dc.readyState === 'open')));
+  function wsend(obj) {
+    const s = JSON.stringify(obj);
+    if (dataConn && dataConn.open) { dataConn.send(s); return true; }
+    if (dc && dc.readyState === 'open') { dc.send(s); return true; }
+    return false;
+  }
   function trackUrl(u) { blobUrls.push(u); return u; }
   function revokeUrls() { while (blobUrls.length) { try { URL.revokeObjectURL(blobUrls.pop()); } catch (e) { } } }
 
@@ -412,8 +444,9 @@ Views.messenger = function (mount, params) {
     if (window.UI && UI.confirm) UI.confirm(tx('rosterRotateAsk'), run); else run();
   }
 
-  // A player or staff member opened from Teams & Players keeps their own shared key,
-  // so the coach never has to retype it. It is created once, on first use.
+  // A player or staff member opened from Teams & Players or the leaderboard keeps
+  // their own shared key, so the coach never has to retype it. It is created once,
+  // on first use, and the conversation opens straight away.
   async function prefillPeerKey() {
     const input = mount.querySelector('#qcKey');
     if (!input || typeof Store === 'undefined') return;
@@ -425,6 +458,7 @@ Views.messenger = function (mount, params) {
       renderRoster();
     }
     if (!input.value) input.value = rec.chatKey;
+    keyConnect(rec.chatKey, (mount.querySelector('#qcMode') || {}).value || 'chat');
   }
 
   function renderContacts() {
@@ -465,8 +499,7 @@ Views.messenger = function (mount, params) {
             <button class="btn sm danger hidden" id="btnHangup">${tx('hangup')}</button>`
       : `<button class="btn primary" id="btnInvite">👋 ${tx('inviteFriend')}</button>
             <button class="btn" id="btnHaveInvite">📨 ${tx('haveInvitation')}</button>
-            <button class="btn sm danger hidden" id="btnHangup">${tx('hangup')}</button>`;
-    const safetyBlock = isRoom ? '' : `
+            <button class="btn sm danger hidden" id="btnHangup">${tx('hangup')}</button>`;    const safetyBlock = isRoom ? '' : `
       <details class="msg-fold" style="margin-top:8px"><summary>${tx('safety')}</summary>
         <div style="margin-top:8px">
           <p class="hint">${tx('safetyHint')}</p>
@@ -500,6 +533,11 @@ Views.messenger = function (mount, params) {
       <div class="call-area hidden" id="callArea">
         <video id="localVid" autoplay muted playsinline class="hidden"></video>
         <video id="remoteVid" autoplay playsinline></video>
+        <div class="call-bar">
+          <button class="btn sm hidden" id="btnMic">🎤</button>
+          <button class="btn sm hidden" id="btnCam">🎥</button>
+          <button class="btn sm danger hidden" id="btnEndCall">📵 ${tx('endCall')}</button>
+        </div>
       </div>
 
       <div class="row" style="justify-content:space-between;align-items:center;margin-top:10px">
@@ -515,10 +553,17 @@ Views.messenger = function (mount, params) {
       <div class="msg-list" id="msgList"></div>
       <div class="composer">
         <label class="btn sm" style="cursor:pointer">${tx('attach')}<input id="fileInput" type="file" hidden></label>
+        <button class="btn sm" id="btnVoice" disabled title="${tx('voiceCall')}">📞</button>
+        <button class="btn sm" id="btnVideo" disabled title="${tx('videoCall')}">🎥</button>
         <input id="msgInput" type="text" placeholder="${tx('typeMsg')}" autocomplete="off">
         <button class="btn primary" id="btnSend">${tx('send')}</button>
       </div>`;
 
+    mount.querySelector('#btnVoice').onclick = () => startCall('voice');
+    mount.querySelector('#btnVideo').onclick = () => startCall('video');
+    mount.querySelector('#btnMic').onclick = () => toggleTrack('audio');
+    mount.querySelector('#btnCam').onclick = () => toggleTrack('video');
+    mount.querySelector('#btnEndCall').onclick = () => endCall(true);
     mount.querySelector('#delContact').onclick = () => deleteContact(c.id);
     mount.querySelector('#btnHangup').onclick = () => { closeConn(); setStatus('closed'); };
     mount.querySelector('#btnClear').onclick = () => clearChat(c.id);
@@ -547,7 +592,8 @@ Views.messenger = function (mount, params) {
     mount.querySelector('#btnSend').onclick = sendText;
     mount.querySelector('#msgInput').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); sendText(); } });
     mount.querySelector('#fileInput').onchange = e => { const f = e.target.files[0]; if (f) sendFile(f); e.target.value = ''; };
-    if (pc) setStatus(pc.connectionState);
+    if (draft) { const i = mount.querySelector('#msgInput'); if (i) { i.value = draft; draft = ''; } }
+    if (authed) setStatus('connected'); else if (pc) setStatus(pc.connectionState);
     reattachMedia();
     refreshMessages();
   }
@@ -622,20 +668,16 @@ Views.messenger = function (mount, params) {
   }
   function reattachMedia() {
     const lv = mount.querySelector('#localVid'), rv = mount.querySelector('#remoteVid');
-    if (localStream && lv) { lv.srcObject = localStream; lv.classList.remove('hidden'); mount.querySelector('#callArea').classList.remove('hidden'); }
-    if (pc && rv) { const rs = pc.getReceivers().map(r => r.track).filter(Boolean); if (rs.length) { rv.srcObject = new MediaStream(rs); mount.querySelector('#callArea').classList.remove('hidden'); } }
+    if (localStream && lv) { lv.srcObject = localStream; lv.classList.toggle('hidden', !localStream.getVideoTracks().length); showCallArea(true); }
+    if (mediaConn && mediaConn.remoteStream && rv) { rv.srcObject = mediaConn.remoteStream; showCallArea(true); }
+    updateCallButtons();
   }
 
   function setupDC(channel) {
     dc = channel;
     dcContact = active;
-    dc.onopen = () => {
-      setStatus('connected'); toast(tx('connected'), 'success'); setSigStatus(''); closeSig();
-      const area = mount.querySelector('#sigArea'); if (area) area.innerHTML = `<p class="conn-ok">✓ ${tx('nowConnected')}</p>`;
-      const d = mount.querySelector('#connDetails'); if (d) d.open = false;
-      const input = mount.querySelector('#msgInput'); if (input) input.focus();
-    };
-    dc.onclose = () => setStatus('closed');
+    dc.onopen = async () => { setSigStatus(tx('verifying')); await sendAuth(); };
+    dc.onclose = () => { authed = false; setStatus('closed'); updateCallButtons(); };
     dc.onmessage = onWire;
   }
 
@@ -735,12 +777,18 @@ Views.messenger = function (mount, params) {
     area.querySelector('#copyReply').onclick = () => copy(reply);
   }
 
-  // ================= shared-key quick connect (auto-signaling over a relay) =================
-  // Both people type the SAME key. From that key we derive (PBKDF2) one AES-GCM secret used to
-  //   (a) encrypt every signaling message that passes through a public MQTT relay, and
-  //   (b) end-to-end encrypt the actual chat / files.
-  // The relay only ever sees ciphertext on a hashed topic — never the key, never any plaintext.
-  const RELAYS = ['wss://broker.emqx.io:8084/mqtt', 'wss://broker.hivemq.com:8884/mqtt'];
+  // ================= shared-key connect over PeerJS =================
+  // Both people type the SAME key. PBKDF2 turns it into three independent values:
+  // the AES-GCM key that end-to-end encrypts every message and file, the local
+  // room id, and the pair of PeerJS addresses the two devices meet on. PeerJS is
+  // only a switchboard — it introduces the two browsers and then steps out of the
+  // way, and everything it does see is either a hash of the key or ciphertext.
+  const PEERJS_SRC = 'https://cdn.jsdelivr.net/npm/peerjs@1.5.5/dist/peerjs.min.js';
+  const ICE = {
+    iceServers: [
+      { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }
+    ]
+  };
   const KEY_ALPHA = '0123456789ABCDEFGHJKMNPQRSTVWXYZ'; // Crockford base32 (no I L O U)
 
   function normalizeKey(s) {
@@ -752,8 +800,8 @@ Views.messenger = function (mount, params) {
     let s = ''; for (let i = 0; i < 16; i++) s += KEY_ALPHA[b[i] & 31];
     return s.replace(/(.{4})(?=.)/g, '$1-'); // XXXX-XXXX-XXXX-XXXX  (~80 bits)
   }
-  // A weak key is the whole attack: the relay topic is public, so anyone who guesses
-  // the key joins the room. Refuse anything a dictionary would find.
+  // A weak key is the whole attack: the rendezvous address is derived from it, so
+  // anyone who guesses the key can walk into the room. Refuse what a dictionary finds.
   function weakKey(norm) {
     if (norm.length < LIMITS.minKey) return true;
     if (/^(.)\1*$/.test(norm)) return true;
@@ -761,9 +809,9 @@ Views.messenger = function (mount, params) {
     return false;
   }
 
-  // PBKDF2 (slow) -> one master secret -> HKDF-Expand into four independent values.
-  // Separate keys for signaling and messages, and a room id / topic that costs a full
-  // PBKDF2 run to compute, so the public relay cannot be brute-forced cheaply.
+  // PBKDF2 (slow) -> one master secret -> HKDF-Expand into independent values, so the
+  // address the broker sees can never be walked back to the key without paying the
+  // full KDF cost per guess.
   const KDF_ITERATIONS = 310000;
   const KDF_SALT = 'sporttactic-p2p-v2';
   async function hkdfExpand(prkBits, info, bytes) {
@@ -785,16 +833,24 @@ Views.messenger = function (mount, params) {
       { name: 'PBKDF2', salt: ENC.encode(KDF_SALT), iterations: KDF_ITERATIONS, hash: 'SHA-256' }, base, 256);
     const aes = async info => subtle.importKey('raw', await hkdfExpand(prk, info, 32), { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
     return {
-      sigKey: await aes('stx-sig-v2'),   // protects relay signaling only
-      msgKey: await aes('stx-msg-v2'),   // protects chat content only
-      roomH: toHex(await hkdfExpand(prk, 'stx-room-v2', 8)),
-      topic: 'stx/' + toHex(await hkdfExpand(prk, 'stx-topic-v2', 16))
+      msgKey: await aes('stx-msg-v2'),                              // chat, files and the handshake
+      roomH: toHex(await hkdfExpand(prk, 'stx-room-v2', 8)),        // local contact id
+      peerHex: toHex(await hkdfExpand(prk, 'stx-peer-v3', 12))      // the pair of PeerJS addresses
     };
   }
-  function loadMqtt() {
-    if (window.__stxMqtt) return Promise.resolve(window.__stxMqtt);
+
+  function loadPeerJs() {
+    if (window.Peer) return Promise.resolve(window.Peer);
+    if (peerLib) return peerLib;
     // Pinned exact version: a floating range would let a compromised registry ship new code.
-    return import('https://esm.sh/mqtt@5.10.1').then(m => (window.__stxMqtt = m.default || m));
+    peerLib = new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = PEERJS_SRC; s.async = true; s.crossOrigin = 'anonymous';
+      s.onload = () => window.Peer ? resolve(window.Peer) : reject(new Error('peerjs'));
+      s.onerror = () => { peerLib = null; reject(new Error('peerjs')); };
+      document.head.appendChild(s);
+    });
+    return peerLib;
   }
   function setSigStatus(msg) { const el = mount.querySelector('#qcStatus'); if (el) el.textContent = msg || ''; }
 
@@ -813,6 +869,9 @@ Views.messenger = function (mount, params) {
       c.kind = 'keyroom'; c.keyEnc = keyEnc;
       delete c.key; delete c.keyText;   // drop any plaintext written by older versions
     }
+    // Opened from a player or staff row: label it now instead of waiting for the
+    // peer to connect and send their own name.
+    if (peer && peer.name && (!c.name || c.name === tx('keyChat'))) c.name = cleanName(peer.name);
     await MDB.put('contacts', c);
     return c;
   }
@@ -825,9 +884,172 @@ Views.messenger = function (mount, params) {
 
   function closeSig() {
     const s = sig; if (!s) return; sig = null; s.done = true;
-    try { clearInterval(s.timer); } catch (e) { }
     try { clearTimeout(s.waitTimer); } catch (e) { }
-    try { if (s.client) s.client.end(true); } catch (e) { }
+    try { clearInterval(s.timer); } catch (e) { }
+  }
+
+  // ---- the handshake that turns "same room" into "same key" ----
+  // AES-GCM is authenticated, so a frame that decrypts is proof the sender holds the
+  // key. Nothing is rendered, stored or answered before that proof arrives.
+  async function sendAuth(kind) {
+    if (!wireKey) return;
+    const blob = await encStr(wireKey, JSON.stringify({
+      hello: kind || 'auth', name: identity.name, fp: localFingerprint(), at: Date.now()
+    }));
+    wsend({ t: 'auth', iv: blob.iv, ct: blob.ct });
+  }
+  // The DTLS fingerprint of our own connection, sent over the encrypted channel so
+  // each side can check the media path really terminates on the peer that has the key.
+  function localFingerprint() {
+    try {
+      const sdp = (pc && pc.localDescription && pc.localDescription.sdp) || '';
+      const m = /a=fingerprint:\S+\s+(\S+)/i.exec(sdp);
+      return m ? m[1] : '';
+    } catch (e) { return ''; }
+  }
+  function remoteFingerprintOf(conn) {
+    try {
+      const p = conn && conn.peerConnection;
+      const sdp = (p && p.remoteDescription && p.remoteDescription.sdp) || '';
+      const m = /a=fingerprint:\S+\s+(\S+)/i.exec(sdp);
+      return m ? m[1] : '';
+    } catch (e) { return ''; }
+  }
+
+  async function setPeerName(nm) {
+    const c = contact(active); if (!c) return;
+    nm = cleanName(nm); if (!nm || c.name === nm) return;
+    c.name = nm;
+    try { await MDB.put('contacts', c); } catch (e) { }
+    const h = mount.querySelector('#convPane h2'); if (h) h.textContent = nm;
+    renderContacts();
+  }
+
+  function markConnected() {
+    if (authed) return;
+    authed = true;
+    setStatus('connected'); toast(tx('connected'), 'success'); setSigStatus('');
+    closeSig();
+    const area = mount.querySelector('#sigArea'); if (area) area.innerHTML = `<p class="conn-ok">✓ ${tx('nowConnected')}</p>`;
+    const d = mount.querySelector('#connDetails'); if (d) d.open = false;
+    updateCallButtons();
+    const input = mount.querySelector('#msgInput'); if (input) input.focus();
+    if (pendingCall) { const k = pendingCall; pendingCall = null; startCall(k); }
+  }
+
+  // ---- data channel ----
+  function attachData(conn) {
+    dataConn = conn;
+    dcContact = active;
+    conn.on('open', async () => {
+      pc = conn.peerConnection || null;
+      if (pc) pc.onconnectionstatechange = () => { if (!authed) setStatus(pc.connectionState); };
+      setSigStatus(tx('verifying'));
+      await sendAuth();
+    });
+    conn.on('data', d => { if (typeof d === 'string') onWire({ data: d }); });
+    conn.on('close', () => { if (dataConn === conn) { authed = false; setStatus('closed'); updateCallButtons(); } });
+    conn.on('error', () => { });
+  }
+
+  // ---- voice / video ----
+  async function ensureLocalMedia(kind) {
+    const wantVideo = kind === 'video';
+    if (localStream && (!wantVideo || localStream.getVideoTracks().length)) return true;
+    // The permission prompt is modal to the browser and can sit there for a while,
+    // so say what is happening instead of looking like nothing was pressed.
+    setSigStatus(tx('askingMedia'));
+    ['#btnVoice', '#btnVideo'].forEach(s => { const b = mount.querySelector(s); if (b) b.disabled = true; });
+    try {
+      const s = await navigator.mediaDevices.getUserMedia({ audio: true, video: wantVideo });
+      if (localStream) localStream.getTracks().forEach(t => t.stop());
+      localStream = s;
+      const lv = mount.querySelector('#localVid');
+      if (lv) { lv.srcObject = s; lv.classList.toggle('hidden', !wantVideo); }
+      showCallArea(true); setSigStatus('');
+      return true;
+    } catch (e) {
+      setSigStatus('');
+      toast(tx(e && e.name === 'NotFoundError' ? 'noCamera' : 'camDenied'), 'error');
+      return false;
+    } finally { updateCallButtons(); }
+  }
+  async function startCall(kind) {
+    if (!dcReady() || !peerObj || !dataConn) return toast(tx('notConnected'), 'error');
+    if (!(await ensureLocalMedia(kind))) return;
+    try {
+      const call = peerObj.call(dataConn.peer, localStream, { metadata: { kind } });
+      attachCall(call, kind);
+      setSigStatus(tx('calling'));
+    } catch (e) { toast(tx('callFailed'), 'error'); }
+  }
+  // A call is only answered for a peer that already proved it holds the key.
+  async function onIncomingCall(call) {
+    if (!authed || !dataConn || call.peer !== dataConn.peer) { try { call.close(); } catch (e) { } return; }
+    const kind = (call.metadata && call.metadata.kind) === 'video' ? 'video' : 'voice';
+    if (!(await ensureLocalMedia(kind))) { try { call.close(); } catch (e) { } return; }
+    try { call.answer(localStream); } catch (e) { return; }
+    attachCall(call, kind);
+  }
+  function attachCall(call, kind) {
+    if (mediaConn && mediaConn !== call) { try { mediaConn.close(); } catch (e) { } }
+    mediaConn = call;
+    call.on('stream', rs => {
+      const rv = mount.querySelector('#remoteVid');
+      if (rv) { rv.srcObject = rs; rv.classList.toggle('audio-only', kind !== 'video' && !rs.getVideoTracks().length); }
+      showCallArea(true); setSigStatus('');
+      checkCallFingerprint(call);
+      updateCallButtons();
+    });
+    call.on('close', () => endCall(false));
+    call.on('error', () => endCall(false));
+  }
+  // The broker introduces the two browsers, so in theory it could introduce the wrong
+  // one. Each side published its own DTLS fingerprint over the encrypted data channel;
+  // if the media path does not present that fingerprint, the call is not the peer.
+  function checkCallFingerprint(call) {
+    const expect = String(sig && sig.peerFp || '');
+    if (!expect) return;
+    const got = remoteFingerprintOf(call);
+    if (got && got.toLowerCase() !== expect.toLowerCase()) {
+      toast(tx('callMitm'), 'error');
+      endCall(true);
+    }
+  }
+  function endCall(closeRemote) {
+    if (mediaConn) { try { if (closeRemote !== false) mediaConn.close(); } catch (e) { } mediaConn = null; }
+    if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
+    const lv = mount.querySelector('#localVid'); if (lv) { lv.srcObject = null; lv.classList.add('hidden'); }
+    const rv = mount.querySelector('#remoteVid'); if (rv) rv.srcObject = null;
+    showCallArea(false);
+    updateCallButtons();
+  }
+  function showCallArea(on) {
+    const ca = mount.querySelector('#callArea'); if (ca) ca.classList.toggle('hidden', !on);
+  }
+  function updateCallButtons() {
+    const on = dcReady();
+    ['#btnVoice', '#btnVideo'].forEach(s => { const b = mount.querySelector(s); if (b) b.disabled = !on; });
+    const end = mount.querySelector('#btnEndCall'); if (end) end.classList.toggle('hidden', !mediaConn);
+    const mic = mount.querySelector('#btnMic');
+    if (mic) {
+      const tr = localStream && localStream.getAudioTracks()[0];
+      mic.classList.toggle('hidden', !tr);
+      if (tr) mic.textContent = tr.enabled ? '🎤 ' + tx('micOn') : '🔇 ' + tx('micOff');
+    }
+    const cam = mount.querySelector('#btnCam');
+    if (cam) {
+      const tr = localStream && localStream.getVideoTracks()[0];
+      cam.classList.toggle('hidden', !tr);
+      if (tr) cam.textContent = tr.enabled ? '🎥 ' + tx('camOn') : '🚫 ' + tx('camOff');
+    }
+    const hang = mount.querySelector('#btnHangup'); if (hang) hang.classList.toggle('hidden', !dataConn && !pc);
+  }
+  function toggleTrack(kind) {
+    const tr = localStream && (kind === 'video' ? localStream.getVideoTracks()[0] : localStream.getAudioTracks()[0]);
+    if (!tr) return;
+    tr.enabled = !tr.enabled;
+    updateCallButtons();
   }
 
   async function keyConnect(keyStr, mode) {
@@ -837,117 +1059,77 @@ Views.messenger = function (mount, params) {
     closeConn();
     setStatus('connecting'); setSigStatus(tx('connectingRelay'));
     const room = await deriveRoom(norm);
-    const sigKey = room.sigKey;
-    const topic = room.topic;
     const c = await ensureKeyroom(room.roomH, keyStr);
     active = c.id; renderContacts(); renderConversation();
     const dfold = mount.querySelector('#connDetails'); if (dfold) dfold.open = true;
     setStatus('connecting'); setSigStatus(tx('connectingRelay'));
 
-    let mqtt;
-    try { mqtt = await loadMqtt(); }
+    let Peer;
+    try { Peer = await loadPeerJs(); }
     catch (e) { toast(tx('relayUnavailable'), 'error'); setSigStatus(tx('relayUnavailable')); return; }
 
-    const myId = rid();
-    const st = { client: null, topic, myId, peerId: null, started: false, done: false, mode, pendingIce: [], timer: null, waitTimer: null };
-    sig = st;
     wireKey = room.msgKey; wireKeys[c.id] = room.msgKey;
+    callMode = mode || 'chat';
+    pendingCall = callMode === 'chat' ? null : callMode;
 
-    const connectVia = idx => new Promise(resolve => {
-      const url = RELAYS[idx]; if (!url) return resolve(null);
-      let settled = false; const finish = v => { if (!settled) { settled = true; resolve(v); } };
-      let client;
-      try { client = mqtt.connect(url, { reconnectPeriod: 0, connectTimeout: 8000 }); }
-      catch (e) { return finish(null); }
-      client.on('connect', () => finish(client));
-      client.on('error', () => { try { client.end(true); } catch (e) { } finish(null); });
-      setTimeout(() => { if (!settled) { try { client.end(true); } catch (e) { } finish(null); } }, 9000);
+    const HOST = 'stx-' + room.peerHex + '-a';
+    const GUEST = 'stx-' + room.peerHex + '-b';
+    const st = { done: false, peerFp: '', waitTimer: null };
+    sig = st;
+
+    // Claim the room address; whoever loses the race dials the winner instead.
+    const openPeer = id => new Promise(resolve => {
+      let p, settled = false;
+      const fin = v => { if (!settled) { settled = true; resolve(v); } };
+      try { p = id ? new Peer(id, { config: ICE, debug: 0 }) : new Peer({ config: ICE, debug: 0 }); }
+      catch (e) { return fin(null); }
+      p.on('open', () => fin(p));
+      p.on('error', () => { if (!settled) { try { p.destroy(); } catch (e) { } fin(null); } });
+      setTimeout(() => { if (!settled) { try { p.destroy(); } catch (e) { } fin(null); } }, 12000);
     });
 
-    let client = await connectVia(0);
-    if (!client && !st.done) client = await connectVia(1);
-    if (st.done) { try { if (client) client.end(true); } catch (e) { } return; }
-    if (!client) { toast(tx('relayUnavailable'), 'error'); setSigStatus(tx('relayUnavailable')); if (sig === st) sig = null; return; }
-    st.client = client;
+    let me = await openPeer(HOST);
+    let role = 'host';
+    if (!me && !st.done) { me = await openPeer(GUEST); role = 'guest'; }
+    if (!me && !st.done) { me = await openPeer(null); role = 'guest'; }   // third device: random address
+    if (st.done) { try { if (me) me.destroy(); } catch (e) { } return; }
+    if (!me) { toast(tx('relayUnavailable'), 'error'); setSigStatus(tx('relayUnavailable')); if (sig === st) sig = null; return; }
 
-    const pub = obj => encStr(sigKey, JSON.stringify(obj)).then(blob => { try { client.publish(topic, JSON.stringify(blob)); } catch (e) { } });
-    const flushIce = async () => { const q = st.pendingIce.splice(0); for (const cand of q) { try { await pc.addIceCandidate(cand); } catch (e) { } } };
-    const setPeerName = async nm => { nm = cleanName(nm); if (!nm || c.name === nm) return; c.name = nm; try { await MDB.put('contacts', c); } catch (e) { } const h = mount.querySelector('#convPane h2'); if (h) h.textContent = nm; renderContacts(); };
-
-    const startInitiator = async () => {
-      if (st.started || pc) return; st.started = true; clearTimeout(st.waitTimer); setSigStatus(tx('connectingRelay'));
-      pc = newPC(); wireKey = room.msgKey;
-      pc.onicecandidate = e => { if (e.candidate && st.peerId) pub({ k: 'ice', from: myId, to: st.peerId, cand: e.candidate.toJSON() }); };
-      setupDC(pc.createDataChannel('chat'));
-      await addLocalMedia(mode);
-      const offer = await pc.createOffer(); await pc.setLocalDescription(offer);
-      pub({ k: 'offer', from: myId, to: st.peerId, name: identity.name, mode, sdp: offer.sdp });
-    };
-    const startAnswerer = async offerObj => {
-      if (st.started || pc) return; st.started = true; clearTimeout(st.waitTimer); setSigStatus(tx('connectingRelay'));
-      pc = newPC(); wireKey = room.msgKey;
-      pc.onicecandidate = e => { if (e.candidate && st.peerId) pub({ k: 'ice', from: myId, to: st.peerId, cand: e.candidate.toJSON() }); };
-      pc.ondatachannel = e => setupDC(e.channel);
-      await addLocalMedia(offerObj.mode || mode);
-      try { await pc.setRemoteDescription({ type: 'offer', sdp: offerObj.sdp }); } catch (e) { return; }
-      await flushIce();
-      const ans = await pc.createAnswer(); await pc.setLocalDescription(ans);
-      pub({ k: 'answer', from: myId, to: st.peerId, name: identity.name, sdp: ans.sdp });
-    };
-
-    // Anyone holding the key can publish to the topic, so the session locks onto the
-    // first peer seen and refuses every frame that is malformed or from a third party.
-    const handle = async obj => {
-      if (!obj || st.done) return;
-      if (typeof obj.from !== 'string' || !obj.from || obj.from.length > 64 || obj.from === myId) return;
-      if (obj.k === 'hello') {
-        if (!st.peerId) { st.peerId = obj.from; pub({ k: 'hello', from: myId }); if (myId < st.peerId) startInitiator(); }
-        return;
-      }
-      if (st.peerId && obj.from !== st.peerId) return;
-      if (obj.to && obj.to !== myId) return;
-      if (obj.k === 'offer') {
-        if (typeof obj.sdp !== 'string' || obj.sdp.length > LIMITS.sdp) return;
-        if (!st.peerId) st.peerId = obj.from;
-        if (myId < st.peerId) return; // I am the initiator — ignore stray offers
-        setPeerName(obj.name);
-        startAnswerer(obj);
-      } else if (obj.k === 'answer') {
-        if (typeof obj.sdp !== 'string' || obj.sdp.length > LIMITS.sdp) return;
-        if (pc && pc.signalingState === 'have-local-offer') { try { await pc.setRemoteDescription({ type: 'answer', sdp: obj.sdp }); await flushIce(); setPeerName(obj.name); } catch (e) { } }
-      } else if (obj.k === 'ice') {
-        const cand = obj.cand;
-        if (!cand || typeof cand !== 'object' || typeof cand.candidate !== 'string' || cand.candidate.length > 512) return;
-        if (pc && pc.remoteDescription && pc.remoteDescription.type) { try { await pc.addIceCandidate(cand); } catch (e) { } }
-        else if (st.pendingIce.length < LIMITS.ice) st.pendingIce.push(cand);
-      }
-    };
-
-    client.on('message', async (t, payload) => {
-      if (t !== topic) return;
-      const raw = payload.toString(); if (raw.length > LIMITS.relay) return;
-      let outer; try { outer = JSON.parse(raw); } catch (e) { return; }
-      if (!outer || typeof outer.iv !== 'string' || typeof outer.ct !== 'string') return;
-      let obj; try { obj = JSON.parse(await decStr(sigKey, outer.iv, outer.ct)); } catch (e) { return; }
-      handle(obj);
+    peerObj = me;
+    me.on('error', () => { });
+    me.on('disconnected', () => { try { if (!st.done) me.reconnect(); } catch (e) { } });
+    me.on('connection', conn => {
+      if (dataConn && dataConn.open) { try { conn.close(); } catch (e) { } return; }  // one peer per room
+      attachData(conn);
     });
-    client.on('error', () => { });
-    client.subscribe(topic, () => { pub({ k: 'hello', from: myId }); setSigStatus(tx('waitingPeer')); });
+    me.on('call', onIncomingCall);
 
-    st.timer = setInterval(() => {
-      if (!sig || sig !== st || st.done) { clearInterval(st.timer); return; }
-      if (pc && pc.connectionState === 'connected') { clearInterval(st.timer); closeSig(); }
-    }, 800);
-    st.waitTimer = setTimeout(() => { if (sig === st && !st.started) { setSigStatus(tx('noPeerYet')); closeSig(); } }, 120000);
+    if (role === 'host') {
+      setSigStatus(tx('waitingPeer'));
+    } else {
+      setSigStatus(tx('connectingRelay'));
+      try { attachData(me.connect(HOST, { reliable: true })); }
+      catch (e) { toast(tx('relayUnavailable'), 'error'); setSigStatus(tx('relayUnavailable')); return; }
+    }
+    // Two minutes is long enough for the other person to open the app; after that the
+    // rendezvous is dropped rather than left holding an address forever.
+    st.waitTimer = setTimeout(() => {
+      if (sig === st && !authed) { setSigStatus(tx('noPeerYet')); closeSig(); }
+    }, 120000);
   }
 
   function closeConn() {
     closeSig();
+    endCall(true);
+    try { if (dataConn) dataConn.close(); } catch (e) { }
+    try { if (peerObj) peerObj.destroy(); } catch (e) { }
     try { if (dc) dc.close(); } catch (e) { }
-    try { if (pc) pc.close(); } catch (e) { }
+    try { if (pc && pc.close) pc.close(); } catch (e) { }
     if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
+    dataConn = null; peerObj = null; mediaConn = null; authed = false; pendingCall = null;
     dc = null; pc = null; wireKey = null; dcContact = null;
     for (const k of Object.keys(incoming)) delete incoming[k];
+    updateCallButtons();
     const ca = mount.querySelector('#callArea'); if (ca) ca.classList.add('hidden');
   }
 
@@ -959,6 +1141,21 @@ Views.messenger = function (mount, params) {
     if (!m || typeof m.t !== 'string' || !wireKey) return;
     const cid = dcContact || active; if (!cid) return;
     const b64 = v => typeof v === 'string' && v.length <= LIMITS.chunk && /^[A-Za-z0-9+/=]*$/.test(v);
+
+    // The handshake comes first: a frame that decrypts under the shared key is proof
+    // the sender has it. Until one arrives nothing else on the wire is looked at.
+    if (m.t === 'auth') {
+      if (!b64(m.iv) || !b64(m.ct)) return;
+      let p; try { p = JSON.parse(await decStr(wireKey, m.iv, m.ct)); } catch (e) { return; }
+      if (!p || typeof p !== 'object') return;
+      if (sig) sig.peerFp = typeof p.fp === 'string' ? p.fp.slice(0, 200) : '';
+      setPeerName(p.name);
+      const first = !authed;
+      markConnected();
+      if (first && p.hello !== 'ack') sendAuth('ack');   // answer once, never in a loop
+      return;
+    }
+    if (!authed) return;
 
     if (m.t === 'msg') {
       if (!b64(m.iv) || !b64(m.ct)) return;
@@ -1002,7 +1199,7 @@ Views.messenger = function (mount, params) {
     const text = cleanText(input.value.trim()); if (!text) return;
     if (!dcReady()) return toast(tx('notConnected'), 'error');
     const blob = await encStr(wireKey, JSON.stringify({ text }));
-    dc.send(JSON.stringify({ t: 'msg', iv: blob.iv, ct: blob.ct }));
+    wsend({ t: 'msg', iv: blob.iv, ct: blob.ct });
     input.value = '';
     addBubble({ dir: 'out', kind: 'text', text, ts: Date.now() });
     persistMsg(active, 'out', { kind: 'text', text });
@@ -1017,9 +1214,9 @@ Views.messenger = function (mount, params) {
     const data = b64enc(ct); const id = rid(); const CH = 16000;
     const chunks = Math.ceil(data.length / CH);
     const name = safeFileName(file.name), mime = safeMime(file.type);
-    dc.send(JSON.stringify({ t: 'file-begin', id, name, mime, size: file.size, iv: b64enc(iv), chunks }));
-    for (let i = 0, seq = 0; i < data.length; i += CH, seq++) dc.send(JSON.stringify({ t: 'file-chunk', id, seq, data: data.slice(i, i + CH) }));
-    dc.send(JSON.stringify({ t: 'file-end', id }));
+    wsend({ t: 'file-begin', id, name, mime, size: file.size, iv: b64enc(iv), chunks });
+    for (let i = 0, seq = 0; i < data.length; i += CH, seq++) wsend({ t: 'file-chunk', id, seq, data: data.slice(i, i + CH) });
+    wsend({ t: 'file-end', id });
     const url = trackUrl(URL.createObjectURL(file));
     addBubble({ dir: 'out', kind: 'file', name, mime, size: file.size, url, ts: Date.now() });
     persistMsg(active, 'out', { kind: 'file', name, mime, size: file.size });

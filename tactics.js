@@ -1643,7 +1643,7 @@ Views.tactics = function (mount) {
     };
   }
   // Hand one saved animation to the squad: a file the players import, the clip
-  // itself, or a mail/SMS that tells them it is on the way.
+  // itself, or a chat/mail that tells them it is on the way.
   function shareSystem(id) {
     const s = Store.find('tactics', id);
     if (!s) return;
@@ -1660,7 +1660,7 @@ Views.tactics = function (mount) {
       footer: `<button class="btn ghost" data-close2>${T('common.close')}</button>
         <button class="btn" data-file>${T('tactics.animShareFile')}</button>
         ${clips.length ? `<button class="btn" data-clip>${T('tactics.animShareClip')}</button>` : ''}
-        <button class="btn" data-sms>📱 ${T('sms.title')}</button>
+        <button class="btn" data-chat>💬 ${T('chat.title')}</button>
         <button class="btn primary" data-mail>✉ ${T('mail.title')}</button>`,
       onOpen: (m, close) => {
         m.querySelector('[data-close2]').onclick = close;
@@ -1689,7 +1689,7 @@ Views.tactics = function (mount) {
           }
           UI.toast(T('tactics.recExported'), 'success');
         };
-        m.querySelector('[data-sms]').onclick = () => { close(); SMS.compose({ players, text: note, title: T('sms.title') + ' — ' + s.name }); };
+        m.querySelector('[data-chat]').onclick = () => { close(); App.go('messenger', { from: 'tactics', draft: note }); };
         m.querySelector('[data-mail]').onclick = () => { close(); MAIL.compose({ players, subject: s.name, text: note, title: T('mail.title') + ' — ' + s.name }); };
       }
     });

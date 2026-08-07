@@ -4,6 +4,16 @@ const App = (() => {
   let cleanup = null;
   let currentSport = 'handball';
   const ROUTES = ['dashboard', 'teams', 'matches', 'scouting', 'statistics', 'tactics', 'video', 'training', 'opponents', 'reports', 'settings'];
+  // A strength discipline has no court to draw on, so only the board is dropped.
+  const SOLO_SPORTS = ['crossfit', 'bodybuilding'];
+  const SOLO_ROUTES = ROUTES.filter(r => r !== 'tactics');
+  const routesFor = id => SOLO_SPORTS.indexOf(id) >= 0 ? SOLO_ROUTES : ROUTES;
+  function applyNav() {
+    const allow = routesFor(currentSport);
+    document.querySelectorAll('.nav-item[data-route]').forEach(n => {
+      n.classList.toggle('hidden', allow.indexOf(n.dataset.route) < 0);
+    });
+  }
 
   // ---- Donations -------------------------------------------------------
   const PAYPAL_SDK = 'https://www.paypalobjects.com/donate/sdk/donate-sdk.js';
@@ -56,6 +66,10 @@ const App = (() => {
 
   function go(route, params) {
     if (!Views[route]) route = 'dashboard';
+    // Never land on a module this sport does not have; 'messenger' is not in
+    // ROUTES and is reachable from any sport, so it is left alone.
+    const allow = routesFor(currentSport);
+    if (ROUTES.indexOf(route) >= 0 && allow.indexOf(route) < 0) route = allow[0];
     if (cleanup) { try { cleanup(); } catch (e) {} cleanup = null; }
     currentRoute = route;
     document.querySelectorAll('.nav-item').forEach(n => n.classList.toggle('active', n.dataset.route === route));
@@ -94,6 +108,7 @@ const App = (() => {
     currentSport = id;
     Store.setSetting('sport', id);
     updateSportPickerSelection();
+    applyNav();
     populateTeamPicker();
     if (!silent) { render(); UI.toast(T('sport.changed') + ': ' + SPORTS.name(id, I18N.getLang()), 'success'); }
   }
@@ -225,7 +240,7 @@ const App = (() => {
       if (e.target.matches('input,textarea,select')) { if (e.key === 'Escape') e.target.blur(); return; }
       if (e.key === '/') { e.preventDefault(); gs.focus(); }
       else if (e.key === 'Escape') { toggleSportMenu(false); const h = document.getElementById('modalHost'); if (!h.classList.contains('hidden') && !h.hasAttribute('data-locked')) { h.classList.add('hidden'); h.innerHTML = ''; } }
-      else if (/^[1-9]$/.test(e.key)) { const r = ROUTES[+e.key - 1]; if (r) go(r); }
+      else if (/^[1-9]$/.test(e.key)) { const r = routesFor(currentSport)[+e.key - 1]; if (r) go(r); }
     });
   }
 
@@ -242,6 +257,7 @@ const App = (() => {
     await Store.purgeDemoPlayers();
     await Store.installDefaultDrills();
     await Store.repairDrillLinks();
+    await Store.installStrengthDrills();
     const theme = await Store.getSetting('theme', 'dark');
     setTheme(theme);
     const lang = await Store.getSetting('lang', 'en');
@@ -256,6 +272,7 @@ const App = (() => {
     await Store.stampTeamScope();
     populateSportPicker();
     populateTeamPicker();
+    applyNav();
     bindChrome();
     startAutosave();
     go('dashboard');

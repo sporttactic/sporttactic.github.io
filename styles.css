@@ -612,8 +612,10 @@ body.board-fs { overflow: hidden; }
 .composer input[type=text] { flex: 1; }
 .safety-num { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 13px; letter-spacing: .5px; word-break: break-word; background: var(--surface-2); padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border); }
 .conn-code { width: 100%; min-height: 64px; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 11px; resize: vertical; }
-.call-area { display: flex; gap: 10px; flex-wrap: wrap; margin: 10px 0; }
+.call-area { display: flex; gap: 10px; flex-wrap: wrap; margin: 10px 0; align-items: flex-start; }
 .call-area video { width: 240px; max-width: 46%; background: #000; border-radius: 10px; }
+.call-area video.audio-only { height: 64px; }
+.call-bar { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; flex: 1 1 100%; }
 .conn-step { background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 12px; }
 .conn-step .step { display: flex; align-items: flex-start; gap: 8px; margin: 0 0 10px; font-size: 14px; line-height: 1.35; }
 .conn-step .num { flex: 0 0 22px; width: 22px; height: 22px; border-radius: 50%; background: var(--primary); color: var(--on-primary); display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; }
@@ -874,21 +876,39 @@ td.col-num .cell, td.col-h .cell, td.col-w .cell { max-width: 92px; }
 /* ---- Max-test rows (Personal training) ---- */
 .test-row { display: grid; grid-template-columns: 2fr 1fr 1fr .8fr auto; gap: 6px; margin-bottom: 6px; align-items: center; }
 
-/* ---- SMS dialog ---- */
-.sms-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
-.sms-list {
-  max-height: 230px; overflow: auto; border: 1px solid var(--border);
-  border-radius: 10px; padding: 6px; margin-bottom: 12px; background: var(--surface-2);
-}
-.sms-row { display: flex; align-items: center; gap: 10px; padding: 7px 8px; border-radius: 8px; cursor: pointer; }
-.sms-row:hover { background: var(--surface); }
-.sms-row + .sms-row { border-top: 1px solid var(--border); }
-.sms-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sms-num { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
-
 /* ---- Mail dialog ---- */
 .mail-picker { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 4px 12px; margin-bottom: 12px; }
 .mail-picker .check-row { margin: 0; }
+.mailsrv-h { margin: 18px 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.send-mode { margin-top: 4px; }
+.code-block {
+  margin: 10px 0 0; padding: 12px; max-height: 320px; overflow: auto;
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px; line-height: 1.5; white-space: pre; color: var(--text);
+}
+.pick-list {
+  max-height: 230px; overflow: auto; border: 1px solid var(--border);
+  border-radius: 10px; padding: 6px; margin-bottom: 12px; background: var(--surface-2);
+}
+.pick-row { display: flex; align-items: center; gap: 10px; padding: 7px 8px; border-radius: 8px; cursor: pointer; }
+.pick-row:hover { background: var(--surface); }
+.pick-row + .pick-row { border-top: 1px solid var(--border); }
+.pick-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pick-sub { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+
+/* ---- Live scouting: strength set logger (scouting.js) ---- */
+.set-input { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+.stepper { display: flex; gap: 6px; align-items: stretch; }
+.stepper > input { flex: 1 1 auto; min-width: 0; text-align: center; font-size: 18px; font-variant-numeric: tabular-nums; }
+.stepper > .btn { flex: 0 0 46px; font-size: 20px; line-height: 1; }
+.big-log { width: 100%; min-height: 52px; font-size: 17px; }
+
+.mail-note { border-left: 3px solid var(--warning); background: var(--surface-2); padding: 8px 10px; border-radius: 6px; margin: 0 0 10px; }
+
+.combo { display: flex; gap: 6px; align-items: stretch; }
+.combo > input { flex: 1 1 auto; min-width: 0; }
+.combo > select { flex: 0 1 44%; min-width: 0; }
 
 /* ---- Team switcher (Teams & Players) ---- */
 .team-bar { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; }
@@ -899,5 +919,5 @@ td.col-num .cell, td.col-h .cell, td.col-w .cell { max-width: 92px; }
 @media (pointer: coarse) {
   .cell { font-size: 16px; }  /* iOS won't zoom the page at >=16px */
   .test-row { grid-template-columns: 1fr 1fr; }
-  .sms-row { padding: 11px 8px; }
+  .pick-row { padding: 11px 8px; }
 }

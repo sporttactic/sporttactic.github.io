@@ -46,7 +46,7 @@ Views.statistics = function (mount) {
               <td>${s.saves}</td>
               <td><span class="tag ${s.rating >= 7 ? 'green' : s.rating >= 5 ? 'amber' : 'red'}">${s.rating}</span></td>
               <td style="white-space:nowrap">
-                <button class="btn sm" data-sms="${p.id}" title="${UI.esc(T('sms.title'))}">📱</button>
+                <button class="btn sm" data-chat="${p.id}" title="${UI.esc(T('chat.title'))}">💬</button>
                 <button class="btn sm" data-aip="${p.id}" title="${UI.esc(T('stats.aiPlayer'))}">🤖 ${T('stats.aiTrain')}</button></td>
             </tr>`).join('') || `<tr><td colspan="11" class="empty">${T('common.noData')}</td></tr>`}
         </tbody>
@@ -58,24 +58,21 @@ Views.statistics = function (mount) {
     <div class="page-head"><div><h1>${T('stats.title')}</h1><p>${T('stats.subtitle')}</p></div></div>
     ${UI.acc('statSeason', T('stats.season'), cards)}
     ${UI.acc('statBoard', T('stats.leaderboard'), board, {
-    actions: `<button class="btn sm" id="smsBoard">📱 ${T('sms.title')}</button>`
+    actions: `<button class="btn sm" id="chatBoard">💬 ${T('chat.title')}</button>`
   })}`;
 
   UI.bindAcc(mount);
   AI.bind(mount);
 
-  // Text the squad the numbers they just produced.
-  mount.querySelector('#smsBoard').onclick = () => SMS.compose({
-    players, title: T('sms.title') + ' — ' + T('stats.leaderboard')
-  });
-  mount.querySelectorAll('[data-sms]').forEach(b => b.onclick = () => {
-    const p = Store.find('players', b.dataset.sms);
+  // Talk the squad through the numbers they just produced.
+  mount.querySelector('#chatBoard').onclick = () => App.go('messenger', { from: 'statistics' });
+  mount.querySelectorAll('[data-chat]').forEach(b => b.onclick = () => {
+    const p = Store.find('players', b.dataset.chat);
     if (!p) return;
     const s = Store.playerStats(p.id);
-    SMS.compose({
-      players: [p],
-      title: T('sms.title') + ' — ' + (p.firstName + ' ' + p.lastName).trim(),
-      text: `${p.firstName}: ${s.goals} ${T('sms.goals')} / ${s.attempts} (${s.shotPct}%), ${s.assists} ${T('sms.assists')}, ${T('sms.rating')} ${s.rating}.`
+    App.go('messenger', {
+      playerId: p.id, playerName: (p.firstName + ' ' + p.lastName).trim(), memberStore: 'players', from: 'statistics',
+      draft: `${p.firstName}: ${s.goals} ${T('stat.goals')} / ${s.attempts} (${s.shotPct}%), ${s.assists} ${T('stat.assists')}, ${T('stat.mvpRating')} ${s.rating}.`
     });
   });
 
