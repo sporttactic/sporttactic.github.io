@@ -3,11 +3,23 @@ const App = (() => {
   let currentRoute = 'dashboard';
   let cleanup = null;
   let currentSport = 'handball';
-  const ROUTES = ['dashboard', 'teams', 'matches', 'scouting', 'statistics', 'tactics', 'video', 'training', 'opponents', 'reports', 'settings'];
+  const ROUTES = ['dashboard', 'teams', 'matches', 'planner', 'scouting', 'statistics', 'tactics', 'video', 'training', 'opponents', 'reports', 'settings'];
   // A strength discipline has no court to draw on, so only the board is dropped.
   const SOLO_SPORTS = ['crossfit', 'bodybuilding'];
   const SOLO_ROUTES = ROUTES.filter(r => r !== 'tactics');
-  const routesFor = id => SOLO_SPORTS.indexOf(id) >= 0 ? SOLO_ROUTES : ROUTES;
+  // The coach picks which modules to see; Settings can never be hidden, or the
+  // list could not be reached again. Cached because applyNav/go are synchronous.
+  const ALWAYS_ON = ['settings'];
+  let menuHidden = [];
+  const menuOff = r => ALWAYS_ON.indexOf(r) < 0 && menuHidden.indexOf(r) >= 0;
+  const routesFor = id => (SOLO_SPORTS.indexOf(id) >= 0 ? SOLO_ROUTES : ROUTES).filter(r => !menuOff(r));
+  function getMenuHidden() { return menuHidden.slice(); }
+  function setMenuHidden(list) {
+    menuHidden = (list || []).filter(r => ROUTES.indexOf(r) >= 0 && ALWAYS_ON.indexOf(r) < 0);
+    Store.setSetting('menuHidden', menuHidden);
+    applyNav();
+    if (routesFor(currentSport).indexOf(currentRoute) < 0) go(currentRoute);
+  }
   function applyNav() {
     const allow = routesFor(currentSport);
     document.querySelectorAll('.nav-item[data-route]').forEach(n => {
@@ -255,9 +267,7 @@ const App = (() => {
     await Store.loadAll();
     await Store.seedIfEmpty();
     await Store.purgeDemoPlayers();
-    await Store.installDefaultDrills();
-    await Store.repairDrillLinks();
-    await Store.installStrengthDrills();
+    await Store.purgeSeedDrills();
     const theme = await Store.getSetting('theme', 'dark');
     setTheme(theme);
     const lang = await Store.getSetting('lang', 'en');
@@ -266,6 +276,8 @@ const App = (() => {
     document.getElementById('roleBadge').textContent = T('role.' + role) || role;
     setSound(await Store.getSetting('sound', true));
     currentSport = await Store.getSetting('sport', 'handball');
+    const hidden = await Store.getSetting('menuHidden', []);
+    menuHidden = Array.isArray(hidden) ? hidden.filter(r => ROUTES.indexOf(r) >= 0) : [];
     // Players registered before squads became sport-bound keep the sport in use.
     await Store.stampSquadSport(currentSport);
     // Rows made before teams were separated are handed to the first team.
@@ -275,10 +287,11 @@ const App = (() => {
     applyNav();
     bindChrome();
     startAutosave();
+    if (window.AUTOBK) AUTOBK.start();   // unattended backups, if the coach turned them on
     go('dashboard');
   }
 
-  return { go, render, setTheme, setLang, getSport, setSport, populateTeamPicker, boot };
+  return { go, render, setTheme, setLang, getSport, setSport, populateTeamPicker, boot, ROUTES, getMenuHidden, setMenuHidden };
 })();
 
 // Expose globally so view modules (tactics, matches, …) can read/switch the

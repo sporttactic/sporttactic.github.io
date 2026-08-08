@@ -237,7 +237,7 @@ const MAIL = (() => {
           <input id="ms_ejkey" autocomplete="off" spellcheck="false" value="${esc(s.ejKey)}" placeholder="AbCdEfGhIjKlMnOp">
           <span class="hint">${esc(t('mailsrv.ejHint', 'All three come from emailjs.com — Email Services, Email Templates and Account. The public key is not a secret; EmailJS blocks every site except the ones you allow.'))}</span></label>
         <label class="field"><span>${esc(t('mailsrv.address', 'Your e-mail address'))}</span>
-          <input id="ms_addr" type="email" autocomplete="off" spellcheck="false" value="${esc(s.addr)}" placeholder="traener@klub.dk">
+          <input id="ms_addr" type="email" autocomplete="off" spellcheck="false" value="${esc(s.addr)}" placeholder="${esc(T('teams.coachEmailPh'))}">
           <span class="hint">${esc(t('mailsrv.addrHint', 'Set as reply-to on every mail, so a player answering writes back to you. The test below is sent here.'))}</span></label>
         <p class="hint mail-note">${esc(t('mailsrv.ejToNote', 'In the EmailJS template, the To Email field must contain {{to_email}} — nothing else. If it holds your own address, every mail is sent to you instead of to the player.'))}</p>`,
       footer: `<button class="btn ghost" data-close2>${esc(T('common.cancel'))}</button>

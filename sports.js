@@ -841,6 +841,9 @@ const SPORTS = (() => {
     const hasBall = full.some(o => o.kind === 'ball');
     const atk = full.filter(o => o.kind === 'player' && o.team === 'atk');
     const def = full.filter(o => o.kind === 'player' && o.team === 'def');
+    // Chess pieces, darts, cue balls… nothing to re-lay out — keep the board as it is
+    // instead of handing back an empty court.
+    if (!atk.length && !def.length) return full;
     const spread = (n, x0, x1) => {
       const out = []; if (n <= 0) return out;
       if (n === 1) { out.push((x0 + x1) / 2); return out; }
@@ -976,7 +979,13 @@ const SPORTS = (() => {
     crossfit: ['Strength', 'Olympic Lifting', 'Gymnastics', 'Metcon', 'Conditioning', 'Mobility', 'Recovery'],
     bodybuilding: ['Chest', 'Back', 'Shoulders', 'Arms', 'Legs', 'Core', 'Cardio', 'Mobility', 'Recovery']
   };
-  function exerciseCategories(id) { return EXCATS[id] || EXCATS.handball; }
+  // Physical work belongs in every discipline, so it is appended here instead of
+  // being repeated in all 20 lists.
+  const EXTRA_EXCATS = ['Physical'];
+  function exerciseCategories(id) {
+    const own = EXCATS[id] || EXCATS.handball;
+    return own.concat(EXTRA_EXCATS.filter(c => own.indexOf(c) < 0));
+  }
 
   // Typical opponent formations / playing styles per sport.
   const OPP_FORMATIONS = {

@@ -4,6 +4,8 @@ window.Views = window.Views || {};
 Views.tactics = function (mount) {
   document.body.classList.remove('board-fs');   // clear a stale CSS-fullscreen lock
   const BOARD_COLORS = ['#ffd400', '#ff3b30', '#34c759', '#0a84ff', '#ffffff', '#0b1220'];
+  // CrossFit and bodybuilding have no court, so the board is not offered for them.
+  const BOARD_SPORTS = SPORTS.LIST.filter(s => ['crossfit', 'bodybuilding'].indexOf(s.id) < 0);
   let tool = 'select';
   let color = '#ffd400';
   let current;
@@ -33,6 +35,7 @@ Views.tactics = function (mount) {
   let propPaint = null;    // colour for training props, independent of the drawing colour
   let showFacing = true;   // draw the player orientation arrows (sidebar toggle)
   let ballMagnet = true;   // snap the ball to the selected player while dragging (sidebar toggle)
+  let ballMagnetDef = false; // also snap the ball to a red (defence) player being dragged
   const HOLD_MS = 380;     // press duration counted as a long-press (auto-select)
   // A fingertip is far less precise than a mouse, so touch devices get a wider
   // slop before a press counts as a drag and bigger pick radii.
@@ -41,9 +44,22 @@ Views.tactics = function (mount) {
   const PICK_R = COARSE ? 6.5 : 4;       // percent radius for hitting an object
   const PICK_SHAPE_R = COARSE ? 5.5 : 3.5; // percent distance for hitting a drawn shape
   const BALL_SPEEDS = { slow: 0.5, medium: 1, fast: 2 };  // ball-flight speed multipliers
+  const PLAYER_SPEEDS = { slow: 0.5, medium: 1, fast: 2 }; // how fast players walk between frames
+  const COURT_SIZES = [0.7, 0.85, 1, 1.15, 1.3];
+  const AUTO_STEP = 4;     // percent of movement between two sampled points of a recorded drag
+  const FRAME_MS = 1200;   // one pose to the next while playing: tween, then hold
+  const TWEEN_MS = 400;
+  const FLOW_MS = 90;      // a sampled point of a recorded drag — runs straight into the next
   const FACE_RADIUS = 16;  // percent: drag a player this close to an opponent to auto-face them
   let ballSpeed = 'medium';                               // slow | medium | fast
+  let playerSpeed = 'medium';                             // slow | medium | fast
+  let courtScale = 1;      // court size chosen by the coach, on top of the fitted size
   try { ballSpeed = localStorage.getItem('tacticsBallSpeed') || 'medium'; } catch (e) { }
+  try { playerSpeed = localStorage.getItem('tacticsPlayerSpeed') || 'medium'; } catch (e) { }
+  try {
+    const cs = parseFloat(localStorage.getItem('tacticsCourtSize'));
+    if (COURT_SIZES.indexOf(cs) >= 0) courtScale = cs;
+  } catch (e) { }
 
   // ---------- Sound (single instance: reset & replay, never overlap) ----------
   const Sfx = (() => {
@@ -154,7 +170,7 @@ Views.tactics = function (mount) {
       <div class="tool-panel card">
         <h3>${T('tactics.sport')}</h3>
         <div class="tool-group sport-group" id="sports">
-          ${SPORTS.LIST.map(s => `<div class="tool-btn sport-btn ${s.id === sportId ? 'active' : ''}" data-sport="${s.id}" title="${SPORTS.name(s.id, I18N.getLang())}">${s.icon}</div>`).join('')}
+          ${BOARD_SPORTS.map(s => `<div class="tool-btn sport-btn ${s.id === sportId ? 'active' : ''}" data-sport="${s.id}" title="${SPORTS.name(s.id, I18N.getLang())}">${s.icon}</div>`).join('')}
         </div>
         <div id="normalTools">
           <h3 style="margin-top:12px">${T('tactics.tools')}</h3>
@@ -180,8 +196,22 @@ Views.tactics = function (mount) {
               <button class="btn sm" data-speed="medium">${T('tactics.speedMedium')}</button>
               <button class="btn sm" data-speed="fast">${T('tactics.speedFast')}</button>
             </div>
+            <h3 style="margin:10px 0 6px">${T('tactics.pspeed')}</h3>
+            <div class="tool-group" id="pspeedGroup">
+              <button class="btn sm" data-pspeed="slow">${T('tactics.speedSlow')}</button>
+              <button class="btn sm" data-pspeed="medium">${T('tactics.speedMedium')}</button>
+              <button class="btn sm" data-pspeed="fast">${T('tactics.speedFast')}</button>
+            </div>
+            <p class="hint">${T('tactics.pspeedHint')}</p>
           </div>
           <button class="btn sm danger" id="clearShapes" style="margin-top:8px">${T('tactics.eraseTools')}</button>
+          <div id="courtSizeWrap" style="margin-top:12px">
+            <h3 style="margin:0 0 6px">${T('tactics.courtSize')}</h3>
+            <select id="courtSizeSel">
+              ${COURT_SIZES.map(v => `<option value="${v}" ${v === courtScale ? 'selected' : ''}>${v === 1 ? T('tactics.sizeFit') : Math.round(v * 100) + '%'}</option>`).join('')}
+            </select>
+            <p class="hint">${T('tactics.courtSizeHint')}</p>
+          </div>
           <div id="courtModeWrap" class="hidden" style="margin-top:12px">
             <h3 style="margin:0 0 6px">${T('tactics.court')}</h3>
             <select id="courtModeSel">
@@ -200,9 +230,8 @@ Views.tactics = function (mount) {
       </div>
       <div class="board-stage">
         <div class="stage-row">
-          <div class="timeline" id="timeline"></div>
-          <canvas id="tacticalCanvas" width="700" height="560"></canvas>
-          <div class="frames-anim" id="framesAnim">
+          <div class="board-side" id="boardSide">
+            <div class="frames-anim" id="framesAnim">
             <h3>${T('tactics.frames')}</h3>
             <div class="tool-group">
               <button class="btn sm" id="playAnim">▶ ${T('tactics.play')}</button>
@@ -213,12 +242,21 @@ Views.tactics = function (mount) {
             <select class="anim-select" id="animList" size="6" aria-label="${T('tactics.savedAnims')}"></select>
             <div class="tool-group anim-acts">
               <button class="btn sm" id="animLoad" disabled>↺ ${T('tactics.animLoad')}</button>
+              <button class="btn sm" id="animEdit" disabled title="${T('tactics.animEdit')}">✎</button>
               <button class="btn sm" id="animShare" disabled title="${T('tactics.animShare')}">📤</button>
               <button class="btn sm" id="animVideo" disabled title="${T('tactics.animPlayVideo')}">▶</button>
               <button class="btn sm danger" id="animDel" disabled title="${T('common.delete')}">✕</button>
             </div>
             <div><span id="recDot" class="rec-dot hidden">REC <span id="recTime">0:00</span> · <span id="frameCount">0</span> ${T('tactics.framesCaptured')}</span></div>
             <div id="recExport" class="rec-export hidden"></div>
+            <div id="clipWrap">
+              <h4 class="anim-head">${T('tactics.exportClip')}</h4>
+              <div class="tool-group">
+                <button class="btn sm" id="expWebm">⬇ WebM</button>
+                <button class="btn sm" id="expMp4">⬇ MP4</button>
+              </div>
+              <p class="hint">${T('tactics.exportClipHint')}</p>
+            </div>
             <div id="facingWrap">
               <h4 class="anim-head">${T('tactics.facing')}</h4>
               <label class="check-row"><input type="checkbox" id="facingToggle" checked><span>${T('tactics.facingShow')}</span></label>
@@ -235,14 +273,19 @@ Views.tactics = function (mount) {
             <div id="magnetWrap">
               <h4 class="anim-head">${T('tactics.magnet')}</h4>
               <label class="check-row"><input type="checkbox" id="magnetToggle" checked><span>${T('tactics.magnetSnap')}</span></label>
+              <label class="check-row"><input type="checkbox" id="magnetDefToggle"><span>${T('tactics.magnetSnapDef')}</span></label>
               <p class="hint">${T('tactics.magnetHint')}</p>
+              <p class="hint">${T('tactics.magnetDefHint')}</p>
             </div>
             <div id="keeperWrap">
               <h4 class="anim-head">${T('tactics.keeper')}</h4>
               <button class="btn sm hidden" id="keeperToggle" title="${T('tactics.keeperHint')}"></button>
               <p class="hint">${T('tactics.keeperHint')}</p>
             </div>
+            </div>
+            <div class="timeline" id="timeline"></div>
           </div>
+          <canvas id="tacticalCanvas" width="700" height="560"></canvas>
         </div>
         <div class="name-bar" id="nameTools">
           <button class="btn sm" id="addNameBtn">＋ ${T('tactics.addName')}</button>
@@ -260,6 +303,12 @@ Views.tactics = function (mount) {
   function ball() { return frame().objects.find(o => o.kind === 'ball'); }
   function selected() { return frame().objects.find(o => o.id === selectedId && (o.kind === 'player' || o.kind === 'gk')); }
   function goalkeeper() { return frame().objects.find(o => o.kind === 'gk'); }
+  // The player the finger is on right now — drawn a little bigger so you can
+  // see what you grabbed underneath your own fingertip.
+  function heldId() {
+    const o = drag || (press && press.o);
+    return o && (o.kind === 'player' || o.kind === 'gk') ? o.id : null;
+  }
 
   // ---- Undo / Redo history ----
   function snapshot() { return JSON.stringify({ frames: current.frames, frameIdx }); }
@@ -335,23 +384,24 @@ Views.tactics = function (mount) {
   }
 
   function drawPlayer(o, x, y) {
-    const r = o.kind === 'gk' ? 16 : 15;
+    const held = o.id === heldId();
+    const r = (o.kind === 'gk' ? 16 : 15) + (held ? 4 : 0);
     if (o.id === selectedId) {
-      ctx.beginPath(); ctx.arc(x, y, 22, 0, 7);
+      ctx.beginPath(); ctx.arc(x, y, r + 7, 0, 7);
       ctx.fillStyle = 'rgba(255,212,0,.25)'; ctx.fill();
       ctx.strokeStyle = '#ffd400'; ctx.lineWidth = 2.5; ctx.stroke();
     }
     // Active goalkeeper: green ring signals that shots aimed here are saved.
     if (o.kind === 'gk' && o.active) {
-      ctx.beginPath(); ctx.arc(x, y, 20, 0, 7);
+      ctx.beginPath(); ctx.arc(x, y, r + 4, 0, 7);
       ctx.strokeStyle = '#34c759'; ctx.lineWidth = 3; ctx.stroke();
     }
     // Facing / rotation pointer (drawn first so the disc caps its base).
     if (showFacing && typeof o.rot === 'number') drawFacing(o.rot, x, y, r);
     ctx.beginPath(); ctx.arc(x, y, r, 0, 7);
     ctx.fillStyle = o.kind === 'gk' ? '#f59e0b' : (o.team === 'atk' ? '#0a84ff' : '#ff3b30'); ctx.fill();
-    ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
-    ctx.fillStyle = '#fff'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = held ? 3 : 2; ctx.stroke();
+    ctx.fillStyle = '#fff'; ctx.font = `bold ${held ? 15 : 13}px system-ui`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText(o.label, x, y);
     if (o.name) drawNameTag(o.name, x, y + r + 3);
   }
@@ -669,11 +719,18 @@ Views.tactics = function (mount) {
     if (s.x2 != null) { s.x2 += dx; s.y2 += dy; }
   }
 
-  // Ball magnet: snap ball to selected player when close
+  // Ball magnet: snap the ball to the player it belongs to when they are close.
   function applyMagnet() {
     if (!ballMagnet) return;
-    const s = selected(), b = ball();
-    if (s && b && dist(s, b) < 8) { b.x = s.x; b.y = s.y - 3; }
+    const b = ball();
+    if (!b) return;
+    // Dragging a player also selects it, so the red switch has to be tested on
+    // the target itself — otherwise a dragged defender would take the ball even
+    // with "Snap ball to red player" off.
+    const target = (drag && (drag.kind === 'player' || drag.kind === 'gk')) ? drag : selected();
+    if (!target) return;
+    if (target.kind === 'player' && target.team === 'def' && !ballMagnetDef) return;
+    if (dist(target, b) < 8) { b.x = target.x; b.y = target.y - 3; }
   }
 
   // Point object `o` at target `t` in pixel-space so the facing arrow is accurate
@@ -1010,6 +1067,7 @@ Views.tactics = function (mount) {
           if (press.o) selectedId = press.o.id;
           if (!press.hist) { pushHistory(); press.hist = true; }
           drag = press.grab;
+          if (autoRec) { autoRec.last = null; autoRec.sampled = false; }
         } else if (press.shape) {
           if (!press.hist) { pushHistory(); press.hist = true; }
           dragShape = press.shape;
@@ -1023,7 +1081,7 @@ Views.tactics = function (mount) {
       press.last = p; draw(); return;
     }
     if (drag) {
-      drag.x = p.x; drag.y = p.y; applyMagnet(); applyDragFacing(drag); draw(); return;
+      drag.x = p.x; drag.y = p.y; applyMagnet(); applyDragFacing(drag); trackPath(p); draw(); return;
     }
     if (drawing.type === 'free') drawing.pts.push(p); else { drawing.x2 = p.x; drawing.y2 = p.y; }
     draw();
@@ -1037,7 +1095,9 @@ Views.tactics = function (mount) {
     }
     if (drag) {
       applyMagnet(); drag = null; draw();
-      if (autoRec) captureAutoFrame(); scheduleAutosave();
+      // The closing leg belongs to the same movement, so it must not pause first.
+      if (autoRec) { captureAutoFrame(autoRec.sampled); autoRec.last = null; autoRec.sampled = false; renderTimeline(); }
+      scheduleAutosave();
     } else if (dragShape) {
       dragShape = null; draw();
       if (autoRec) captureAutoFrame(); scheduleAutosave();
@@ -1045,6 +1105,7 @@ Views.tactics = function (mount) {
       handleSelectTap(press);                       // quick tap: select, or pass to a tapped mate
     }
     press = null;
+    draw();                                         // the held disc shrinks back to normal
     if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
   }
 
@@ -1172,7 +1233,7 @@ Views.tactics = function (mount) {
   }
   function stopAnimation() {
     if (animStep) { clearInterval(animStep); animStep = null; }
-    if (animTimer) { clearInterval(animTimer); animTimer = null; }
+    if (animTimer) { clearTimeout(animTimer); animTimer = null; }
     updatePlayBtn();
     const cb = animEnd; animEnd = null; if (cb) cb();
   }
@@ -1181,32 +1242,42 @@ Views.tactics = function (mount) {
     animEnd = typeof onEnd === 'function' ? onEnd : null;
     Sfx.whistle();
     let i = 0;
-    animTimer = setInterval(() => {
+    const mult = PLAYER_SPEEDS[playerSpeed] || 1;
+    const paint = (a, b, t) => {
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      drawCourt();
+      a.shapes.forEach(drawShape);
+      a.objects.forEach(o => {
+        const bo = b.objects.find(x => x.id === o.id) || o;
+        const ix = o.x + (bo.x - o.x) * t, iy = o.y + (bo.y - o.y) * t;
+        const x = ix / 100 * canvas.width;
+        const y = iy / 100 * canvas.height;
+        let oo = o;
+        if (typeof o.rot === 'number' && typeof bo.rot === 'number') oo = Object.assign({}, o, { x: ix, y: iy, rot: lerpAngle(o.rot, bo.rot, t) });
+        if (o.kind === 'ball') drawBall(x, y); else if (o.kind === 'cue') drawCue(oo, x, y); else if (o.kind === 'dart') drawDart(oo, x, y); else if (o.kind === 'prop') drawProp(oo, x, y); else if (o.kind === 'piece') drawPiece(oo, x, y); else if (o.kind === 'card') drawCard(oo, x, y); else if (o.kind === 'checker') drawChecker(oo, x, y); else drawPlayer(oo, x, y);
+      });
+    };
+    // Each pair of frames gets its own timing: a pose is held so the coach can
+    // talk over it, while a point sampled from a recorded drag runs straight
+    // into the next one — that is what makes a curve play back as a curve.
+    function runPair() {
       const a = current.frames[i], b = current.frames[(i + 1) % current.frames.length];
-      let t = 0;
-      const step = setInterval(() => {
-        t += 0.1;
-        ctx.setTransform(1, 0, 0, 1, 0, 0);
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        drawCourt();
-        a.shapes.forEach(drawShape);
-        a.objects.forEach(o => {
-          const bo = b.objects.find(x => x.id === o.id) || o;
-          const ix = o.x + (bo.x - o.x) * t, iy = o.y + (bo.y - o.y) * t;
-          const x = ix / 100 * canvas.width;
-          const y = iy / 100 * canvas.height;
-          let oo = o;
-          if (typeof o.rot === 'number' && typeof bo.rot === 'number') oo = Object.assign({}, o, { x: ix, y: iy, rot: lerpAngle(o.rot, bo.rot, t) });
-          if (o.kind === 'ball') drawBall(x, y); else if (o.kind === 'cue') drawCue(oo, x, y); else if (o.kind === 'dart') drawDart(oo, x, y); else if (o.kind === 'prop') drawProp(oo, x, y); else if (o.kind === 'piece') drawPiece(oo, x, y); else if (o.kind === 'card') drawCard(oo, x, y); else if (o.kind === 'checker') drawChecker(oo, x, y); else drawPlayer(oo, x, y);
-        });
-        if (t >= 1) {
-          clearInterval(step); animStep = null;
-          i = (i + 1) % current.frames.length;
-          if (i === 0) { stopAnimation(); frameIdx = 0; draw(); }
-        }
-      }, 40);
-      animStep = step;
-    }, 1200);
+      const flow = !!b.flow;
+      const tw = Math.max(40, (flow ? FLOW_MS : TWEEN_MS) / mult);
+      const hold = flow ? 0 : (FRAME_MS - TWEEN_MS) / mult;
+      const t0 = Date.now();
+      animStep = setInterval(() => {
+        const t = Math.min(1, (Date.now() - t0) / tw);
+        paint(a, b, t);
+        if (t < 1) return;
+        clearInterval(animStep); animStep = null;
+        i = (i + 1) % current.frames.length;
+        if (i === 0) { stopAnimation(); frameIdx = 0; draw(); return; }
+        animTimer = setTimeout(runPair, hold);
+      }, flow ? 20 : 40);
+    }
+    animTimer = setTimeout(runPair, 0);
     updatePlayBtn();
   }
 
@@ -1248,14 +1319,33 @@ Views.tactics = function (mount) {
     box.querySelector('#recExportClose').onclick = () => { box.innerHTML = ''; box.classList.add('hidden'); fitCanvas(); };
     fitCanvas();
   }
-  function captureAutoFrame() {
+  function captureAutoFrame(flow) {
     if (!autoRec) return;
     // snapshot current frame as a new frame so movement is preserved
-    current.frames.splice(frameIdx + 1, 0, JSON.parse(JSON.stringify(frame())));
+    const f = JSON.parse(JSON.stringify(frame()));
+    // Set explicitly: the copy would otherwise inherit the flag from the frame
+    // it was cloned from and turn an ordinary pose into a path point.
+    if (flow) f.flow = true; else delete f.flow;
+    // The snapshot goes BEFORE the live frame, so the object under the finger
+    // keeps its identity. Stepping into the copy instead left the drag writing
+    // to the frame that had just been frozen, and every later sample of the
+    // same drag recorded the very same spot.
+    current.frames.splice(frameIdx, 0, f);
     frameIdx++;
     autoRec.count++;
     const fc = mount.querySelector('#frameCount'); if (fc) fc.textContent = autoRec.count;
-    draw(); renderTimeline();
+    draw();
+    if (!flow) renderTimeline();   // rebuilding the strip on every sample would crawl
+  }
+  // While recording, a drag is sampled into frames as the finger moves, so a
+  // curved run plays back as a curve instead of a straight line to where it ended.
+  function trackPath(p) {
+    if (!autoRec || !press) return;
+    const from = autoRec.last || press.start;
+    if (dist(p, from) < AUTO_STEP) return;
+    autoRec.last = { x: p.x, y: p.y };
+    autoRec.sampled = true;
+    captureAutoFrame(true);
   }
   function startAutoRecord() {
     pushHistory();
@@ -1354,28 +1444,21 @@ Views.tactics = function (mount) {
     if (!stage) return;
     applyCanvasSize();
     const ratio = canvas.height / canvas.width;      // ~0.8 (700x560)
-    // The frame strip (left) and Frames & Animation (right) sit beside the court
-    // on wide screens and wrap under it on narrow ones — either way their boxes
-    // have to come out of the budget.
-    const side = mount.querySelector('#framesAnim');
-    const strip = mount.querySelector('#timeline');
+    // Frame list + Frames & Animation share one column that sits beside the court
+    // on wide screens and wraps under it on narrow ones — either way its box has
+    // to come out of the budget.
+    const side = mount.querySelector('#boardSide');
     // Matches the .stage-row breakpoint in styles.css — measuring instead would
     // feed the canvas size back into its own budget and never settle.
-    const beside = window.matchMedia('(min-width: 901px)').matches;
+    const beside = window.matchMedia('(min-width: 1101px)').matches;
     let availW = stage.clientWidth;
-    if (beside) {
-      if (side) availW -= side.offsetWidth + 12;
-      if (strip) availW -= strip.offsetWidth + 12;
-    }
+    if (beside && side) availW -= side.offsetWidth + 12;
     if (availW <= 0) { draw(); return; }
     const rect = canvas.getBoundingClientRect();
     // Measure the controls stacked under the board.
     let below = 0;
     stage.querySelectorAll('.name-bar').forEach(el => { below += el.offsetHeight; });
-    if (!beside) {
-      if (side) below += side.offsetHeight + 12;
-      if (strip) below += strip.offsetHeight + 12;
-    }
+    if (!beside && side) below += side.offsetHeight + 12;
     // visualViewport tracks the iPad's collapsing Safari toolbars; innerHeight does not.
     const vh = (window.visualViewport && window.visualViewport.height) || window.innerHeight;
     // Measure from the document top, otherwise the space would grow as the user
@@ -1385,12 +1468,22 @@ Views.tactics = function (mount) {
     let w = availW;
     let h = w * ratio;
     if (availH > 140 && h > availH) { h = availH; w = h / ratio; }
+    // On a tablet in portrait the panels under the board can swallow the whole
+    // height budget. A postage-stamp court is useless, so give it a floor and let
+    // the page scroll instead.
+    const floor = Math.min(availW, Math.max(300, Math.round(vh * 0.42)));
+    if (w < floor) { w = floor; h = w * ratio; }
+    // The coach's own size choice wins over the fit — a bigger court simply lets
+    // the page scroll.
+    if (courtScale !== 1) { w = w * courtScale; h = w * ratio; }
+    const row = mount.querySelector('.stage-row');
+    if (row) row.classList.toggle('court-big', courtScale > 1);
     canvas.style.width = Math.round(w) + 'px';
     canvas.style.height = Math.round(h) + 'px';
-    // Beside the court the strip is stretched by the row, and the row is as tall
+    // Beside the court the column is stretched by the row, and the row is as tall
     // as its tallest child — so without a cap it grows on every added frame and
-    // never scrolls. Keep it well short of the court and let it scroll.
-    if (strip) strip.style.maxHeight = beside ? Math.round(Math.min(h * 0.55, 300)) + 'px' : '';
+    // never scrolls. Pin it to the court and let it scroll.
+    if (side) side.style.maxHeight = beside ? Math.round(h) + 'px' : '';
     draw();
   }
   const roResize = () => fitCanvas();
@@ -1501,12 +1594,26 @@ Views.tactics = function (mount) {
   });
   function updateSpeedButtons() {
     mount.querySelectorAll('[data-speed]').forEach(b => b.classList.toggle('primary', b.dataset.speed === ballSpeed));
+    mount.querySelectorAll('[data-pspeed]').forEach(b => b.classList.toggle('primary', b.dataset.pspeed === playerSpeed));
   }
   mount.querySelectorAll('[data-speed]').forEach(b => b.onclick = () => {
     ballSpeed = b.dataset.speed;
     try { localStorage.setItem('tacticsBallSpeed', ballSpeed); } catch (e) { }
     updateSpeedButtons();
   });
+  // How fast players walk from one frame to the next while the play runs.
+  mount.querySelectorAll('[data-pspeed]').forEach(b => b.onclick = () => {
+    playerSpeed = b.dataset.pspeed;
+    try { localStorage.setItem('tacticsPlayerSpeed', playerSpeed); } catch (e) { }
+    updateSpeedButtons();
+    if (animTimer) { stopAnimation(); frameIdx = 0; draw(); playAnimation(); }
+  });
+  const sizeSel = mount.querySelector('#courtSizeSel');
+  if (sizeSel) sizeSel.onchange = () => {
+    courtScale = parseFloat(sizeSel.value) || 1;
+    try { localStorage.setItem('tacticsCourtSize', String(courtScale)); } catch (e) { }
+    fitCanvas();
+  };
   mount.querySelector('#playAnim').onclick = () => playAnimation();
   mount.querySelector('#clearShapes').onclick = () => { pushHistory(); frame().shapes = []; draw(); if (autoRec) captureAutoFrame(); };
   const addNameBtn = mount.querySelector('#addNameBtn');
@@ -1549,6 +1656,15 @@ Views.tactics = function (mount) {
       UI.toast(ballMagnet ? T('tactics.magnetOn') : T('tactics.magnetOff'), ballMagnet ? 'success' : 'error');
     };
   }
+  const magnetDefChk = mount.querySelector('#magnetDefToggle');
+  if (magnetDefChk) {
+    Store.getSetting('boardMagnetDef', false).then(v => { ballMagnetDef = v === true; magnetDefChk.checked = ballMagnetDef; });
+    magnetDefChk.onchange = () => {
+      ballMagnetDef = magnetDefChk.checked;
+      Store.setSetting('boardMagnetDef', ballMagnetDef);
+      UI.toast(ballMagnetDef ? T('tactics.magnetDefOn') : T('tactics.magnetDefOff'), ballMagnetDef ? 'success' : 'error');
+    };
+  }
   const rotClearBtn = mount.querySelector('#rotClear');
   if (rotClearBtn) rotClearBtn.onclick = () => {
     const s = selected(); if (!s || typeof s.rot !== 'number') return;
@@ -1575,8 +1691,7 @@ Views.tactics = function (mount) {
     courtMode = courtModeSel.value;
     pushHistory();
     current.courtMode = courtMode;
-    frame().objects = (courtMode === 'half' && window.SPORTS && SPORTS.halfFormation)
-      ? SPORTS.halfFormation(sportId) : defaultFrame().objects;
+    frame().objects = startObjects();
     selectedId = null; aim = null;
     fitCanvas(); draw();
     UI.toast(courtMode === 'half' ? T('tactics.halfCourt') : T('tactics.fullCourt'), 'success');
@@ -1584,15 +1699,20 @@ Views.tactics = function (mount) {
   mount.querySelector('#recFramesBtn').onclick = toggleAutoRecord;
   mount.querySelector('#undoBtn').onclick = undo;
   mount.querySelector('#redoBtn').onclick = redo;
+  // The sport's starting line-up for the court in use. `isHalf()` also checks the
+  // sport is a team sport, and an empty result falls back to the full formation —
+  // without either guard a reset could leave the board with no players at all.
+  function startObjects() {
+    let objs = null;
+    if (isHalf() && window.SPORTS && SPORTS.halfFormation) objs = SPORTS.halfFormation(sportId);
+    if (!objs || !objs.length) objs = defaultFrame().objects;
+    return objs;
+  }
   // Back to the sport's starting formation: one frame, no drawings, no names.
   mount.querySelector('#resetBoard').onclick = () => UI.confirm(T('tactics.resetAsk'), () => {
     pushHistory();
     if (autoRec) stopAutoRecord();
-    current.frames = [{
-      objects: (courtMode === 'half' && window.SPORTS && SPORTS.halfFormation)
-        ? SPORTS.halfFormation(sportId) : defaultFrame().objects,
-      shapes: []
-    }];
+    current.frames = [{ objects: startObjects(), shapes: [] }];
     frameIdx = 0; selectedId = null; aim = null;
     fitCanvas(); draw(); renderTimeline(); scheduleAutosave();
     UI.toast(T('tactics.resetDone'), 'success');
@@ -1642,6 +1762,7 @@ Views.tactics = function (mount) {
     const opt = box && box.selectedOptions[0];
     const id = opt && opt.value;
     mount.querySelector('#animLoad').disabled = !id;
+    mount.querySelector('#animEdit').disabled = !id;
     mount.querySelector('#animDel').disabled = !id;
     mount.querySelector('#animShare').disabled = !id;
     mount.querySelector('#animVideo').disabled = !(opt && opt.dataset.vid);
@@ -1654,6 +1775,7 @@ Views.tactics = function (mount) {
     box.onchange = () => { syncAnimActions(); if (sel()) loadSystem(sel(), false); };
     box.ondblclick = () => { if (sel()) loadSystem(sel()); };
     mount.querySelector('#animLoad').onclick = () => { if (sel()) loadSystem(sel()); };
+    mount.querySelector('#animEdit').onclick = () => { if (sel()) editSystem(sel()); };
     mount.querySelector('#animVideo').onclick = () => { if (sel()) playSystemVideo(sel()); };
     mount.querySelector('#animShare').onclick = () => { if (sel()) shareSystem(sel()); };
     mount.querySelector('#animDel').onclick = () => {
@@ -1663,6 +1785,40 @@ Views.tactics = function (mount) {
         renderAnimList(); UI.toast(T('common.delete'));
       });
     };
+  }
+  // Rename a saved animation, and optionally overwrite its frames with the board
+  // as it stands now — without this, correcting one saved play meant deleting it
+  // and saving a new one under the same name.
+  function editSystem(id) {
+    const s = Store.find('tactics', id);
+    if (!s) return;
+    UI.modal({
+      title: T('tactics.animEdit'),
+      body: `<label class="field"><span>${T('tactics.animTitle')}</span><input id="anim_rename" maxlength="60" value="${UI.esc(s.name || '')}"></label>
+        <label class="check-row"><input type="checkbox" id="anim_frames"><span>${T('tactics.animReplace')}</span></label>
+        <p class="hint">${T('tactics.animReplaceHint').replace('{0}', (s.frames || []).length).replace('{1}', current.frames.length)}</p>`,
+      footer: `<button class="btn ghost" data-close2>${T('common.cancel')}</button><button class="btn primary" data-save>${T('common.save')}</button>`,
+      onOpen: (m, close) => {
+        const inp = m.querySelector('#anim_rename');
+        inp.focus(); inp.select();
+        const commit = async () => {
+          const name = inp.value.trim();
+          if (!name) return UI.toast(T('tactics.animNeedTitle'), 'error');
+          const rec = Object.assign({}, s, { name });
+          if (m.querySelector('#anim_frames').checked) {
+            rec.frames = JSON.parse(JSON.stringify(current.frames));
+            rec.courtMode = courtMode;
+            delete rec.clips;                    // the old clip no longer matches the frames
+            delete rec.video; delete rec.videoExt;
+          }
+          await Store.save('tactics', rec);
+          close(); renderAnimList(); UI.toast(T('tactics.animSaved'), 'success');
+        };
+        inp.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); commit(); } });
+        m.querySelector('[data-close2]').onclick = close;
+        m.querySelector('[data-save]').onclick = commit;
+      }
+    });
   }
   // Hand one saved animation to the squad: a file the players import, the clip
   // itself, or a chat/mail that tells them it is on the way.
@@ -1793,7 +1949,7 @@ Views.tactics = function (mount) {
       });
       if (!pending) return resolve([]);
       // Never leave the save hanging if an encoder stalls.
-      guard = setTimeout(halt, current.frames.length * 1400 + 5000);
+      guard = setTimeout(halt, current.frames.length * 1400 / (PLAYER_SPEEDS[playerSpeed] || 1) + 5000);
       stopAnimation();
       frameIdx = 0;
       playAnimation(() => setTimeout(halt, 250));
@@ -1836,6 +1992,35 @@ Views.tactics = function (mount) {
   const saveAnimBtn = mount.querySelector('#saveAnim');
   if (saveAnimBtn) saveAnimBtn.onclick = saveAnimation;
   bindAnimActions();
+
+  // Play the animation once while recording the canvas, then download that pass
+  // in the chosen container. MP4 is only offered where the browser can encode it.
+  function exportClip(ext) {
+    const btns = [mount.querySelector('#expWebm'), mount.querySelector('#expMp4')].filter(Boolean);
+    const me = mount.querySelector(ext === 'mp4' ? '#expMp4' : '#expWebm');
+    const label = me.textContent;
+    btns.forEach(b => { b.disabled = true; });
+    me.textContent = '● ' + T('tactics.recording');
+    recordAnimation().then(outs => {
+      btns.forEach(b => { b.disabled = false; });
+      me.textContent = label;
+      const hit = outs.find(o => o.ext === ext);
+      if (!hit) return UI.toast(T(ext === 'mp4' ? 'video.noMp4' : 'tactics.recDiscard'), 'error');
+      const name = ((current.name || 'tactic').replace(/[^\w.-]+/g, '_') || 'tactic') + '.' + ext;
+      const url = URL.createObjectURL(hit.blob);
+      const a = document.createElement('a'); a.href = url; a.download = name;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+      UI.toast(T('tactics.recExported') + ' ' + name, 'success');
+    });
+  }
+  const expWebm = mount.querySelector('#expWebm');
+  const expMp4 = mount.querySelector('#expMp4');
+  if (expWebm) expWebm.onclick = () => exportClip('webm');
+  if (expMp4) {
+    expMp4.onclick = () => exportClip('mp4');
+    if (!pickRecFormats().some(f => f.ext === 'mp4')) { expMp4.disabled = true; expMp4.title = T('video.noMp4'); }
+  }
 
   setupBotMode();
   renderAnimList();

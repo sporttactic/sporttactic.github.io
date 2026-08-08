@@ -2,8 +2,10 @@
 window.Views = window.Views || {};
 Views.reports = function (mount) {
   const team = Store.activeTeam();
+  const sportId = (window.App && App.getSport && App.getSport()) || 'handball';
   const matches = Store.matches().filter(m => m.status === 'finished');
   const players = Store.players(team && team.id);
+  const fullName = p => [p.firstName, p.lastName].filter(Boolean).join(' ').trim() || ('#' + (p.number || '?'));
 
   const builders = `
     <div class="grid cols-3">
@@ -13,7 +15,7 @@ Views.reports = function (mount) {
           <button class="btn primary sm" id="genMatch">${T('common.new')}</button>
           <button class="btn sm" id="aiMatch">🤖 ${T('reports.aiAnalysis')}</button></div></div>
       <div class="card"><h3>${T('reports.playerReport')}</h3>
-        <select id="pSel">${players.map(p => `<option value="${p.id}">#${p.number} ${UI.esc(p.lastName)}</option>`).join('')}</select>
+        <select id="pSel">${players.map(p => `<option value="${p.id}">#${p.number} ${UI.esc(fullName(p))}</option>`).join('')}</select>
         <div class="head-acts" style="margin-top:10px">
           <button class="btn primary sm" id="genPlayer">${T('common.new')}</button>
           <button class="btn sm" id="aiPlayer">🤖 ${T('reports.aiAnalysis')}</button></div></div>
@@ -33,18 +35,32 @@ Views.reports = function (mount) {
   const out = mount.querySelector('#reportOut');
 
   function showReport(title, html, exportRows, chat) {
-    out.innerHTML = `<div class="card"><div style="display:flex;justify-content:space-between;align-items:center">
+    out.innerHTML = `<div class="card"><div class="rep-head">
       <h3 style="margin:0">${UI.esc(title)}</h3>
-      <div><button class="btn sm" id="expChat">💬 ${T('chat.title')}</button> <button class="btn sm" id="expCsv">${T('reports.csv')}</button> <button class="btn sm" id="expPrint">${T('reports.print')}</button></div></div>
+      <div class="head-acts">
+        <button class="btn sm" id="expPdf">⬇ ${T('reports.pdf')}</button>
+        <button class="btn sm" id="expMail">✉ ${T('reports.email')}</button>
+        <button class="btn sm" id="expChat">💬 ${T('chat.title')}</button>
+        <button class="btn sm" id="expCsv">${T('reports.csv')}</button>
+        <button class="btn sm" id="expPrint">${T('reports.print')}</button>
+      </div></div>
       <div id="repBody" style="margin-top:12px">${html}</div></div>`;
     out.querySelector('#expChat').onclick = () => App.go('messenger', {
       from: 'reports',
       draft: (chat && chat.text) || title
     });
-    out.querySelector('#expPrint').onclick = () => {
-      const w = window.open('', '_blank');
-      w.document.write(`<html><head><title>${UI.esc(title)}</title><style>body{font-family:system-ui;padding:24px}table{border-collapse:collapse;width:100%}td,th{border:1px solid #ccc;padding:6px 10px;text-align:left}</style></head><body><h1>${UI.esc(title)}</h1>${html}</body></html>`);
-      w.document.close(); w.print();
+    const sub = [team && team.name, SPORTS.name(sportId, I18N.getLang())].filter(Boolean).join(' · ');
+    const toPdf = () => UI.printDoc(title, sub, html, () => UI.toast(T('training.popupBlocked'), 'error'));
+    out.querySelector('#expPdf').onclick = toPdf;
+    out.querySelector('#expPrint').onclick = toPdf;
+    // The report as plain text, so it can go straight into a mail body.
+    out.querySelector('#expMail').onclick = () => {
+      const lines = (exportRows || []).map(r => r.map(c => String(c)).join(': '));
+      MAIL.compose({
+        players: Store.players(team && team.id),
+        subject: title,
+        text: [title, sub, ''].concat(lines).join('\n')
+      });
     };
     out.querySelector('#expCsv').onclick = () => {
       // A leading =, +, - or @ would make Sheets/Excel treat the cell as a formula.
@@ -68,10 +84,10 @@ Views.reports = function (mount) {
   mount.querySelector('#genPlayer').onclick = () => {
     const p = Store.find('players', mount.querySelector('#pSel').value); if (!p) return;
     const s = Store.playerStats(p.id);
-    const rows = [[T('stat.metric'), T('stat.value')], [T('stat.name'), p.firstName + ' ' + p.lastName], [T('stat.position'), p.position], [T('stat.goals'), s.goals], [T('stat.attempts'), s.attempts], [T('stat.shootingPct'), s.shotPct + '%'], [T('stat.assists'), s.assists], [T('stat.turnovers'), s.turnovers], [T('stat.saves'), s.saves], [T('stat.mvpRating'), s.rating]];
-    showReport(T('reports.playerReport') + ' — ' + p.lastName, tableHtml(rows), rows, {
+    const rows = [[T('stat.metric'), T('stat.value')], [T('stat.name'), fullName(p)], [T('stat.position'), p.position], [T('stat.goals'), s.goals], [T('stat.attempts'), s.attempts], [T('stat.shootingPct'), s.shotPct + '%'], [T('stat.assists'), s.assists], [T('stat.turnovers'), s.turnovers], [T('stat.saves'), s.saves], [T('stat.mvpRating'), s.rating]];
+    showReport(T('reports.playerReport') + ' — #' + (p.number || '?') + ' ' + fullName(p), tableHtml(rows), rows, {
       players: [p],
-      text: `${p.firstName}: ${s.goals} ${T('stat.goals')} / ${s.attempts} (${s.shotPct}%), ${s.assists} ${T('stat.assists')}, ${T('stat.mvpRating')} ${s.rating}.`
+      text: `${fullName(p)}: ${s.goals} ${T('stat.goals')} / ${s.attempts} (${s.shotPct}%), ${s.assists} ${T('stat.assists')}, ${T('stat.mvpRating')} ${s.rating}.`
     });
   };
   mount.querySelector('#genSeason').onclick = () => {
@@ -106,8 +122,8 @@ Views.reports = function (mount) {
     if (!p) return UI.toast(T('common.noData'), 'error');
     const s = Store.playerStats(p.id);
     AI.report({
-      title: T('reports.aiAnalysis') + ' — #' + p.number + ' ' + p.lastName,
-      task: `Analyse this player report for #${p.number} ${p.firstName} ${p.lastName} (${p.position}).\n`
+      title: T('reports.aiAnalysis') + ' — #' + p.number + ' ' + fullName(p),
+      task: `Analyse this player report for #${p.number} ${fullName(p)} (${p.position}).\n`
         + `${s.goals} goals from ${s.attempts} attempts (${s.shotPct}%), ${s.assists} assists, ${s.turnovers} turnovers, ${s.saves} saves, rating ${s.rating}.\n`
         + 'Give: their strengths in these numbers, the two biggest gaps, a personal training focus for the next four weeks with drills from our library and their video links, and one measurable target.'
     });

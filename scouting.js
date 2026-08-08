@@ -99,7 +99,6 @@ Views.scouting = function (mount, params) {
     ev: [['Save', 'Redning', 'save', ''], ['Penalty Save', 'Straffekastredning', 'save', ''], ['One-on-One Save', 'Duelredning', 'save', ''], ['Rebound Control', 'Returkontrol', 'save', ''], ['Goal Conceded', 'Mål imod', 'conceded', 'turnover'], ['Assist', 'Assist', 'assist', '']]
   };
   const hasKeeper = ((window.SPORTS && SPORTS.positions(sport)) || []).indexOf('Goalkeeper') > -1;
-  const keepers = players.filter(p => p.position === 'Goalkeeper');
 
   const cats = (SPORT_EVENTS[sport] || SPORT_EVENTS.handball).concat(hasKeeper ? [GK_CAT] : []);
   // en → da lookup across all sports so the event log translates historic events.
@@ -108,24 +107,59 @@ Views.scouting = function (mount, params) {
   GK_CAT.ev.forEach(e => { EV_LABELS[e[0]] = e[1]; });
   const catLabel = c => (I18N.getLang() === 'da' ? c.da : c.en);
   const evLabel = t => (I18N.getLang() === 'da' ? (EV_LABELS[t] || t) : t);
-  const curCat = () => cats.find(c => c.id === activeCat) || cats[0];
+  const evName = e => (I18N.getLang() === 'da' ? e[1] : e[0]);
   const posBadgeHtml = (pos) => {
     const b = SPORTS.posBadge(sport, pos);
-    return `<span class="pos-badge role-${b.role}" style="--pos:${b.color}" title="${UI.esc(pos || '')}">${UI.esc(b.ab)}</span>`;
+    const k = 'pos.' + (pos || ''), lbl = T(k) === k ? (pos || '') : T(k);
+    return `<span class="pos-badge role-${b.role}" style="--pos:${b.color}" title="${UI.esc(lbl)}">${UI.esc(b.ab)}</span>`;
   };
 
-  let clock = 0, timer = null, activeCat = cats[0].id;
+  // ---- Focus areas --------------------------------------------------------
+  // A coach rarely tracks everything at once. What is switched OFF is what gets
+  // stored (per sport), so an event added in a later build is on by default.
+  const FOCUS_KEY = 'stx_scout_focus_' + sport;
+  const evKey = (c, e) => c.id + '|' + e[0];
+  let focusOff = readFocus();
+  function readFocus() {
+    try {
+      const o = JSON.parse(localStorage.getItem(FOCUS_KEY) || '{}');
+      return { cats: o.cats || {}, evs: o.evs || {} };
+    } catch { return { cats: {}, evs: {} }; }
+  }
+  function writeFocus() {
+    try { localStorage.setItem(FOCUS_KEY, JSON.stringify(focusOff)); } catch { /* private mode */ }
+  }
+  const evsOf = c => c.ev.filter(e => !focusOff.evs[evKey(c, e)]);
+  // A category with nothing left to log is hidden too, so no empty tab appears.
+  function shownCats() {
+    const list = cats.filter(c => !focusOff.cats[c.id] && evsOf(c).length);
+    return list.length ? list : cats;
+  }
+  const curCat = () => shownCats().find(c => c.id === activeCat) || shownCats()[0];
+  const curEvs = () => evsOf(curCat());
+
+  let clock = 0, timer = null, activeCat = shownCats()[0].id;
 
   function render() {
     const match = Store.find('matches', matchId);
     const events = Store.matchEvents(matchId).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
     const goals = events.filter(e => e.result === 'goal').length;
+    const tabs = shownCats();
+    activeCat = curCat().id; // a focus area that was switched off must not stay selected
+    const evs = curEvs();
+    // Only the players picked for THIS match, when a line-up was chosen for it.
+    const lineup = match && Array.isArray(match.players) && match.players.length ? match.players : null;
+    const playing = lineup ? players.filter(p => lineup.indexOf(p.id) >= 0) : players;
     // The Goalkeeper tab only registers on keepers.
-    const rows = activeCat === 'keeper' ? keepers : players;
+    const rows = activeCat === 'keeper' ? playing.filter(p => p.position === 'Goalkeeper') : playing;
     mount.innerHTML = `
       <div class="page-head">
         <div><h1>${T('scout.title')}</h1><p>${T('scout.subtitle')} · ${UI.esc(SPORTS.name(sport, I18N.getLang()))}</p></div>
-        <select id="matchSel" style="max-width:280px">${matches.length ? matches.map(m => `<option value="${m.id}" ${m.id === matchId ? 'selected' : ''}>${UI.esc(m.home ? T('common.vs') : T('common.at'))} ${UI.esc(m.opponent)} · ${SPORTS.name(m.sport || 'handball', I18N.getLang())} · ${UI.fmtDate(m.date)}</option>`).join('') : `<option value="">${T('scout.noMatches')}</option>`}</select>
+        <div class="head-acts">
+          <select id="matchSel" style="max-width:280px">${matches.length ? matches.map(m => `<option value="${m.id}" ${m.id === matchId ? 'selected' : ''}>${UI.esc(m.home ? T('common.vs') : T('common.at'))} ${UI.esc(m.opponent)} · ${SPORTS.name(m.sport || 'handball', I18N.getLang())} · ${UI.fmtDate(m.date)}</option>`).join('') : `<option value="">${T('scout.noMatches')}</option>`}</select>
+          <button class="btn" id="focusBtn">🎯 ${T('scout.focus')} (${tabs.length}/${cats.length})</button>
+          ${lineup ? `<span class="tag green" title="${UI.esc(T('matches.squadHint'))}">👥 ${playing.length}/${players.length}</span>` : ''}
+        </div>
       </div>
       <div class="scoreboard">
         <div style="text-align:center"><div style="color:var(--muted);font-size:12px">${UI.esc(team ? team.name : T('scout.home'))}</div><div class="score" id="ourScore">${goals}</div></div>
@@ -135,14 +169,14 @@ Views.scouting = function (mount, params) {
       <div class="scout-grid">
         <div>
           <div class="pill-row">
-            ${cats.map(c => `<span class="pill ${c.id === activeCat ? 'active' : ''}" data-cat="${c.id}">${UI.esc(catLabel(c))}</span>`).join('')}
+            ${tabs.map(c => `<span class="pill ${c.id === activeCat ? 'active' : ''}" data-cat="${c.id}">${UI.esc(catLabel(c))}</span>`).join('')}
           </div>
           <div class="player-events">
             ${rows.length ? rows.map(p => `
               <div class="player-row">
-                <span class="player-tag">${posBadgeHtml(p.position)}#${p.number} ${UI.esc(p.lastName)}</span>
+                <span class="player-tag">${posBadgeHtml(p.position)}<span class="pt-name"><span class="pt-num">#${UI.esc(p.number || '?')}</span>${UI.esc(p.lastName || p.firstName || '')}</span></span>
                 <div class="pev">
-                  ${curCat().ev.map((e, i) => `<button class="event-btn ${e[3] || 'neutral'}" data-ev="${i}" data-player="${p.id}">${UI.esc(I18N.getLang() === 'da' ? e[1] : e[0])}</button>`).join('')}
+                  ${evs.map((e, i) => `<button class="event-btn ${e[3] || 'neutral'}" data-ev="${i}" data-player="${p.id}">${UI.esc(evName(e))}</button>`).join('')}
                 </div>
               </div>`).join('') : `<p style="color:var(--muted)">${activeCat === 'keeper' ? T('scout.noKeepers') : T('scout.noPlayers')}</p>`}
           </div>
@@ -153,16 +187,96 @@ Views.scouting = function (mount, params) {
       const p = Store.find('players', e.playerId);
       return `<div class="log-item"><span><span class="log-time">${UI.fmtClock((e.minute || 0) * 60)}</span> ${UI.esc(evLabel(e.type))} ${e.result === 'goal' ? '&#9917;' : ''} — ${p ? '#' + p.number + ' ' + UI.esc(p.lastName) : ''}</span><button class="btn sm danger" data-rmev="${e.id}">${T('scout.remove')}</button></div>`;
     }).join('') || `<p style="color:var(--muted)">${T('scout.noEvents')}</p>`}
-          </div>`, { sub: events.length + ' ' + T('scout.events') })}
+          </div>`, {
+      sub: events.length + ' ' + T('scout.events'),
+      actions: events.length ? `<button class="btn sm danger" id="clearLog">🗑 ${T('scout.clearLog')}</button>` : ''
+    })}
       </div>`;
 
     UI.bindAcc(mount);
     mount.querySelector('#matchSel').onchange = e => { matchId = e.target.value; render(); };
+    mount.querySelector('#focusBtn').onclick = focusDialog;
     mount.querySelector('#startBtn').onclick = toggleClock;
     mount.querySelector('#resetBtn').onclick = () => { clock = 0; stopClock(); mount.querySelector('#clock').textContent = UI.fmtClock(0); };
     mount.querySelectorAll('[data-cat]').forEach(b => b.onclick = () => { activeCat = b.dataset.cat; render(); });
-    mount.querySelectorAll('[data-ev]').forEach(b => b.onclick = () => logEvent(curCat().ev[+b.dataset.ev], b.dataset.player));
+    mount.querySelectorAll('[data-ev]').forEach(b => b.onclick = () => logEvent(evs[+b.dataset.ev], b.dataset.player));
     mount.querySelectorAll('[data-rmev]').forEach(b => b.onclick = async () => { await Store.remove('events', b.dataset.rmev); render(); });
+    const clearBtn = mount.querySelector('#clearLog');
+    if (clearBtn) clearBtn.onclick = () => clearLog(events);
+  }
+
+  // Wipe every event of THIS match only — the other fixtures keep their log.
+  function clearLog(events) {
+    if (!events.length) return;
+    UI.confirm(T('scout.clearLogAsk').replace('{0}', events.length), async () => {
+      for (const e of events) await Store.remove('events', e.id);
+      const m = Store.find('matches', matchId);
+      const ours = m && (m.home ? 'homeScore' : 'awayScore'); // only scouting ever bumps our own side
+      if (m && m[ours]) await Store.save('matches', Object.assign({}, m, { [ours]: 0 }));
+      UI.toast(T('scout.cleared'));
+      render();
+    });
+  }
+
+  // Pick the focus areas — and the single actions inside them — that matter in
+  // this match. Everything else disappears from the buttons, so the ones that
+  // are left are bigger and easier to hit on a tablet at the side of the court.
+  function focusDialog() {
+    const lang = I18N.getLang();
+    UI.modal({
+      title: T('scout.focusTitle'),
+      width: 720,
+      body: `
+        <p class="hint" style="margin-top:0">${T('scout.focusHint')}</p>
+        <div class="focus-acts">
+          <button type="button" class="btn sm" data-all>${T('scout.focusAll')}</button>
+          <button type="button" class="btn sm" data-none>${T('scout.focusNone')}</button>
+        </div>
+        <div class="focus-list">
+          ${cats.map(c => `
+            <div class="focus-cat ${focusOff.cats[c.id] ? 'off' : ''}" data-cat="${UI.esc(c.id)}">
+              <label class="check-row focus-head"><input type="checkbox" data-fcat="${UI.esc(c.id)}" ${focusOff.cats[c.id] ? '' : 'checked'}><span>${UI.esc(catLabel(c))}</span></label>
+              <div class="focus-evs">
+                ${c.ev.map(e => `<label class="check-row"><input type="checkbox" data-fev="${UI.esc(evKey(c, e))}" ${focusOff.evs[evKey(c, e)] ? '' : 'checked'}><span>${UI.esc(lang === 'da' ? e[1] : e[0])}</span></label>`).join('')}
+              </div>
+            </div>`).join('')}
+        </div>`,
+      footer: `<button class="btn ghost" data-close2>${T('common.cancel')}</button><button class="btn primary" data-save>${T('common.save')}</button>`,
+      onOpen: (m, close) => {
+        const catBoxes = [...m.querySelectorAll('[data-fcat]')];
+        const evBoxes = [...m.querySelectorAll('[data-fev]')];
+        const syncCat = box => box.closest('.focus-cat').classList.toggle('off', !box.checked);
+        catBoxes.forEach(box => box.onchange = () => {
+          // Ticking a whole area brings its actions back; clearing it hides them.
+          box.closest('.focus-cat').querySelectorAll('[data-fev]').forEach(b => { b.checked = box.checked; });
+          syncCat(box);
+        });
+        evBoxes.forEach(box => box.onchange = () => {
+          const wrap = box.closest('.focus-cat');
+          const head = wrap.querySelector('[data-fcat]');
+          if (box.checked && !head.checked) head.checked = true;
+          if (![...wrap.querySelectorAll('[data-fev]')].some(b => b.checked)) head.checked = false;
+          syncCat(head);
+        });
+        const setAll = on => { catBoxes.concat(evBoxes).forEach(b => { b.checked = on; }); catBoxes.forEach(syncCat); };
+        m.querySelector('[data-all]').onclick = () => setAll(true);
+        m.querySelector('[data-none]').onclick = () => setAll(false);
+        m.querySelector('[data-close2]').onclick = close;
+        m.querySelector('[data-save]').onclick = () => {
+          const next = { cats: {}, evs: {} };
+          catBoxes.forEach(b => { if (!b.checked) next.cats[b.dataset.fcat] = 1; });
+          evBoxes.forEach(b => { if (!b.checked) next.evs[b.dataset.fev] = 1; });
+          const kept = cats.filter(c => !next.cats[c.id] && c.ev.some(e => !next.evs[evKey(c, e)]));
+          if (!kept.length) return UI.toast(T('scout.focusNeed'), 'error');
+          focusOff = next;
+          writeFocus();
+          if (!kept.some(c => c.id === activeCat)) activeCat = kept[0].id;
+          close();
+          UI.toast(T('scout.focusSaved'), 'success');
+          render();
+        };
+      }
+    });
   }
 
   async function logEvent(def, playerId) {
@@ -205,6 +319,7 @@ function strengthScout(mount, sport) {
   const oneRm = (kg, reps) => (kg > 0 && reps > 1) ? Math.round(kg * (1 + reps / 30)) : Math.round(kg || 0);
   const esc = s => UI.esc(s);
   const dt = v => { const r = T('seed.' + v); return r === 'seed.' + v ? v : r; };
+  const ex = e => UI.langText(e, 'title');   // a drill's title in the chosen language
 
   const readDraft = () => { try { return JSON.parse(localStorage.getItem(DRAFT) || '[]'); } catch { return []; } };
   const writeDraft = () => { try { localStorage.setItem(DRAFT, JSON.stringify(sets)); } catch { /* private mode */ } };
@@ -216,7 +331,7 @@ function strengthScout(mount, sport) {
   // Only the drills that belong to this sport, so the picker is not a wall of text.
   const cats = SPORTS.exerciseCategories(sport);
   const drills = Store.all('exercises').filter(e => cats.indexOf(e.category) >= 0)
-    .sort((a, b) => dt(a.title).localeCompare(dt(b.title)));
+    .sort((a, b) => ex(a).localeCompare(ex(b)));
 
   // One row per exercise: what has been done so far, newest session only.
   function totals() {
@@ -255,10 +370,10 @@ function strengthScout(mount, sport) {
           <label class="field"><span>${T('scout.exercise')}</span>
             <div class="combo">
               <input id="sc_ex" list="scEx" placeholder="${esc(T('scout.exercisePh'))}">
-              <select id="sc_exPick"><option value="">${T('teams.pick')}</option>${drills.map(e => `<option value="${esc(dt(e.title))}">${esc(dt(e.title))}</option>`).join('')}</select>
+              <select id="sc_exPick"><option value="">${T('teams.pick')}</option>${drills.map(e => `<option value="${esc(ex(e))}">${esc(ex(e))}</option>`).join('')}</select>
             </div>
           </label>
-          <datalist id="scEx">${drills.map(e => `<option value="${esc(dt(e.title))}"></option>`).join('')}</datalist>
+          <datalist id="scEx">${drills.map(e => `<option value="${esc(ex(e))}"></option>`).join('')}</datalist>
 
           <div class="set-input">
             <label class="field"><span>${T('scout.weight')} (kg)</span>

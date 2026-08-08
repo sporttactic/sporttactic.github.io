@@ -140,9 +140,10 @@ const UI = (() => {
 
   function confirm(msg, onYes) {
     modal({
-      title: 'Please confirm',
+      title: tr('common.confirmTitle', 'Please confirm'),
       body: `<p>${esc(msg)}</p>`,
-      footer: `<button class="btn ghost" data-no>Cancel</button><button class="btn danger" data-yes>Confirm</button>`,
+      footer: `<button class="btn ghost" data-no>${esc(tr('common.cancel', 'Cancel'))}</button>`
+        + `<button class="btn danger" data-yes>${esc(tr('common.confirm', 'Confirm'))}</button>`,
       onOpen: (m, close) => {
         m.querySelector('[data-no]').onclick = close;
         m.querySelector('[data-yes]').onclick = () => { close(); onYes(); };
@@ -165,19 +166,173 @@ const UI = (() => {
 
   function initials(a, b) { return (((a || '?')[0] || '?') + ((b || '')[0] || '')).toUpperCase(); }
 
+  // ---- Multi-language record text ----------------------------------------
+  // A drill can carry its own wording per language in `tr` — tr.da.title and so
+  // on. Falls back to the field as it was typed, so an untranslated record and
+  // everything made before this still read correctly.
+  function langText(rec, field) {
+    const lang = (window.I18N && I18N.getLang && I18N.getLang()) || 'en';
+    const t = rec && rec.tr && rec.tr[lang];
+    const v = t && t[field];
+    return (typeof v === 'string' && v.trim()) ? v : ((rec && rec[field]) || '');
+  }
+  // The languages a record has text for, in DICT order.
+  function langsOf(rec) {
+    return Object.keys((rec && rec.tr) || {}).filter(l => {
+      const t = rec.tr[l];
+      return t && typeof t.title === 'string' && t.title.trim();
+    });
+  }
+
+  // ---- Videos -------------------------------------------------------------
+  // Only http(s) links may reach an href — blocks javascript:/data: payloads.
+  function safeUrl(u) {
+    const s = String(u || '').trim();
+    if (!s) return '';
+    try { const p = new URL(s); return (p.protocol === 'http:' || p.protocol === 'https:') ? p.href : ''; }
+    catch { return ''; }
+  }
+  function ytId(u) {
+    const s = safeUrl(u);
+    if (!s) return '';
+    let id = '';
+    try {
+      const p = new URL(s), host = p.hostname.replace(/^www\.|^m\./, '').toLowerCase();
+      if (host === 'youtu.be') id = p.pathname.slice(1);
+      else if (host === 'youtube.com' || host === 'youtube-nocookie.com') {
+        const seg = p.pathname.split('/').filter(Boolean);
+        id = p.searchParams.get('v') || (['shorts', 'embed', 'live', 'v'].indexOf(seg[0]) >= 0 ? seg[1] : '');
+      }
+    } catch { return ''; }
+    return /^[\w-]{5,20}$/.test(id || '') ? id : '';
+  }
+  // Google Drive: /file/d/<id>/view, /open?id=<id> and /uc?id=<id> all play at /preview.
+  function driveId(u) {
+    const s = safeUrl(u);
+    if (!s) return '';
+    let id = '';
+    try {
+      const p = new URL(s);
+      if (p.hostname.replace(/^www\./, '').toLowerCase() !== 'drive.google.com') return '';
+      const seg = p.pathname.split('/').filter(Boolean);
+      const i = seg.indexOf('d');
+      id = (i >= 0 ? seg[i + 1] : '') || p.searchParams.get('id') || '';
+    } catch { return ''; }
+    return /^[\w-]{10,80}$/.test(id || '') ? id : '';
+  }
+  // The embed address for a link we recognise, or '' — nothing else may ever
+  // reach an iframe src.
+  function videoSrc(u) {
+    const y = ytId(u);
+    if (y) return 'https://www.youtube.com/embed/' + y + '?rel=0';
+    const d = driveId(u);
+    if (d) return 'https://drive.google.com/file/d/' + d + '/preview';
+    return '';
+  }
+  // Every link on a drill, the two old single fields included.
+  function videosOf(rec) {
+    const all = (Array.isArray(rec && rec.videos) ? rec.videos : []).concat([rec && rec.videoYt, rec && rec.videoUrl]);
+    const out = [];
+    all.map(safeUrl).forEach(u => { if (u && out.indexOf(u) < 0) out.push(u); });
+    return out.slice(0, 8);
+  }
+  function videoEmbed(rec, max) {
+    const title = langText(rec, 'title') || 'video';
+    return videosOf(rec).filter(videoSrc).slice(0, max || 4).map(u => playerHtml(u, title)).join('');
+  }
+  // A poster with a play button, not a live iframe. YouTube answers an embed
+  // request with "Error 153 — video player configuration error" whenever it
+  // cannot see the embedding page (opened straight from a file, referrer
+  // stripped, embedding turned off for that clip), and the coach was left
+  // looking at that instead of the drill. The frame is only inserted on the
+  // click, and where it cannot work the same click opens YouTube itself.
+  const CAN_EMBED = location.protocol === 'http:' || location.protocol === 'https:';
+  function playerHtml(u, title) {
+    const y = ytId(u);
+    const open = `<a class="v-open" href="${esc(u)}" target="_blank" rel="noopener noreferrer" title="${esc(tr('exercises.openVideo', 'Open in a new tab'))}">↗</a>`;
+    const play = `<button type="button" class="v-play" aria-label="${esc(tr('exercises.playVideo', 'Play'))}">▶</button>`;
+    if (y) {
+      return `<div class="ex-embed lite" data-play="${esc(u)}">
+        <img src="https://i.ytimg.com/vi/${esc(y)}/hqdefault.jpg" alt="${esc(title)}" loading="lazy">${play}${open}</div>`;
+    }
+    return `<div class="ex-embed lite drive" data-play="${esc(u)}"><span class="v-lbl">${esc(tr('exercises.drive', 'Google Drive'))}</span>${play}${open}</div>`;
+  }
+  // One listener for every player the app renders, wherever it was inserted.
+  document.addEventListener('click', e => {
+    const a = e.target.closest && e.target.closest('.ex-embed .v-open');
+    if (a) return;                                   // the corner link opens on its own
+    const box = e.target.closest && e.target.closest('.ex-embed[data-play]');
+    if (!box) return;
+    const u = box.dataset.play, src = videoSrc(u);
+    if (!CAN_EMBED || !src) { window.open(u, '_blank', 'noopener'); return; }
+    const img = box.querySelector('img');
+    const title = img ? img.alt : 'video';
+    box.classList.remove('lite', 'drive');
+    box.removeAttribute('data-play');
+    box.innerHTML = `<iframe src="${esc(src + (src.indexOf('?') >= 0 ? '&' : '?') + 'autoplay=1')}" title="${esc(title)}"
+      allowfullscreen referrerpolicy="strict-origin-when-cross-origin"
+      allow="autoplay; accelerometer; encrypted-media; picture-in-picture; web-share"></iframe>`;
+  });
+  // An editable list of video links — used by the drill form and wherever the
+  // app shows links it generated, so a wrong one can always be fixed or removed.
+  const MAX_VIDEOS = 8;
+  function videoRow(u) {
+    return `<div class="vid-row"><input type="url" inputmode="url" placeholder="${esc(tr('exercises.videoPh', ''))}" value="${esc(u || '')}">`
+      + `<button type="button" class="btn sm danger" data-rmvid title="${esc(tr('common.delete', 'Delete'))}">✕</button></div>`;
+  }
+  function videoEditor(list) {
+    const rows = (list && list.length ? list : ['']).map(videoRow).join('');
+    return `<div class="vid-list" data-vids><div class="vid-rows">${rows}</div>`
+      + `<button type="button" class="btn sm" data-addvid>+ ${esc(tr('exercises.addVideo', 'Add video'))}</button></div>`;
+  }
+  function readVideos(box) {
+    return box ? [...box.querySelectorAll('input')].map(i => i.value.trim()).filter(Boolean) : [];
+  }
+  // onChange(box) fires whenever a link is typed, added or removed.
+  function bindVideos(host, onChange) {
+    host.querySelectorAll('[data-vids]').forEach(box => {
+      const rows = box.querySelector('.vid-rows');
+      const fire = () => { if (onChange) onChange(box); };
+      const wire = row => {
+        const inp = row.querySelector('input');
+        inp.addEventListener('change', fire);
+        inp.addEventListener('blur', fire);
+        row.querySelector('[data-rmvid]').onclick = () => {
+          if (rows.children.length > 1) row.remove(); else inp.value = '';
+          fire();
+        };
+      };
+      [...rows.children].forEach(wire);
+      box.querySelector('[data-addvid]').onclick = () => {
+        if (rows.children.length >= MAX_VIDEOS) return toast(tr('exercises.videosMax', ''), 'error');
+        rows.insertAdjacentHTML('beforeend', videoRow(''));
+        wire(rows.lastElementChild);
+        rows.lastElementChild.querySelector('input').focus();
+      };
+    });
+  }
+
   // ---- Share bar ---------------------------------------------------------
   // Export / import for a single module (drills, training plan, tactical board)
   // so a coach can hand one file to a teammate instead of a whole backup.
-  function shareBar(kind) {
-    return `<button class="btn sm" data-pack-exp="${esc(kind)}">${icon('download', 14)} ${esc(tr('share.export', 'Export'))}</button>`
-      + `<label class="btn sm" style="cursor:pointer">${icon('upload', 14)} ${esc(tr('share.import', 'Import'))}`
+  // opts.label renames the buttons; opts.scoped keeps the file to the active team.
+  function shareBar(kind, opts) {
+    opts = opts || {};
+    const exp = opts.exportLabel || tr('share.export', 'Export');
+    const imp = opts.importLabel || tr('share.import', 'Import');
+    return `<button class="btn sm" data-pack-exp="${esc(kind)}">${icon('download', 14)} ${esc(exp)}</button>`
+      + `<label class="btn sm" style="cursor:pointer">${icon('upload', 14)} ${esc(imp)}`
       + `<input type="file" accept="application/json" data-pack-imp="${esc(kind)}" hidden></label>`;
   }
-  function bindShare(host, kind, onDone) {
+  function bindShare(host, kind, onDone, opts) {
+    opts = opts || {};
+    // A team-scoped pack carries one squad only, and lands in the squad you are
+    // looking at on the way back in.
+    const scope = () => (opts.scoped && Store.activeTeamId && Store.activeTeamId()) || '';
     const exp = host.querySelector(`[data-pack-exp="${kind}"]`);
     if (exp) exp.onclick = async () => {
       try {
-        const json = JSON.stringify(await Store.exportPack(kind), null, 2);
+        const json = JSON.stringify(await Store.exportPack(kind, { teamId: scope() }), null, 2);
         const a = document.createElement('a');
         a.href = URL.createObjectURL(new Blob([json], { type: 'application/json' }));
         a.download = `sporttactic-${kind}-${new Date().toISOString().slice(0, 10)}.json`;
@@ -196,7 +351,7 @@ const UI = (() => {
       const r = new FileReader();
       r.onload = async () => {
         try {
-          const n = await Store.importPack(kind, JSON.parse(r.result));
+          const n = await Store.importPack(kind, JSON.parse(r.result), { teamId: scope() });
           toast(tr('share.imported', 'Imported') + ' (' + n + ')', 'success');
           if (onDone) onDone();
         } catch { toast(tr('share.badFile', 'That file is not a SportTactic share file'), 'error'); }
@@ -208,10 +363,17 @@ const UI = (() => {
   // ---- Accordion ---------------------------------------------------------
   // Every big area of the app is a collapsible card, so a coach can fold away
   // what is not in use. The open/closed state is remembered per key.
+  // Until the coach has folded anything at all, EVERY card starts closed, so a
+  // first run shows the whole app as a short list instead of a wall of panels.
+  const ACC_TOUCHED = 'stx_acc_seen';
+  function accTouched() {
+    try { return localStorage.getItem(ACC_TOUCHED) === '1'; } catch { return true; }
+  }
   function accOpen(key, def) {
     try {
       const v = localStorage.getItem('stx_acc_' + key);
-      return v === null ? def !== false : v === '1';
+      if (v !== null) return v === '1';
+      return accTouched() ? def !== false : false;
     } catch { return def !== false; }
   }
   // acc(key, title, innerHtml, { sub, actions, open })
@@ -229,7 +391,10 @@ const UI = (() => {
   function bindAcc(host) {
     host.querySelectorAll('details[data-acc]').forEach(d => {
       d.addEventListener('toggle', () => {
-        try { localStorage.setItem('stx_acc_' + d.dataset.acc, d.open ? '1' : '0'); } catch { /* private mode */ }
+        try {
+          localStorage.setItem('stx_acc_' + d.dataset.acc, d.open ? '1' : '0');
+          localStorage.setItem(ACC_TOUCHED, '1');   // from now on a new card may open by default
+        } catch { /* private mode */ }
       });
       const acts = d.querySelector('.acc-acts');
       // Buttons live in the header — using one must not fold the card, so the
@@ -238,6 +403,38 @@ const UI = (() => {
     });
   }
 
-  return { esc, el, toast, modal, confirm, fmtDate, fmtClock, statCard, initials, icon, shareBar, bindShare, acc, bindAcc };
+  // ---- Printable report --------------------------------------------------
+  // Opens a self-contained page and calls print(), which is also how a browser
+  // saves a PDF. No PDF library and no network, so it works offline.
+  const PRINT_CSS = `
+    body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: #111; margin: 0; padding: 28px; }
+    h1 { font-size: 22px; margin: 0 0 4px; }
+    h2 { font-size: 14px; text-transform: uppercase; letter-spacing: .08em; color: #555; margin: 22px 0 6px; padding-bottom: 4px; border-bottom: 1px solid #bbb; }
+    h3 { font-size: 14px; margin: 14px 0 4px; }
+    p.sub { color: #555; margin: 0 0 16px; font-size: 13px; }
+    p.foot { color: #777; font-size: 11px; margin-top: 28px; border-top: 1px solid #ccc; padding-top: 6px; }
+    p, li { font-size: 13px; line-height: 1.5; margin: 0 0 8px; }
+    table { border-collapse: collapse; width: 100%; margin: 6px 0 10px; font-size: 12px; }
+    th, td { border: 1px solid #bbb; padding: 5px 8px; text-align: left; vertical-align: top; }
+    th { background: #eee; }
+    .none { color: #777; font-style: italic; }
+    .kpi { display: flex; flex-wrap: wrap; gap: 10px; margin: 8px 0 14px; }
+    .kpi div { border: 1px solid #bbb; border-radius: 6px; padding: 6px 12px; min-width: 92px; }
+    .kpi b { display: block; font-size: 18px; }
+    .kpi span { font-size: 11px; color: #555; }
+    @media print { body { padding: 0; } h2 { page-break-after: avoid; } section { page-break-inside: avoid; } }`;
+  function printDoc(title, sub, html, onBlocked) {
+    const w = window.open('', '_blank');
+    if (!w) { if (onBlocked) onBlocked(); return false; }
+    w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>' + esc(title) + '</title><style>' + PRINT_CSS + '</style></head><body>'
+      + '<h1>' + esc(title) + '</h1>' + (sub ? '<p class="sub">' + esc(sub) + '</p>' : '') + html
+      + '<p class="foot">SportTactic \u00b7 ' + esc(fmtDate(Date.now())) + '</p></body></html>');
+    w.document.close();
+    w.focus();
+    setTimeout(function () { try { w.print(); } catch (e) { /* the user can print it themselves */ } }, 300);
+    return true;
+  }
+
+  return { esc, el, toast, modal, confirm, fmtDate, fmtClock, statCard, initials, icon, langText, langsOf, safeUrl, videoSrc, videosOf, videoEmbed, videoEditor, bindVideos, readVideos, shareBar, bindShare, acc, bindAcc, printDoc };
 })();
 if (typeof window !== 'undefined') window.UI = UI;

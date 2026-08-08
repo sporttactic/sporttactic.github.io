@@ -2,16 +2,20 @@
 window.Views = window.Views || {};
 Views.opponents = function (mount) {
   const opponents = Store.scoped('opponents');
+  const team = Store.activeTeam();
   const sportId = (window.App && App.getSport && App.getSport()) || 'handball';
+  // Translate a stored value, falling back to the value itself.
+  const tt = (p, v) => { const k = p + '.' + v; const r = T(k); return r === k ? v : r; };
   const cards = `
     <div class="grid cols-2">
       ${opponents.map(o => `
         <div class="card">
-          <div style="display:flex;justify-content:space-between"><h3 style="margin:0">${UI.esc(o.name)}</h3><span class="tag amber">${UI.esc(o.formation || '—')}</span></div>
+          <div style="display:flex;justify-content:space-between"><h3 style="margin:0">${UI.esc(o.name)}</h3><span class="tag amber">${UI.esc(o.formation ? tt('form', o.formation) : '—')}</span></div>
           <p style="margin:8px 0"><strong>${T('opponents.keyPlayers')}:</strong> ${UI.esc(o.keyPlayers || '—')}</p>
           <p style="margin:8px 0;color:var(--text-soft)"><strong>${T('opponents.tendencies')}:</strong> ${UI.esc(o.tendencies || '—')}</p>
           <button class="btn sm" data-edit="${o.id}">${T('common.edit')}</button>
           <button class="btn sm" data-report="${o.id}">${T('opponents.report')}</button>
+          <button class="btn sm" data-pdf="${o.id}">⬇ ${T('opponents.pdf')}</button>
           <button class="btn sm" data-aiplan="${o.id}">🤖 ${T('opponents.aiPlan')}</button>
           <button class="btn sm danger" data-del="${o.id}">${T('common.delete')}</button>
         </div>`).join('') || `<div class="empty"><div class="big">${UI.icon('search', 40)}</div>${T('opponents.none')}</div>`}
@@ -23,6 +27,7 @@ Views.opponents = function (mount) {
     ${UI.acc('opponents', T('opponents.scouted'), cards, {
     sub: T('opponents.subtitle'),
     actions: `${UI.shareBar('opponents')}
+        <button class="btn" id="pdfAll">⬇ ${T('opponents.pdfAll')}</button>
         <button class="btn" id="aiNewOpp">🤖 ${T('opponents.aiNew')}</button>
         <button class="btn" id="aiSuggest">🤖 ${T('opponents.aiSuggest')}</button>
         <button class="btn primary" id="addOpp">+ ${T('opponents.newOpponent')}</button>`
@@ -35,7 +40,7 @@ Views.opponents = function (mount) {
       title: o.id ? T('opponents.editOpp') : T('opponents.newOpponent'),
       body: `
         <label class="field"><span>${T('opponents.name')}</span><input id="o_n" value="${UI.esc(o.name || '')}"></label>
-        <label class="field"><span>${T('opponents.formation')}</span><select id="o_f">${SPORTS.oppFormations(sportId).map(x => `<option ${x === o.formation ? 'selected' : ''}>${UI.esc(x)}</option>`).join('')}</select></label>
+        <label class="field"><span>${T('opponents.formation')}</span><select id="o_f">${SPORTS.oppFormations(sportId).map(x => `<option value="${UI.esc(x)}" ${x === o.formation ? 'selected' : ''}>${UI.esc(tt('form', x))}</option>`).join('')}</select></label>
         <label class="field"><span>${T('opponents.keyPlayers')}</span><input id="o_k" value="${UI.esc(o.keyPlayers || '')}"></label>
         <label class="field"><span>${T('opponents.tendencies')}</span><textarea id="o_t" rows="4">${UI.esc(o.tendencies || '')}</textarea></label>`,
       footer: `<button class="btn ghost" data-close2>${T('common.cancel')}</button><button class="btn primary" data-save>${T('common.save')}</button>`,
@@ -65,33 +70,38 @@ Views.opponents = function (mount) {
       <p style="margin-top:10px">${UI.esc(o.tendencies || '—')}</p>
       <p style="margin-top:12px;color:var(--muted)">${UI.esc(recFor(o))}</p>`;
   }
+  // One opponent as printable HTML, reused for a single card and for the
+  // "export all" sheet.
+  function pdfSection(o) {
+    const played = Store.matches().filter(m => (m.opponent || '').toLowerCase() === (o.name || '').toLowerCase());
+    return `<section><h2>${UI.esc(o.name)}</h2>`
+      + `<table><tr><th>${UI.esc(T('opponents.formationLabel'))}</th><td>${UI.esc(o.formation || '—')}</td></tr>`
+      + `<tr><th>${UI.esc(T('opponents.keyPlayers'))}</th><td>${UI.esc(o.keyPlayers || '—')}</td></tr></table>`
+      + `<h3>${UI.esc(T('opponents.tendencies'))}</h3><p>${UI.esc(o.tendencies || '—')}</p>`
+      + (played.length ? `<h3>${UI.esc(T('opponents.pastMatches'))}</h3><table><thead><tr>`
+        + `<th>${UI.esc(T('training.date'))}</th><th>${UI.esc(T('opponents.venue'))}</th><th>${UI.esc(T('opponents.result'))}</th></tr></thead><tbody>`
+        + played.map(m => `<tr><td>${UI.esc(UI.fmtDate(m.date))}</td><td>${UI.esc(m.home ? T('opponents.home') : T('opponents.away'))}</td><td>${UI.esc((m.homeScore || 0) + ':' + (m.awayScore || 0))}</td></tr>`).join('')
+        + '</tbody></table>' : '')
+      + `<h3>${UI.esc(T('opponents.recommendation'))}</h3><p>${UI.esc(recFor(o))}</p></section>`;
+  }
+  const pdfSub = () => [team && team.name, SPORTS.name(sportId, I18N.getLang())].filter(Boolean).join(' · ');
   // Print view — the browser's own "Save as PDF" is the export.
   function reportPdf(o) {
-    const w = window.open('', '_blank');
-    if (!w) return UI.toast(T('opponents.popupBlocked'), 'error');
-    const title = T('opponents.report') + ' — ' + o.name;
-    const played = Store.matches().filter(m => (m.opponent || '').toLowerCase() === (o.name || '').toLowerCase());
-    w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${UI.esc(title)}</title>
-      <style>body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;padding:28px;color:#111;max-width:760px}
-      h1{margin:0 0 4px;font-size:22px}.meta{color:#666;font-size:12px;margin-bottom:18px}
-      h2{font-size:14px;text-transform:uppercase;letter-spacing:.08em;color:#666;margin:22px 0 6px}
-      p{margin:0 0 8px;line-height:1.5}table{border-collapse:collapse;width:100%;font-size:13px}
-      td,th{border:1px solid #ccc;padding:6px 10px;text-align:left}</style></head><body>
-      <h1>${UI.esc(title)}</h1>
-      <div class="meta">SportTactic · ${UI.esc(SPORTS.name(sportId, I18N.getLang()))} · ${UI.esc(new Date().toLocaleDateString())}</div>
-      <h2>${UI.esc(T('opponents.formationLabel'))}</h2><p>${UI.esc(o.formation || '—')}</p>
-      <h2>${UI.esc(T('opponents.keyPlayers'))}</h2><p>${UI.esc(o.keyPlayers || '—')}</p>
-      <h2>${UI.esc(T('opponents.tendencies'))}</h2><p>${UI.esc(o.tendencies || '—')}</p>
-      ${played.length ? `<h2>${UI.esc(T('opponents.pastMatches'))}</h2><table><thead><tr>
-        <th>${UI.esc(T('training.date'))}</th><th>${UI.esc(T('opponents.venue'))}</th><th>${UI.esc(T('opponents.result'))}</th></tr></thead><tbody>`
-        + played.map(m => `<tr><td>${UI.esc(UI.fmtDate(m.date))}</td><td>${UI.esc(m.home ? T('opponents.home') : T('opponents.away'))}</td><td>${UI.esc((m.homeScore || 0) + ':' + (m.awayScore || 0))}</td></tr>`).join('')
-        + '</tbody></table>' : ''}
-      <h2>${UI.esc(T('opponents.recommendation'))}</h2><p>${UI.esc(recFor(o))}</p>
-      </body></html>`);
-    w.document.close();
-    w.focus();
-    setTimeout(() => w.print(), 250);
+    UI.printDoc(T('opponents.report') + ' — ' + o.name, pdfSub(), pdfSection(o),
+      () => UI.toast(T('opponents.popupBlocked'), 'error'));
   }
+  // Every scouted opponent in one document, ready for the pre-season folder.
+  function reportPdfAll() {
+    const list = Store.scoped('opponents');
+    if (!list.length) return UI.toast(T('opponents.none'), 'error');
+    UI.printDoc(T('opponents.title'), pdfSub() + ' · ' + list.length + ' ' + T('opponents.scouted'),
+      list.map(pdfSection).join(''), () => UI.toast(T('opponents.popupBlocked'), 'error'));
+  }
+  mount.querySelector('#pdfAll').onclick = reportPdfAll;
+  mount.querySelectorAll('[data-pdf]').forEach(b => b.onclick = () => {
+    const o = Store.find('opponents', b.dataset.pdf);
+    if (o) reportPdf(o);
+  });
 
   // ---- AI-drafted opponent ------------------------------------------------
   // Reads the match list, so the coach can turn a fixture into a scouting card

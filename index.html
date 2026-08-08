@@ -44,7 +44,7 @@ Show focus areas
 Produce video clips.">
   <link rel="apple-touch-icon" href="logo.svg?v=6" />
   <title>SportTactic</title>
-  <link rel="stylesheet" href="styles.css?v=74" />
+  <link rel="stylesheet" href="styles.css?v=87" />
   <link rel="manifest" href="manifest.webmanifest?v=2" />
   <style>
     /* Boot splash — inline so it paints before styles.css / the app scripts run.
@@ -138,7 +138,7 @@ Produce video clips.">
               <path d="M11 7.6V15"/><path d="M11 9.4 15.4 5.6"/><path d="M11 9.4 6.4 13"/><path d="M11 15 7.4 21.8"/><path d="M11 15 14.6 21.8"/>
             </svg>
           </div>
-          <span data-i18n="brand.tagline">Coaching Platform</span>
+          <span data-i18n="brand.tagline">Sports Platform</span>
         </div>
       </div>
       <div class="sport-picker">
@@ -150,6 +150,7 @@ Produce video clips.">
         <a data-route="dashboard" class="nav-item active"><span class="ico"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg></span> <span data-i18n="nav.dashboard">Dashboard</span></a>
         <a data-route="teams" class="nav-item"><span class="ico"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></span> <span data-i18n="nav.teams">Teams &amp; Players</span></a>
         <a data-route="matches" class="nav-item"><span class="ico"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21h18M5 21V7l8-4v18M19 21V11l-6-4"/><path d="M9 9v0M9 13v0M9 17v0"/></svg></span> <span data-i18n="nav.matches">Matches</span></a>
+        <a data-route="planner" class="nav-item"><span class="ico"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/><path d="M8 14h3M8 17h6"/></svg></span> <span data-i18n="nav.planner">Event Planner</span></a>
         <a data-route="scouting" class="nav-item"><span class="ico"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2M9 2h6"/></svg></span> <span data-i18n="nav.scouting">Live Scouting</span></a>
         <a data-route="statistics" class="nav-item"><span class="ico"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></svg></span> <span data-i18n="nav.statistics">Statistics</span></a>
         <a data-route="tactics" class="nav-item"><span class="ico"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></span> <span data-i18n="nav.tactics">Tactical Board</span></a>
@@ -169,7 +170,7 @@ Produce video clips.">
       <div class="sidebar-footer">
         <span id="syncStatus" class="sync-badge"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-2px"><path d="M18 6 7 17l-5-5"/><path d="m22 10-7.5 7.5L13 16"/></svg> <span data-i18n="footer.offline">Offline Ready</span></span>
         <button type="button" id="installApp" class="install-btn hidden"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg> <span data-i18n="footer.install">Install App</span></button>
-        <div class="author">© 2026 ArcToCore — Steen Østerby Rasmussen · <a href="license.html" target="_blank" rel="noopener" class="license-link" data-i18n="footer.license">License</a></div>
+        <div class="author">© 2026 ArcToCore · <span data-i18n="footer.author">Author</span>: Steen Østerby Rasmussen · <a href="license.html" target="_blank" rel="noopener" class="license-link" data-i18n="footer.license">License</a></div>
       </div>
     </aside>
 
@@ -213,33 +214,35 @@ Produce video clips.">
   <div id="modalHost" class="modal-host hidden"></div>
   <div id="toastHost" class="toast-host"></div>
 
-  <script src="db.js?v=13"></script>
-  <script src="i18n.js?v=72"></script>
-  <script src="sports.js?v=18"></script>
+  <script src="db.js?v=14"></script>
+  <script src="i18n.js?v=95"></script>
+  <script src="sports.js?v=20"></script>
   <script src="playbook.js?v=12"></script>
-  <script src="store.js?v=19"></script>
-  <script src="ui.js?v=18"></script>
-  <script src="mail.js?v=10"></script>
-  <script src="ai.js?v=8"></script>
+  <script src="store.js?v=21"></script>
+  <script src="ui.js?v=26"></script>
+  <script src="mail.js?v=11"></script>
+  <script src="ai.js?v=11"></script>
   <script src="dashboard.js?v=16"></script>
-  <script src="teams.js?v=27"></script>
-  <script src="matches.js?v=16"></script>
-  <script src="scouting.js?v=20"></script>
-  <script src="statistics.js?v=21"></script>
+  <script src="teams.js?v=30"></script>
+  <script src="matches.js?v=19"></script>
+  <script src="planner.js?v=1"></script>
+  <script src="scouting.js?v=27"></script>
+  <script src="statistics.js?v=23"></script>
   <script src="chess.js?v=13"></script>
   <script src="bridge.js?v=13"></script>
   <script src="poker.js?v=13"></script>
   <script src="backgammon.js?v=13"></script>
-  <script src="tactics.js?v=52"></script>
+  <script src="tactics.js?v=61"></script>
   <script src="anim.js?v=1"></script>
-  <script src="video.js?v=21"></script>
-  <script src="training.js?v=25"></script>
-  <script src="exercises.js?v=16"></script>
-  <script src="opponents.js?v=17"></script>
-  <script src="reports.js?v=19"></script>
-  <script src="settings.js?v=38"></script>
+  <script src="video.js?v=22"></script>
+  <script src="training.js?v=36"></script>
+  <script src="exercises.js?v=30"></script>
+  <script src="opponents.js?v=19"></script>
+  <script src="reports.js?v=21"></script>
+  <script src="settings.js?v=43"></script>
+  <script src="backup.js?v=1"></script>
   <script src="messenger.js?v=16"></script>
-  <script src="app.js?v=23"></script>
+  <script src="app.js?v=26"></script>
   <script>
     // PWA: offline app shell (sw.js) + Chrome's install prompt.
     (function () {

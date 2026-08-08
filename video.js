@@ -391,7 +391,7 @@ Views.video = function (mount) {
       title: T('video.addBookmark'),
       body: `
         <label class="field"><span>${T('video.time')}</span><input id="bm_time" value="${UI.fmtClock(Math.floor(t))}" placeholder="mm:ss"></label>
-        <label class="field"><span>${T('video.tag')}</span><input id="bm_tag" value="Goal" placeholder="${T('video.tag')}"></label>
+        <label class="field"><span>${T('video.tag')}</span><input id="bm_tag" value="${UI.esc(T('video.tagDefault'))}" placeholder="${T('video.tag')}"></label>
         <label class="field"><span>${T('video.comment')}</span><textarea id="bm_comment" rows="3" placeholder="${T('video.commentPh')}"></textarea></label>`,
       footer: `<button class="btn ghost" data-close2>${T('common.cancel')}</button><button class="btn primary" data-save>${T('common.save')}</button>`,
       onOpen: (m, close) => {

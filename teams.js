@@ -107,9 +107,17 @@ Views.teams = function (mount) {
       <div class="team-bar">
         <label class="field"><span>${T('teams.activeTeam')}</span>
           <select id="teamPick">${teamList.map(x => `<option value="${UI.esc(x.id)}" ${team && x.id === team.id ? 'selected' : ''}>${UI.esc(x.name)}</option>`).join('') || `<option value="">${UI.esc(T('teams.noTeam'))}</option>`}</select></label>
+        <button class="btn sm" id="editTeamBtn" ${team ? '' : 'disabled'}>✎ ${T('teams.editTeam')}</button>
         <button class="btn sm" id="newTeam">+ ${T('teams.newTeam')}</button>
         <button class="btn sm danger" id="delTeam" ${teamList.length < 2 ? 'disabled' : ''}>${T('teams.delTeam')}</button>
       </div>
+      ${team ? `<div class="team-facts">
+        <span class="tag">${T('teams.clubField')}: ${UI.esc(clubName(team) || '—')}</span>
+        <span class="tag">${T('teams.seasonField')}: ${UI.esc(seasonName(team) || '—')}</span>
+        <span class="tag">${T('teams.division')}: ${UI.esc(team.division || '—')}</span>
+        <span class="tag">${T('teams.category')}: ${UI.esc(team.category || '—')}</span>
+        <span class="tag">${T('teams.venue')}: ${UI.esc(team.venue || '—')}</span>
+      </div>` : ''}
       <p class="hint">${T('teams.scopeHint')}</p>`;
 
     mount.innerHTML = `
@@ -134,6 +142,8 @@ Views.teams = function (mount) {
   function bind(team, players) {
     const q = s => mount.querySelector(s);
     q('#editTeam').onclick = () => teamForm(team);
+    const editBtn = q('#editTeamBtn');
+    if (editBtn) editBtn.onclick = () => team ? teamForm(team) : UI.toast(T('teams.noTeamFirst'), 'error');
     q('#addStaff').onclick = () => team ? staffForm(team) : UI.toast(T('teams.noTeamFirst'), 'error');
 
     const pick = q('#teamPick');
@@ -240,7 +250,7 @@ Views.teams = function (mount) {
         <label class="field"><span>${T('teams.status')}</span><select id="f_st"><option value="active" ${p.status === 'active' ? 'selected' : ''}>${UI.esc(tt('status', 'active'))}</option><option value="injured" ${p.status === 'injured' ? 'selected' : ''}>${UI.esc(tt('status', 'injured'))}</option><option value="suspended" ${p.status === 'suspended' ? 'selected' : ''}>${UI.esc(tt('status', 'suspended'))}</option></select></label></div>
         <label class="field"><span>${T('teams.phone')}</span><input id="f_ph" type="tel" value="${UI.esc(p.phone || '')}" placeholder="+45 12 34 56 78">
           <span class="hint">${T('teams.phoneHint')}</span></label>
-        <label class="field"><span>${T('teams.email')}</span><input id="f_em" type="email" value="${UI.esc(p.email || '')}" placeholder="navn@klub.dk">
+        <label class="field"><span>${T('teams.email')}</span><input id="f_em" type="email" value="${UI.esc(p.email || '')}" placeholder="${UI.esc(T('teams.emailPh'))}">
           <span class="hint">${T('teams.emailHint')}</span></label>
         <label class="field" id="f_noteWrap" style="display:${p.status === 'injured' ? 'block' : 'none'}"><span>${T('teams.injuryNote')}</span>
           <textarea id="f_note" rows="3" placeholder="${UI.esc(T('teams.injuryNotePh'))}">${UI.esc(p.injuryNote || '')}</textarea>
@@ -283,20 +293,33 @@ Views.teams = function (mount) {
   }
 
   // `fresh` starts a brand new squad instead of editing the active one.
+  const clubName = t => { const c = t && Store.find('clubs', t.clubId); return c ? c.name : ''; };
+  const seasonName = t => { const s = t && Store.find('seasons', t.seasonId); return s ? s.name : ''; };
+
   function teamForm(team, fresh) {
     const t = fresh ? {} : (team || {});
     // The text field stays authoritative; the select beside it only fills it in,
-    // so a league SportTactic has never heard of is still allowed.
-    const combo = (id, val, list) => `<div class="combo">
+    // so a league SportTactic has never heard of is still allowed. The option
+    // shows the translated wording while the value written stays English.
+    const combo = (id, val, list, prefix) => `<div class="combo">
       <input id="${id}" value="${UI.esc(val || '')}">
-      <select id="${id}Pick"><option value="">${T('teams.pick')}</option>${list.map(x => `<option value="${UI.esc(x)}" ${x === val ? 'selected' : ''}>${UI.esc(x)}</option>`).join('')}</select>
+      <select id="${id}Pick"><option value="">${T('teams.pick')}</option>${list.map(x => `<option value="${UI.esc(x)}" ${x === val ? 'selected' : ''}>${UI.esc(tt(prefix, x))}</option>`).join('')}</select>
     </div>`;
+    const club = Store.find('clubs', t.clubId) || Store.all('clubs')[0] || {};
+    const season = Store.find('seasons', t.seasonId) || Store.all('seasons')[0] || {};
     UI.modal({
       title: fresh ? T('teams.newTeam') : T('teams.editTeam'),
+      width: 620,
       body: `
         <label class="field"><span>${T('teams.teamName')}</span><input id="t_name" value="${UI.esc(t.name || '')}"></label>
-        <div class="row"><label class="field"><span>${T('teams.division')}</span>${combo('t_div', t.division, SPORTS.divisions(sportId))}</label>
-        <label class="field"><span>${T('teams.category')}</span>${combo('t_cat', t.category, SPORTS.categories(sportId))}</label></div>
+        <div class="row"><label class="field"><span>${T('teams.division')}</span>${combo('t_div', t.division, SPORTS.divisions(sportId), 'division')}</label>
+        <label class="field"><span>${T('teams.category')}</span>${combo('t_cat', t.category, SPORTS.categories(sportId), 'teamCat')}</label></div>
+        <div class="row">
+          <label class="field"><span>${T('teams.clubField')}</span><input id="t_club" value="${UI.esc(club.name || '')}" placeholder="${UI.esc(T('teams.clubPh'))}"></label>
+          <label class="field"><span>${T('teams.seasonField')}</span><input id="t_season" value="${UI.esc(season.name || '')}" placeholder="2025/2026"></label>
+        </div>
+        <label class="field"><span>${T('teams.venue')}</span><input id="t_venue" value="${UI.esc(t.venue || '')}" placeholder="${UI.esc(T('teams.venuePh'))}">
+          <span class="hint">${T('teams.venueHint')}</span></label>
         ${fresh ? `<p class="hint">${T('teams.newTeamHint')}</p>` : ''}`,
       footer: `<button class="btn ghost" data-close2>${T('common.cancel')}</button><button class="btn primary" data-save>${T('common.save')}</button>`,
       onOpen: (m, close) => {
@@ -308,14 +331,21 @@ Views.teams = function (mount) {
         m.querySelector('[data-save]').onclick = async () => {
           const name = m.querySelector('#t_name').value.trim();
           if (!name) return UI.toast(T('teams.reqTeamName'), 'error');
-          const club = Store.all('clubs')[0], season = Store.all('seasons')[0];
+          // The club and the season are their own records — renamed in place, or
+          // created when the install has none yet.
+          const clubName2 = m.querySelector('#t_club').value.trim();
+          const seasonName2 = m.querySelector('#t_season').value.trim();
+          let clubId = club.id, seasonId = season.id;
+          if (clubName2) clubId = (await Store.save('clubs', Object.assign({}, club, { name: clubName2 }))).id;
+          if (seasonName2) seasonId = (await Store.save('seasons', Object.assign({}, season, { name: seasonName2, clubId: clubId }))).id;
           // Falls back to creating the team when none exists yet.
-          const obj = Object.assign({ clubId: club && club.id, seasonId: season && season.id }, t, {
-            name,
+          const obj = Object.assign({}, t, {
+            name, clubId, seasonId,
             // A team belongs to one sport, so the switcher only lists its own squads.
             sport: t.sport || sportId,
             division: m.querySelector('#t_div').value.trim(),
-            category: m.querySelector('#t_cat').value.trim()
+            category: m.querySelector('#t_cat').value.trim(),
+            venue: m.querySelector('#t_venue').value.trim().slice(0, 80)
           });
           const saved = await Store.save('teams', obj);
           if (fresh) Store.setActiveTeam(saved.id);
@@ -333,7 +363,7 @@ Views.teams = function (mount) {
       body: `
         <label class="field"><span>${T('teams.staffName')}</span><input id="s_name" value="${UI.esc(c.name || '')}"></label>
         <label class="field"><span>${T('teams.staffRole')}</span><select id="s_role">${roles.map(x => `<option value="${x}" ${x === c.role ? 'selected' : ''}>${UI.esc(tt('coachRole', x))}</option>`).join('')}</select></label>
-        <label class="field"><span>${T('teams.email')}</span><input id="s_email" type="email" autocomplete="off" spellcheck="false" value="${UI.esc(c.email || '')}" placeholder="traener@klub.dk">
+        <label class="field"><span>${T('teams.email')}</span><input id="s_email" type="email" autocomplete="off" spellcheck="false" value="${UI.esc(c.email || '')}" placeholder="${UI.esc(T('teams.coachEmailPh'))}">
           <span class="hint">${T('teams.staffEmailHint')}</span></label>`,
       footer: `<button class="btn ghost" data-close2>${T('common.cancel')}</button><button class="btn primary" data-save>${T('common.save')}</button>`,
       onOpen: (m, close) => {

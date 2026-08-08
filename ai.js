@@ -55,20 +55,15 @@ window.AI = (() => {
     L.push('Drill library (video = link the coach can open):');
     if (!drills.length) L.push('  empty');
     drills.forEach(d => L.push(`  ${d.title} (${d.category}, ${d.duration || 0} min, ${d.intensity || 'Low'})`
-      + ((d.videoYt || d.videoUrl) ? ` — video: ${d.videoYt || d.videoUrl}` : '')));
+      + ((d.videos && d.videos[0]) || d.videoYt || d.videoUrl ? ` — video: ${(d.videos && d.videos[0]) || d.videoYt || d.videoUrl}` : '')));
     return L.join('\n');
   }
 
   function systemPrompt() {
-    const da = window.I18N && I18N.getLang() === 'da';
-    const lang = da ? 'Danish' : 'English';
     const sportId = (window.App && App.getSport && App.getSport()) || 'handball';
     return [
-      `You are an experienced ${SPORTS.name(sportId, 'en')} head coach, performance analyst and strength & conditioning adviser.`,
-      `Write your entire answer in ${lang} — this is the language the coach selected in the app.`,
-      // The data, the drill titles and older turns may be in the other language; the reply must not follow them.
-      `Use ${lang} even if the team data, the drill names, the question or your earlier replies in this conversation are in another language, and use the normal ${lang} coaching vocabulary.`,
-      da ? 'Svar udelukkende på dansk.' : 'Answer only in English.',
+      `You are an experienced ${SPORTS.name(sportId, 'en')} head coach, performance analyst and strength & conditioning adviser.`
+    ].concat(langLines(), [
       'Be concrete and practical: short bullet points, no filler, at most ~200 words unless asked for more.',
       `Stay inside ${SPORTS.name(sportId, 'en')}: use only the drill categories, positions and formations listed in TEAM DATA, that sport's own rules, scoring and vocabulary, and never borrow drills or terms from another sport.`,
       'Use the team data below — cite real shirt numbers and names when you name players.',
@@ -82,7 +77,7 @@ window.AI = (() => {
       '',
       'TEAM DATA',
       context()
-    ].join('\n');
+    ]).join('\n');
   }
 
   // ---- Rendering ----
@@ -244,18 +239,32 @@ window.AI = (() => {
     });
   }
 
+  // The language the coach picked in the app, spelled out for the model. Read at
+  // ASK time, so switching language mid-session takes effect on the next answer.
+  function langLines() {
+    const da = window.I18N && I18N.getLang() === 'da';
+    const lang = da ? 'Danish' : 'English';
+    return [
+      `Write your entire answer in ${lang} — this is the language the coach selected in the app.`,
+      `Use ${lang} for every heading, label, list item and caption, even when the data you are given is in another language.`,
+      da ? 'Svar udelukkende på dansk.' : 'Answer only in English.'
+    ];
+  }
+
   // One-shot call for other views (e.g. the drill generator) — no chat history, no team data.
   async function complete(system, user, maxTokens) {
     const key = getKey();
     if (!key) { keyDialog(); return null; }
     if (navigator.onLine === false) { UI.toast(T('ai.offline'), 'error'); return null; }
+    // Every caller gets the language rule, whatever prompt it built.
+    const sys = langLines().join('\n') + '\n' + String(system || '');
     try {
       const res = await fetch(ENDPOINT, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key },
         body: JSON.stringify({
           model: MODEL, temperature: 0.7, max_tokens: maxTokens || 600,
-          messages: [{ role: 'system', content: system }, { role: 'user', content: user }]
+          messages: [{ role: 'system', content: sys }, { role: 'user', content: user }]
         })
       });
       if (!res.ok) {
@@ -310,8 +319,39 @@ window.AI = (() => {
       catch (e) { return ''; }
     };
     return Store.all('exercises')
-      .map(e => ({ title: e.title, url: safe(e.videoYt) || safe(e.videoUrl) }))
+      .map(e => ({ title: e.title, url: safe((e.videos || [])[0]) || safe(e.videoYt) || safe(e.videoUrl) }))
       .filter(e => e.url).slice(0, 30);
+  }
+
+  // A model will happily invent a YouTube address that 404s. YouTube's oEmbed
+  // endpoint answers 200 with the real title for a video that exists and 404 for
+  // one that does not, and it allows cross-origin reads — so a suggested link is
+  // only kept when it actually resolves.
+  const ytChecked = new Map();
+  async function checkVideo(url) {
+    const u = String(url || '').trim();
+    if (!u || !/^https:\/\/(www\.|m\.)?(youtube\.com|youtu\.be)\//i.test(u)) return null;
+    if (ytChecked.has(u)) return ytChecked.get(u);
+    if (navigator.onLine === false) return null;
+    let out = null;
+    try {
+      const r = await fetch('https://www.youtube.com/oembed?format=json&url=' + encodeURIComponent(u), { cache: 'no-store' });
+      if (r.ok) {
+        const j = await r.json();
+        if (j && j.title) out = { url: u, title: String(j.title).slice(0, 120) };
+      }
+    } catch (e) { out = null; }        // offline or blocked — treat as unverified
+    ytChecked.set(u, out);
+    return out;
+  }
+  // Takes the addresses a model suggested and returns the first that really
+  // exists, or '' when none do.
+  async function pickVideo(list) {
+    for (const u of (list || []).slice(0, 5)) {
+      const ok = await checkVideo(u);
+      if (ok) return ok.url;
+    }
+    return '';
   }
 
   function helpDialog() {
@@ -387,7 +427,7 @@ window.AI = (() => {
   }
 
   return {
-    section, bind, complete, report, videos, render: fmt,
+    section, bind, complete, report, videos, render: fmt, checkVideo, pickVideo,
     keyDialog: () => keyDialog(), hasKey: () => !!getKey()
   };
 })();

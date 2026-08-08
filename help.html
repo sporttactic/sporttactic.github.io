@@ -38,15 +38,33 @@
     nav.toc{display:flex;flex-wrap:wrap;gap:8px;margin:20px 0}
     nav.toc a{background:var(--surface2);border:1px solid var(--border);color:var(--soft);padding:8px 14px;border-radius:20px;text-decoration:none;font-size:14px}
     nav.toc a:hover{background:var(--border);color:var(--text)}
-    section.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:22px;margin:18px 0;box-shadow:var(--shadow)}
-    section.card h2{text-transform:uppercase;letter-spacing:.5px;font-size:19px;margin-bottom:6px;display:flex;align-items:center;gap:10px}
-    section.card h2 .num{width:30px;height:30px;border-radius:50%;background:var(--primary);color:var(--on-primary);display:inline-flex;align-items:center;justify-content:center;font-size:15px}
+    details.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:22px;margin:18px 0;box-shadow:var(--shadow)}
+    details.card h2{text-transform:uppercase;letter-spacing:.5px;font-size:19px;margin:0;display:flex;align-items:center;gap:10px}
+    details.card h2 .num{width:30px;height:30px;border-radius:50%;background:var(--primary);color:var(--on-primary);display:inline-flex;align-items:center;justify-content:center;font-size:15px;flex:none}
+    summary.sec-h{cursor:pointer;display:flex;align-items:center;gap:10px;list-style:none}
+    summary.sec-h::-webkit-details-marker{display:none}
+    summary.sec-h::after{content:"";flex:none;margin-left:auto;width:9px;height:9px;border-right:2px solid var(--soft);border-bottom:2px solid var(--soft);transform:rotate(45deg);transition:transform .15s}
+    details.card[open]>summary.sec-h::after{transform:rotate(-135deg)}
+    summary.sec-h:hover::after{border-color:var(--text)}
+    details.card>summary.sec-h{margin:-4px 0}
+    details.card[open]>summary.sec-h{margin-bottom:10px}
+    /* Author display rules out-specify the UA hiding of a closed <details>. */
+    details.card:not([open])>*:not(summary){display:none}
+    .sec-acts{display:flex;flex-wrap:wrap;gap:8px;margin:-8px 0 8px}
+    .sec-acts button{background:var(--surface2);border:1px solid var(--border);color:var(--soft);padding:7px 13px;border-radius:20px;font-size:13px;cursor:pointer}
+    .sec-acts button:hover{background:var(--border);color:var(--text)}
     ol,ul{margin:10px 0 10px 22px}
     li{margin:5px 0;color:var(--soft)}
     kbd{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:1px 7px;font-size:12px}
     .tut{display:grid;grid-template-columns:280px 1fr;gap:18px;align-items:center;margin-top:14px}
     @media(max-width:640px){.tut{grid-template-columns:1fr}}
     .fig{background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:8px}
+    .tools-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px;margin-top:14px}
+    .tool-card{margin:0;background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:10px}
+    .tool-card svg{display:block;width:100%;height:auto;border-radius:8px}
+    .tool-card figcaption{margin-top:8px;font-size:13px;line-height:1.5;color:var(--soft)}
+    .tool-card figcaption b{color:var(--text)}
+    .tool-card .kbd-tap{display:inline-block;font-size:11px;color:var(--muted);margin-top:4px}
     .drills-h{margin:24px 0 2px;font-size:13px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)}
     .tag{display:inline-block;background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:2px 10px;font-size:12px;color:var(--soft)}
     /* Icon is taken out of flow so wrapped lines keep a clean hanging indent and
@@ -64,7 +82,7 @@
     #themeIcon{display:inline-flex}
     #themeIcon svg{box-shadow:none;border-radius:0}
     [data-theme="dark"] .lang button.active{background:linear-gradient(90deg,#ffffff,#9aa3b5);border-color:transparent;box-shadow:0 6px 16px rgba(0,0,0,.5)}
-    [data-theme="dark"] section.card h2 .num{background:linear-gradient(90deg,#ffffff,#9aa3b5)}
+    [data-theme="dark"] details.card h2 .num{background:linear-gradient(90deg,#ffffff,#9aa3b5)}
     [data-theme="dark"] .callout{border-left-color:var(--primary)}
     [data-theme="dark"] .callout > .sym:first-child{color:var(--primary)}
     /* Hide the inactive language only — never re-declare display, or block elements
@@ -135,12 +153,14 @@
       <a href="#sport"><span data-lang-en>Choose Your Sport</span><span data-lang-da>Vælg Sportsgren</span></a>
       <a href="#bots"><span data-lang-en>Game Bots</span><span data-lang-da>Spil-bots</span></a>
       <a href="#board"><span data-lang-en>Tactical Board</span><span data-lang-da>Taktiktavle</span></a>
+      <a href="#tools"><span data-lang-en>Every Tool, Illustrated</span><span data-lang-da>Alle værktøjer, illustreret</span></a>
       <a href="#gestures"><span data-lang-en>Gestures &amp; Autosave</span><span data-lang-da>Bevægelser &amp; Autogem</span></a>
       <a href="#shoot"><span data-lang-en>Shooting &amp; Magnet</span><span data-lang-da>Skud &amp; Magnet</span></a>
       <a href="#physics"><span data-lang-en>Physics &amp; Cue Sports</span><span data-lang-da>Fysik &amp; Køllesport</span></a>
       <a href="#record"><span data-lang-en>Record Board</span><span data-lang-da>Optag Tavlen</span></a>
       <a href="#video"><span data-lang-en>Video Analysis</span><span data-lang-da>Videoanalyse</span></a>
       <a href="#squad"><span data-lang-en>Squad, Matches &amp; Training</span><span data-lang-da>Trup, Kampe &amp; Træning</span></a>
+      <a href="#planner"><span data-lang-en>Event Planner</span><span data-lang-da>Begivenhedsplan</span></a>
       <a href="#exercises"><span data-lang-en>Exercise Library</span><span data-lang-da>Øvelsesbibliotek</span></a>
       <a href="#opponents"><span data-lang-en>Opponent Analysis</span><span data-lang-da>Modstanderanalyse</span></a>
       <a href="#scout"><span data-lang-en>Live Scouting</span><span data-lang-da>Live Registrering</span></a>
@@ -153,11 +173,18 @@
       <a href="#support"><span data-lang-en>Support the App</span><span data-lang-da>Støt appen</span></a>
     </nav>
 
+    <div class="sec-acts">
+      <button type="button" id="secOpen"><span data-lang-en>▾ Open all topics</span><span data-lang-da>▾ Åbn alle emner</span></button>
+      <button type="button" id="secClose"><span data-lang-en>▸ Close all topics</span><span data-lang-da>▸ Luk alle emner</span></button>
+    </div>
+
     <!-- 1. Getting started -->
-    <section class="card" id="start">
-      <h2><span class="num">1</span> <span data-lang-en>Getting Started</span><span data-lang-da>Kom godt i gang</span></h2>
+    <details class="card sec" id="start" open>
+      <summary class="sec-h"><h2><span class="num">1</span> <span data-lang-en>Getting Started</span><span data-lang-da>Kom godt i gang</span></h2></summary>
       <p data-lang-en>SportTactic runs fully in your browser and works offline — there is <b>no account and no server</b>. Everything you create is stored on your own device, and you decide what to share.</p>
       <p data-lang-da>SportTactic kører fuldt ud i din browser og virker offline — der er <b>ingen konto og ingen server</b>. Alt hvad du laver gemmes på din egen enhed, og du bestemmer, hvad der deles.</p>
+      <div class="callout" data-lang-en><svg class="sym"><use href="#i-target"/></svg> <b>Every topic on this page folds.</b> Click a heading to open or close it, or use <b>Open all topics</b> / <b>Close all topics</b> above. What you leave open is remembered for next time, and following a link from the list of contents opens the topic it points at.</div>
+      <div class="callout" data-lang-da><svg class="sym"><use href="#i-target"/></svg> <b>Alle emner på denne side kan foldes.</b> Klik på en overskrift for at åbne eller lukke den, eller brug <b>Åbn alle emner</b> / <b>Luk alle emner</b> ovenfor. Det, du lader stå åbent, huskes til næste gang, og følger du et link fra indholdsfortegnelsen, åbnes det emne, det peger på.</div>
       <div class="tut">
         <div class="fig">
           <svg viewBox="0 0 280 150" width="100%">
@@ -179,12 +206,16 @@
           <ul>
             <li data-lang-en>Open the <b>Dashboard</b> to see next/last match, injuries and team form.</li>
             <li data-lang-da>Åbn <b>Oversigt</b> for at se næste/seneste kamp, skader og holdform.</li>
-            <li data-lang-en>Switch <b>language</b> and <b>theme</b> under <span class="tag">Settings</span> or from the top bar.</li>
-            <li data-lang-da>Skift <b>sprog</b> og <b>tema</b> under <span class="tag">Indstillinger</span> eller fra topbjælken.</li>
+            <li data-lang-en>Switch <b>language</b> under <span class="tag">Settings</span> or from the top bar, and <b>theme</b> with the sun/moon button in the top bar.</li>
+            <li data-lang-da>Skift <b>sprog</b> under <span class="tag">Indstillinger</span> eller fra topbjælken, og <b>tema</b> med sol/måne-knappen i topbjælken.</li>
+            <li data-lang-en><b>Choose what is in the menu.</b> <span class="tag">Settings <svg class="sym"><use href="#i-right"/></svg> Modules in the menu</span> lists every module with a tick box. Untick the ones you never use — video analysis, opponent analysis, whatever it is — and they disappear from the sidebar. Nothing is deleted: the data stays, and the module is back the moment you tick it again. <b>Only the basics</b> cuts the list down to Dashboard, Training Planner and Settings in one press, and <b>Select all</b> puts everything back. Settings itself can never be hidden, and the <kbd>1</kbd>–<kbd>9</kbd> shortcuts follow the list you leave on.</li>
+            <li data-lang-da><b>Vælg hvad der står i menuen.</b> <span class="tag">Indstillinger <svg class="sym"><use href="#i-right"/></svg> Moduler i menuen</span> viser hvert modul med et flueben. Fjern fluebenet ved dem du aldrig bruger — videoanalyse, modstanderanalyse, hvad det nu er — så forsvinder de fra menuen. Intet slettes: dataene bliver liggende, og modulet er tilbage i samme øjeblik du sætter fluebenet igen. <b>Kun det basale</b> skærer listen ned til Oversigt, Træningsplan og Indstillinger med ét tryk, og <b>Vælg alle</b> henter det hele tilbage. Indstillinger kan aldrig skjules, og genvejene <kbd>1</kbd>–<kbd>9</kbd> følger den liste, du lader stå tilbage.</li>
             <li data-lang-en>Toggle <b>sound effects</b> on/off with the <svg class="sym"><use href="#i-sound"/></svg> speaker button in the top bar — it mutes the whistle and ball sounds.</li>
             <li data-lang-da>Slå <b>lydeffekter</b> til/fra med <svg class="sym"><use href="#i-sound"/></svg> højttaler-knappen i topbjælken — den lydløser fløjt og boldlyde.</li>
             <li data-lang-en>Every area of the app is a <b>fold-out panel</b>. Click the heading — or the <b>chevron</b> next to it — to collapse a section you are done with and open the one you need. The app <b>remembers what you left open</b> on this device, so your own layout is back the next time you open it. The buttons that belong to a section sit in its heading and keep working whether it is open or closed.</li>
             <li data-lang-da>Alle områder i appen er <b>fold-ud-paneler</b>. Klik på overskriften — eller <b>pilen</b> ved siden af — for at folde et afsnit sammen, når du er færdig med det, og åbne det, du skal bruge. Appen <b>husker, hvad du lod være åbent</b> på denne enhed, så dit eget layout er tilbage næste gang. De knapper, der hører til et afsnit, ligger i dets overskrift og virker, uanset om det er åbent eller lukket.</li>
+            <li data-lang-en><b>Everything starts folded.</b> The first time you open SportTactic every panel is closed, so each page reads as a short list of what is there instead of a wall of tables. Open the ones you work in and they stay open — from then on the app follows your own choices.</li>
+            <li data-lang-da><b>Alt starter foldet sammen.</b> Første gang du åbner SportTactic, er alle paneler lukkede, så hver side læses som en kort liste over, hvad der er, i stedet for en mur af tabeller. Åbn dem, du arbejder i, så bliver de stående — derefter følger appen dine egne valg.</li>
           </ul>
           <div class="callout" data-lang-en><svg class="sym"><use href="#i-hand"/></svg> <b>Dialogs never close by accident.</b> Every box that opens — forms, confirmations, the bot games, the donate window — stays put until you press its own <b>Cancel</b> or <b>Close</b> button. Clicking the dark background or pressing <kbd>Esc</kbd> does nothing, so a half-filled form is never lost by a stray tap.</div>
           <div class="callout" data-lang-da><svg class="sym"><use href="#i-hand"/></svg> <b>Dialoger lukker aldrig ved et uheld.</b> Hver boks der åbner — formularer, bekræftelser, botspillene, donationsvinduet — bliver stående, indtil du trykker på dens egen <b>Annuller</b>- eller <b>Luk</b>-knap. At klikke på den mørke baggrund eller trykke <kbd>Esc</kbd> gør ingenting, så en halvudfyldt formular mistes aldrig ved et forkert tryk.</div>
@@ -192,13 +223,13 @@
           <div class="callout" data-lang-da><svg class="sym"><use href="#i-hand"/></svg> <b>En gammel iPad? Appen tjekker selv enheden.</b> Hvis browseren er for gammel til den fulde version — en iPad fra 2010, iOS 6 eller ældre, eller en Chrome fra samme tid — åbner SportTactic i stedet <b>Classic</b>-udgaven (<span class="tag">oldipads.html</span>). Classic er én selvstændig side med taktiktavle, trup, kampe, live registrering, statistik, træning, modstandere og rapporter, og alt gemmes på den iPad. Flyt data mellem de to med <b>Data &rsaquo; Vis backup-tekst</b> i Classic og <b>Indstillinger &rsaquo; Importér backup</b> i den fulde version — det virker begge veje. Tilføj <span class="tag">?full=1</span> for at prøve den fulde version alligevel, eller <span class="tag">?classic=1</span> for at tvinge Classic frem på enhver enhed.</div>
         </div>
       </div>
-    </section>
+    </details>
 
     <!-- 2. Choose your sport -->
-    <section class="card" id="sport">
-      <h2><span class="num">2</span> <span data-lang-en>Choose Your Sport</span><span data-lang-da>Vælg Sportsgren</span></h2>
-      <p data-lang-en>SportTactic supports <b>18 sports &amp; games</b>. Pick one from the <b>sport selector</b> at the top of the sidebar and the whole app instantly adapts — the tactical board surface, player positions, live-scouting events, exercise categories and opponent formations all change to match.</p>
-      <p data-lang-da>SportTactic understøtter <b>18 sportsgrene &amp; spil</b>. Vælg en i <b>sportsvælgeren</b> øverst i sidebjælken, og hele appen tilpasser sig med det samme — taktiktavlens bane, spillerpositioner, live-registreringens hændelser, øvelseskategorier og modstanderopstillinger ændrer sig alle, så de passer.</p>
+    <details class="card sec" id="sport" open>
+      <summary class="sec-h"><h2><span class="num">2</span> <span data-lang-en>Choose Your Sport</span><span data-lang-da>Vælg Sportsgren</span></h2></summary>
+      <p data-lang-en>SportTactic supports <b>20 sports &amp; games</b>. Pick one from the <b>sport selector</b> at the top of the sidebar and the whole app instantly adapts — the tactical board surface, player positions, live-scouting events, exercise categories and opponent formations all change to match. <b>CrossFit and bodybuilding</b> are trained by one person rather than a team, so they have no tactical board; everything else is there.</p>
+      <p data-lang-da>SportTactic understøtter <b>20 sportsgrene &amp; spil</b>. Vælg en i <b>sportsvælgeren</b> øverst i sidebjælken, og hele appen tilpasser sig med det samme — taktiktavlens bane, spillerpositioner, live-registreringens hændelser, øvelseskategorier og modstanderopstillinger ændrer sig alle, så de passer. <b>CrossFit og bodybuilding</b> trænes af én person i stedet for et hold, så de har ingen taktiktavle; alt andet er der.</p>
       <div class="callout" data-lang-en><svg class="sym"><use href="#i-flag"/></svg> <b>Each sport has its own squad.</b> A player is registered under the sport that was active when you created the card, and is only shown while that sport is chosen. Switch from handball to basketball and the handball players step aside — the dashboard, live scouting, statistics and reports all count only the squad of the sport you are in. Nobody is deleted: switch back and they are there again. Players created before this rule keep the sport you used at the time.</div>
       <div class="callout" data-lang-da><svg class="sym"><use href="#i-flag"/></svg> <b>Hver sportsgren har sin egen trup.</b> En spiller registreres under den sportsgren, der var valgt, da du oprettede kortet, og vises kun, mens den sportsgren er valgt. Skifter du fra håndbold til basketball, træder håndboldspillerne til side — oversigt, live-registrering, statistik og rapporter tæller kun truppen for den sportsgren, du er i. Ingen slettes: skift tilbage, og de er der igen. Spillere oprettet før denne regel beholder den sportsgren, du brugte dengang.</div>
       <ul>
@@ -215,11 +246,11 @@
       <div class="callout" data-lang-da><svg class="sym"><use href="#i-target"/></svg> Din valgte sportsgren huskes. Hver har sin egen bane, positioner, scouting-hændelser, øvelseskategorier og sine egne <b>gemte animationer</b>.</div>
       <div class="callout" data-lang-en><svg class="sym"><use href="#i-hand"/></svg> <b>Older iPad?</b> If the main app is slow on a very old device, open <a class="back" href="oldipads.html">oldipads.html</a> — a lightweight <b>Classic Board</b> with the same core tactical board (sports, formations, props, frames &amp; playback) built to run on iPads from 2010.</div>
       <div class="callout" data-lang-da><svg class="sym"><use href="#i-hand"/></svg> <b>Ældre iPad?</b> Hvis hovedappen er langsom på en meget gammel enhed, så åbn <a class="back" href="oldipads.html">oldipads.html</a> — en let <b>Klassisk Tavle</b> med den samme centrale taktiktavle (sportsgrene, formationer, rekvisitter, frames &amp; afspilning) bygget til iPads fra 2010.</div>
-    </section>
+    </details>
 
     <!-- Game bots -->
-    <section class="card" id="bots">
-      <h2><span class="num"><svg class="sym"><use href="#i-bot"/></svg></span> <span data-lang-en>Play the Game Bots</span><span data-lang-da>Spil mod Spil-botterne</span></h2>
+    <details class="card sec" id="bots" open>
+      <summary class="sec-h"><h2><span class="num"><svg class="sym"><use href="#i-bot"/></svg></span> <span data-lang-en>Play the Game Bots</span><span data-lang-da>Spil mod Spil-botterne</span></h2></summary>
       <p data-lang-en>Four board &amp; card games include a full <b>playable bot</b> with <b>100 training levels</b> — from beginner to world-class. Select <b>Chess</b>, <b>Bridge</b>, <b>Poker</b> or <b>Backgammon</b> in the Tactical Board, open the <b>Game Bots</b> panel and press <b>Play</b>.</p>
       <p data-lang-da>Fire bræt- og kortspil har en fuld <b>spilbar bot</b> med <b>100 træningsniveauer</b> — fra begynder til verdensklasse. Vælg <b>Skak</b>, <b>Bridge</b>, <b>Poker</b> eller <b>Backgammon</b> i Taktiktavlen, åbn <b>Spil-bots</b>-panelet og tryk <b>Spil</b>.</p>
       <ul>
@@ -234,11 +265,11 @@
       </ul>
       <div class="callout" data-lang-en><svg class="sym"><use href="#i-bot"/></svg> Drag the <b>Level</b> slider (1–100) to set the bot's strength. The dialog also works in <b>full-screen</b> mode, and closes with the <b>Close</b> button at the bottom.</div>
       <div class="callout" data-lang-da><svg class="sym"><use href="#i-bot"/></svg> Træk <b>Niveau</b>-skyderen (1–100) for at sætte bottens styrke. Dialogen virker også i <b>fuld skærm</b> og lukkes med <b>Luk</b>-knappen nederst.</div>
-    </section>
+    </details>
 
     <!-- 3. Tactical board -->
-    <section class="card" id="board">
-      <h2><span class="num">3</span> <span data-lang-en>Tactical Board</span><span data-lang-da>Taktiktavle</span></h2>
+    <details class="card sec" id="board" open>
+      <summary class="sec-h"><h2><span class="num">3</span> <span data-lang-en>Tactical Board</span><span data-lang-da>Taktiktavle</span></h2></summary>
       <p data-lang-en>Design plays on a handball court. Drag players with the <b>Select</b> tool, draw passes, runs, arrows and shapes, and build multi-frame animations on the timeline.</p>
       <p data-lang-da>Design spil på en håndboldbane. Træk spillere med <b>Vælg</b>-værktøjet, tegn afleveringer, løb, pile og former, og byg animationer med flere frames på tidslinjen.</p>
       <div class="tut">
@@ -264,8 +295,14 @@
             <li data-lang-da><b>Vælg</b> <svg class="sym"><use href="#i-hand"/></svg> — klik på en spiller for at markere den (gul glød); træk for at flytte. Med en spiller markeret: klik på en medspiller for at <b>aflevere</b> eller målet for at <b>skyde</b>.</li>
             <li data-lang-en><b>Pass <svg class="sym"><use href="#i-pass"/></svg> / Run <svg class="sym"><use href="#i-run"/></svg> / Arrow <svg class="sym"><use href="#i-arrow"/></svg></b> — click-drag to draw dashed or solid paths.</li>
             <li data-lang-da><b>Aflevering <svg class="sym"><use href="#i-pass"/></svg> / Løb <svg class="sym"><use href="#i-run"/></svg> / Pil <svg class="sym"><use href="#i-arrow"/></svg></b> — klik og træk for at tegne stiplede eller fyldte linjer.</li>
-            <li data-lang-en><b>Frames &amp; Animation</b> sits in the panel to the <b>right</b> of the court, and the <b>frame list runs down the left-hand side</b> — one row per frame, with <b>＋ Add Frame</b> and <b>✕ Delete Frame</b> above it. The box is kept deliberately short and <b>scrolls</b> once you have more frames than fit, so a long animation never takes over the screen. Click a frame to jump to it, move the objects, then press <b><svg class="sym solid"><use href="#i-play"/></svg> Play</b> to animate between them. On a phone both columns fold back under the board.</li>
-            <li data-lang-da><b>Frames &amp; Animation</b> ligger i panelet til <b>højre</b> for banen, og <b>frame-listen løber ned ad venstre side</b> — én række pr. frame med <b>＋ Tilføj Frame</b> og <b>✕ Slet Frame</b> ovenover. Boksen holdes bevidst lav og <b>ruller</b>, når du har flere frames end der er plads til, så en lang animation aldrig overtager skærmen. Klik på en frame for at hoppe til den, flyt objekterne, og tryk <b><svg class="sym solid"><use href="#i-play"/></svg> Afspil</b> for at animere mellem dem. På en telefon foldes begge kolonner tilbage under banen.</li>
+            <li data-lang-en><b>One column to the left of the court</b> holds both lists: the <b>animation track list</b> on top (Frames &amp; Animation, your saved animations, recording, rotation, ball magnet and keeper) and the <b>frame list</b> directly underneath it — one row per frame, with <b>＋ Add Frame</b> and <b>✕ Delete Frame</b> above it. The column is pinned to the height of the court and <b>scrolls</b>, so a long animation never takes over the screen. Click a frame to jump to it, move the objects, then press <b><svg class="sym solid"><use href="#i-play"/></svg> Play</b> to animate between them. On a phone the column folds back under the board.</li>
+            <li data-lang-da><b>Én kolonne til venstre for banen</b> rummer begge lister: <b>animationslisten</b> øverst (Frames &amp; Animation, dine gemte animationer, optagelse, rotation, boldmagnet og målmand) og <b>frame-listen</b> lige under den — én række pr. frame med <b>＋ Tilføj Frame</b> og <b>✕ Slet Frame</b> ovenover. Kolonnen er sat til samme højde som banen og <b>ruller</b>, så en lang animation aldrig overtager skærmen. Klik på en frame for at hoppe til den, flyt objekterne, og tryk <b><svg class="sym solid"><use href="#i-play"/></svg> Afspil</b> for at animere mellem dem. På en telefon foldes kolonnen tilbage under banen.</li>
+            <li data-lang-en><b>Court size</b> — under the tools, right above Court. The board fits itself to your screen, but you can overrule that with <b>70% · 85% · Fit to screen · 115% · 130%</b>. Pick a smaller court on a laptop when you want the panels to fit next to it, or a bigger one on a big screen — a court larger than the space simply lets the page scroll. The size you choose is remembered, so the board opens that way every time.</li>
+            <li data-lang-da><b>Banestørrelse</b> — under værktøjerne, lige over Bane. Tavlen tilpasser sig selv din skærm, men du kan overstyre det med <b>70% · 85% · Tilpas skærmen · 115% · 130%</b>. Vælg en mindre bane på en bærbar, når panelerne skal kunne være ved siden af, eller en større på en stor skærm — en bane, der fylder mere end pladsen, betyder blot, at siden kan rulles. Den valgte størrelse huskes, så tavlen åbner sådan hver gang.</li>
+            <li data-lang-en><b>Player Speed</b> — right under Ball Speed. <b>Slow · Medium · Fast</b> sets how quickly the players walk from one frame to the next while the play runs, exactly like Ball Speed does for a pass or a shot. Slow it down to talk a movement through with the team; speed it up to show the whole play at match tempo. Change it while the play is running and it restarts at the new tempo, and it is remembered between sessions.</li>
+            <li data-lang-da><b>Spillerhastighed</b> — lige under Boldhastighed. <b>Langsom · Middel · Hurtig</b> bestemmer, hvor hurtigt spillerne går fra det ene billede til det næste, mens spillet kører — præcis som Boldhastighed gør for en aflevering eller et skud. Sæt den ned for at gennemgå en bevægelse med holdet; sæt den op for at vise hele spillet i kamptempo. Ændrer du den, mens spillet kører, starter det forfra i det nye tempo, og valget huskes mellem besøg.</li>
+            <li data-lang-en><b>The sport row at the top of the tools</b> holds the eighteen sports that have a playing surface. <b>CrossFit and bodybuilding are not there</b> — they have no court to draw on, so the board is left out of their menu altogether.</li>
+            <li data-lang-da><b>Sportsrækken øverst i værktøjerne</b> rummer de atten sportsgrene, der har en bane. <b>CrossFit og bodybuilding er der ikke</b> — de har ingen bane at tegne på, så tavlen er helt udeladt af deres menu.</li>
             <li data-lang-en><b>▣ Board only</b> — next to Full Screen. It fills the whole screen with <b>nothing but the court and the players</b>: no tools, no frame list, no panels, no menus. Made for an iPad on the sideline, where the board is all you want to see and every stray panel is something to mis-tap. Press <b>✕ Close</b> in the corner to come back. It does not need the browser’s fullscreen permission, so it also works on an iPad, where that is refused.</li>
             <li data-lang-da><b>▣ Kun banen</b> — ved siden af Fuld skærm. Den fylder hele skærmen med <b>kun banen og spillerne</b>: ingen værktøjer, ingen frame-liste, ingen paneler, ingen menuer. Lavet til en iPad ved sidelinjen, hvor tavlen er alt du vil se, og hvert overflødigt panel er noget at ramme forkert. Tryk <b>✕ Luk</b> i hjørnet for at komme tilbage. Den kræver ikke browserens fuldskærmstilladelse, så den virker også på en iPad, hvor den nægtes.</li>
             <li data-lang-en><b>Training Props</b> — under the tools, pick a cone, marker disc, pole, hurdle, ladder, ring, mini-goal, dummy or medicine ball (the choice matches your sport), then tap the board to place it. Drag to move, or use <b>Erase</b> to remove. Props have their <b>own colour row</b> right below them, separate from the drawing colours — pick a colour and every prop you place gets it (the <b>↺</b> button returns to the natural colours). Picking a colour also recolours the prop you have marked.</li>
@@ -278,8 +315,14 @@
             <li data-lang-da><b>Retningspile</b> — afkrydsningsfeltet <b>Vis spillerens retning</b> i det samme panel til højre for banen slår de hvide pile til og fra, også den automatiske drejning der sker, mens du trækker. Slå den fra for et rent bræt uden rod; retningerne huskes og kommer tilbage, når du slår den til igen. Dit valg gemmes mellem besøg.</li>
             <li data-lang-en><b>Ball magnet</b> — the <b>Snap ball to player</b> checkbox sits in the <b>panel to the right of the court</b>, under the frames and animation buttons. While it is on, the ball jumps to the marked player as soon as you drag them close. Switch it off when you want the ball to stay exactly where you put it — for example to show a loose ball or a gap. Your choice is saved between sessions.</li>
             <li data-lang-da><b>Boldmagnet</b> — afkrydsningsfeltet <b>Klæb bolden til spilleren</b> ligger i <b>panelet til højre for banen</b>, under frame- og animationsknapperne. Når den er slået til, hopper bolden fast på den markerede spiller, så snart du trækker dem tæt på hinanden. Slå den fra, når bolden skal blive præcis der, hvor du lægger den — for eksempel for at vise en løs bold eller et hul. Dit valg gemmes mellem besøg.</li>
+            <li data-lang-en><b>Snap ball to red player</b> — the second checkbox, right under the first one. Normally only the blue side picks the ball up, which is what you want while you are drawing your own attack. Tick this one as well and a <b>red (defending) player you drag takes the ball too</b>, so you can show a block, an interception or a turnover and then walk the ball out of defence. With it off, a red player never takes the ball — not even the one you are dragging, and not even though dragging a player marks it. It is off to begin with and your choice is saved between sessions.</li>
+            <li data-lang-da><b>Sæt bolden på rød spiller</b> — det andet afkrydsningsfelt, lige under det første. Normalt er det kun den blå side, der samler bolden op, og det er også det, du vil have, mens du tegner jeres eget angreb. Sæt også flueben her, så tager <b>en rød (forsvarende) spiller, du trækker, også bolden</b>, så du kan vise en blokering, en aflusning eller et boldtab og derefter spille bolden ud af forsvaret. Med den slået fra tager en rød spiller aldrig bolden — heller ikke den, du trækker i, og heller ikke selvom det at trække i en spiller markerer den. Den er slået fra fra start, og dit valg gemmes mellem besøg.</li>
             <li data-lang-en><b>Saved animations</b> — press <b>＋ Save Animation</b> in the same right-hand panel to store the whole frame sequence under a name. Everything you save appears in the <b>Saved Animations</b> list just below: click one to load its frames, <b>↺ Load</b> (or double-click) to play it, <b>📤</b> to send it to your squad, <b>▶</b> to watch its recorded video and <b>✕</b> to delete it. The list only shows the animations for the sport you are in, and it updates the moment you <b>import</b> a shared file.</li>
             <li data-lang-da><b>Gemte animationer</b> — tryk <b>＋ Gem animation</b> i det samme højre panel for at gemme hele frame-sekvensen under et navn. Alt hvad du gemmer vises i listen <b>Gemte animationer</b> lige nedenunder: klik på en for at hente dens frames, <b>↺ Hent</b> (eller dobbeltklik) for at afspille den, <b>📤</b> for at sende den til truppen, <b>▶</b> for at se dens optagne video og <b>✕</b> for at slette den. Listen viser kun animationer for den sportsgren, du er i, og den opdateres i samme øjeblik du <b>importérer</b> en delt fil.</li>
+        <li data-lang-en><b>✎ Rename / update</b> — the pen button between Load and 📤 is how you correct a saved animation instead of deleting it and starting again. It renames it, and a tick box lets you <b>replace its frames with the board as it is now</b>: load the animation, fix the run you were not happy with, then press ✎ and confirm. The hint tells you how many frames it has saved and how many the board is holding, so you can see what you are about to overwrite. Replacing the frames also drops the recorded clip, because that clip would no longer match — save a new one from <b>Export clip</b> when you are done.</li>
+        <li data-lang-da><b>✎ Omdøb / opdatér</b> — pen-knappen mellem Hent og 📤 er måden at rette en gemt animation på i stedet for at slette den og starte forfra. Den omdøber den, og et flueben lader dig <b>erstatte dens frames med tavlen, som den ser ud nu</b>: hent animationen, ret det forløb du ikke var tilfreds med, og tryk så ✎ og bekræft. Hjaelpeteksten fortæller, hvor mange frames den har gemt, og hvor mange tavlen har, så du kan se, hvad du er ved at overskrive. Erstatter du frames, fjernes den optagne video også, fordi den ikke længere ville passe — gem en ny med <b>Eksportér video</b>, når du er færdig.</li>
+        <li data-lang-en><b>✕ Delete</b> removes the selected animation for good; you are asked to confirm first. Both buttons stay greyed out until you have picked something in the list.</li>
+        <li data-lang-da><b>✕ Slet</b> fjerner den valgte animation for altid; du bliver spurgt først. Begge knapper er grå og ikke til at trykke på, før du har valgt noget i listen.</li>
             <li data-lang-en><b>📤 Send to team</b> — with an animation picked, this offers four ways to get it to the players: <b>save it as a file</b> they import on their own device, <b>download the recorded clip</b>, or post it in the <b>squad chat</b> or an <b>e-mail</b> telling the squad it is on the way.</li>
             <li data-lang-da><b>📤 Send til holdet</b> — med en animation valgt tilbydes fire måder at få den ud til spillerne: <b>gem den som en fil</b>, de importérer på deres egen enhed, <b>hent den optagne video</b>, eller skriv det i <b>holdchatten</b> eller en <b>e-mail</b> om at den er på vej.</li>
             <li data-lang-en><b>⟳ Reset</b> — the red button in the top bar clears the board back to the sport's starting formation: one frame, no drawings, no names. You are asked to confirm first, and <b>↶ Undo</b> brings it all back if you change your mind.</li>
@@ -289,11 +332,222 @@
           <div class="callout" data-lang-da><svg class="sym"><use href="#i-whistle"/></svg> En dommerfløjte lyder hver gang du trykker <svg class="sym solid"><use href="#i-play"/></svg> Afspil — den nulstilles og afspilles igen ved hvert tryk (overlapper aldrig).</div>
         </div>
       </div>
-    </section>
+    </details>
+
+    <!-- Every tool, illustrated -->
+    <details class="card sec" id="tools" open>
+      <summary class="sec-h"><h2><span class="num"><svg class="sym"><use href="#i-target"/></svg></span> <span data-lang-en>Every Tool, Illustrated</span><span data-lang-da>Alle værktøjer, illustreret</span></h2></summary>
+      <p data-lang-en>One picture per tool in the board's tool panel. The <b>yellow dashed line</b> is the movement your finger or mouse makes, and the <b>ring</b> is where you press down.</p>
+      <p data-lang-da>Ét billede pr. værktøj i tavlens værktøjspanel. Den <b>gule stiplede linje</b> er den bevægelse, din finger eller mus laver, og <b>ringen</b> er der, hvor du trykker ned.</p>
+      <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+        <marker id="tm-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+          <path d="M0 0 L10 5 L0 10 z" fill="#ffd400"/>
+        </marker>
+        <marker id="tm-white" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+          <path d="M0 0 L10 5 L0 10 z" fill="#fff"/>
+        </marker>
+      </defs></svg>
+
+      <div class="tools-grid">
+
+        <figure class="tool-card">
+          <svg viewBox="0 0 200 120" role="img">
+            <rect x="2" y="2" width="196" height="116" rx="8" fill="#0d5c2b" stroke="#fff" stroke-width="1.5"/>
+            <circle cx="55" cy="70" r="15" fill="#0a84ff" stroke="#fff" stroke-width="3"/>
+            <circle cx="55" cy="70" r="11" fill="none" stroke="#0b1220" stroke-width="1.2" stroke-dasharray="3 3" opacity=".75"/>
+            <circle cx="55" cy="70" r="22" fill="none" stroke="#ffd400" stroke-width="2"/>
+            <path d="M76 64 L128 44" stroke="#ffd400" stroke-width="2.5" stroke-dasharray="6 5" fill="none" marker-end="url(#tm-arrow)"/>
+            <circle cx="138" cy="40" r="11" fill="#0a84ff" opacity=".35" stroke="#fff" stroke-width="2"/>
+          </svg>
+          <figcaption>
+            <b data-lang-en>Select</b><b data-lang-da>Vælg</b>
+            <span data-lang-en> — tap a player to mark it (it glows), then drag to move. The disc grows while you hold it, so you can see it under your fingertip. With a player marked, tap a team-mate to pass or the goal to shoot. It also picks up and moves anything you have already drawn.</span>
+            <span data-lang-da> — tryk på en spiller for at markere den (den gløder), og træk for at flytte. Cirklen vokser, mens du holder på den, så du kan se den under fingerspidsen. Med en spiller markeret: tryk på en medspiller for at aflevere eller på målet for at skyde. Den tager også fat i alt, du allerede har tegnet, og flytter det.</span>
+          </figcaption>
+        </figure>
+
+        <figure class="tool-card">
+          <svg viewBox="0 0 200 120" role="img">
+            <rect x="2" y="2" width="196" height="116" rx="8" fill="#0d5c2b" stroke="#fff" stroke-width="1.5"/>
+            <rect x="72" y="4" width="56" height="12" fill="none" stroke="#fff" stroke-width="2"/>
+            <circle cx="60" cy="86" r="11" fill="#0a84ff" stroke="#fff" stroke-width="2"/>
+            <path d="M72 80 L112 26" stroke="#ffd400" stroke-width="2.5" stroke-dasharray="6 5" fill="none" marker-end="url(#tm-arrow)"/>
+            <circle cx="92" cy="54" r="5.5" fill="#ffeffb" stroke="#0b1220"/>
+            <g stroke="#ffd400" stroke-width="2" fill="none"><circle cx="116" cy="20" r="9"/><path d="M116 8v6M116 26v6M104 20h6M122 20h6"/></g>
+          </svg>
+          <figcaption>
+            <b data-lang-en>Shoot</b><b data-lang-da>Skud</b>
+            <span data-lang-en> — mark a player, then aim: a crosshair follows your finger. Aim at a team-mate to pass, at the goal to shoot. The ball stops exactly where you aimed.</span>
+            <span data-lang-da> — markér en spiller og sigt: et sigtekorn følger din finger. Sigt mod en medspiller for at aflevere, mod målet for at skyde. Bolden stopper præcis der, hvor du sigtede.</span>
+          </figcaption>
+        </figure>
+
+        <figure class="tool-card">
+          <svg viewBox="0 0 200 120" role="img">
+            <rect x="2" y="2" width="196" height="116" rx="8" fill="#0d5c2b" stroke="#fff" stroke-width="1.5"/>
+            <circle cx="130" cy="60" r="20" fill="none" stroke="#ffd400" stroke-width="2" stroke-dasharray="4 4"/>
+            <circle cx="130" cy="60" r="11" fill="#0a84ff" stroke="#fff" stroke-width="2"/>
+            <text x="130" y="64" font-size="10" fill="#fff" text-anchor="middle" font-family="system-ui">7</text>
+            <circle cx="52" cy="42" r="11" fill="#0a84ff" stroke="#fff" stroke-width="2"/>
+            <circle cx="52" cy="86" r="11" fill="#ff3b5c" stroke="#fff" stroke-width="2"/>
+          </svg>
+          <figcaption>
+            <b data-lang-en>Add player</b><b data-lang-da>Tilføj spiller</b>
+            <span data-lang-en> — tap anywhere on the court to drop a new player there. The tool stays on, so you can place a whole line-up with one tap each.</span>
+            <span data-lang-da> — tryk et vilkårligt sted på banen for at sætte en ny spiller. Værktøjet bliver aktivt, så du kan placere en hel opstilling med ét tryk hver.</span>
+          </figcaption>
+        </figure>
+
+        <figure class="tool-card">
+          <svg viewBox="0 0 200 120" role="img">
+            <rect x="2" y="2" width="196" height="116" rx="8" fill="#0d5c2b" stroke="#fff" stroke-width="1.5"/>
+            <circle cx="42" cy="82" r="11" fill="#0a84ff" stroke="#fff" stroke-width="2"/>
+            <circle cx="158" cy="38" r="11" fill="#0a84ff" stroke="#fff" stroke-width="2"/>
+            <path d="M55 76 L145 44" stroke="#22e07a" stroke-width="2.5" stroke-dasharray="7 5" fill="none" marker-end="url(#tm-white)"/>
+            <circle cx="55" cy="76" r="6" fill="none" stroke="#ffd400" stroke-width="2"/>
+          </svg>
+          <figcaption>
+            <b data-lang-en>Pass line</b><b data-lang-da>Afleveringslinje</b>
+            <span data-lang-en> — press on the passer and drag to the receiver. Drawn as a dashed line with an arrowhead, the standard way of writing a pass on a whiteboard.</span>
+            <span data-lang-da> — tryk på afleveren og træk til modtageren. Tegnes som en stiplet linje med pilespids — den gængse måde at skrive en aflevering på en tavle.</span>
+          </figcaption>
+        </figure>
+
+        <figure class="tool-card">
+          <svg viewBox="0 0 200 120" role="img">
+            <rect x="2" y="2" width="196" height="116" rx="8" fill="#0d5c2b" stroke="#fff" stroke-width="1.5"/>
+            <circle cx="40" cy="60" r="11" fill="#0a84ff" stroke="#fff" stroke-width="2"/>
+            <path d="M54 60 C90 60 100 26 150 30" stroke="#fff" stroke-width="3" fill="none" marker-end="url(#tm-white)"/>
+            <circle cx="54" cy="60" r="6" fill="none" stroke="#ffd400" stroke-width="2"/>
+          </svg>
+          <figcaption>
+            <b data-lang-en>Run</b><b data-lang-da>Løb</b>
+            <span data-lang-en> — press on the player and drag the way they should run. A solid line with an arrowhead: the player moves, the ball does not.</span>
+            <span data-lang-da> — tryk på spilleren og træk den vej, de skal løbe. En fyldt linje med pilespids: spilleren flytter sig, bolden gør ikke.</span>
+          </figcaption>
+        </figure>
+
+        <figure class="tool-card">
+          <svg viewBox="0 0 200 120" role="img">
+            <rect x="2" y="2" width="196" height="116" rx="8" fill="#0d5c2b" stroke="#fff" stroke-width="1.5"/>
+            <path d="M34 90 L160 34" stroke="#ffd400" stroke-width="4" fill="none" marker-end="url(#tm-arrow)"/>
+            <circle cx="34" cy="90" r="7" fill="none" stroke="#fff" stroke-width="2" stroke-dasharray="3 3"/>
+          </svg>
+          <figcaption>
+            <b data-lang-en>Arrow</b><b data-lang-da>Pil</b>
+            <span data-lang-en> — press and drag to draw a free arrow anywhere: a direction, a screen, a switch. It uses the colour picked in the palette.</span>
+            <span data-lang-da> — tryk og træk for at tegne en fri pil hvor som helst: en retning, en afskærmning, et skift. Den bruger den farve, du har valgt i paletten.</span>
+          </figcaption>
+        </figure>
+
+        <figure class="tool-card">
+          <svg viewBox="0 0 200 120" role="img">
+            <rect x="2" y="2" width="196" height="116" rx="8" fill="#0d5c2b" stroke="#fff" stroke-width="1.5"/>
+            <path d="M28 34 L172 86" stroke="#ffd400" stroke-width="4" fill="none"/>
+            <circle cx="28" cy="34" r="7" fill="none" stroke="#fff" stroke-width="2" stroke-dasharray="3 3"/>
+            <circle cx="172" cy="86" r="7" fill="none" stroke="#fff" stroke-width="2" stroke-dasharray="3 3"/>
+          </svg>
+          <figcaption>
+            <b data-lang-en>Line</b><b data-lang-da>Linje</b>
+            <span data-lang-en> — a plain straight line with no arrowhead. Good for marking a defensive wall, a zone edge or a boundary you want the squad to hold.</span>
+            <span data-lang-da> — en almindelig lige linje uden pilespids. God til at markere en forsvarsmur, en zonekant eller en grænse, truppen skal holde.</span>
+          </figcaption>
+        </figure>
+
+        <figure class="tool-card">
+          <svg viewBox="0 0 200 120" role="img">
+            <rect x="2" y="2" width="196" height="116" rx="8" fill="#0d5c2b" stroke="#fff" stroke-width="1.5"/>
+            <path d="M26 84 C50 40 70 100 96 58 C116 26 140 92 176 48" stroke="#ffd400" stroke-width="4" fill="none" stroke-linecap="round"/>
+            <circle cx="26" cy="84" r="7" fill="none" stroke="#fff" stroke-width="2" stroke-dasharray="3 3"/>
+          </svg>
+          <figcaption>
+            <b data-lang-en>Draw (freehand)</b><b data-lang-da>Tegn (frihånd)</b>
+            <span data-lang-en> — keep your finger down and scribble. Whatever you draw is kept as one shape, so a single drag can be moved or erased in one go.</span>
+            <span data-lang-da> — hold fingeren nede og tegn frit. Alt du tegner gemmes som én figur, så et enkelt træk kan flyttes eller slettes på én gang.</span>
+          </figcaption>
+        </figure>
+
+        <figure class="tool-card">
+          <svg viewBox="0 0 200 120" role="img">
+            <rect x="2" y="2" width="196" height="116" rx="8" fill="#0d5c2b" stroke="#fff" stroke-width="1.5"/>
+            <circle cx="100" cy="60" r="42" fill="none" stroke="#ffd400" stroke-width="4"/>
+            <circle cx="82" cy="52" r="10" fill="#ff3b5c" stroke="#fff" stroke-width="2"/>
+            <circle cx="118" cy="70" r="10" fill="#ff3b5c" stroke="#fff" stroke-width="2"/>
+            <path d="M100 60 L142 60" stroke="#fff" stroke-width="1.5" stroke-dasharray="4 4"/>
+          </svg>
+          <figcaption>
+            <b data-lang-en>Circle</b><b data-lang-da>Cirkel</b>
+            <span data-lang-en> — press at the centre and drag outwards. Use it to ring the area you want covered, or the two opponents a pair has to watch.</span>
+            <span data-lang-da> — tryk i midten og træk udad. Brug den til at ringe det område ind, der skal dækkes, eller de to modstandere et par skal holde øje med.</span>
+          </figcaption>
+        </figure>
+
+        <figure class="tool-card">
+          <svg viewBox="0 0 200 120" role="img">
+            <rect x="2" y="2" width="196" height="116" rx="8" fill="#0d5c2b" stroke="#fff" stroke-width="1.5"/>
+            <rect x="40" y="28" width="120" height="64" fill="none" stroke="#ffd400" stroke-width="4"/>
+            <circle cx="40" cy="28" r="7" fill="none" stroke="#fff" stroke-width="2" stroke-dasharray="3 3"/>
+            <path d="M46 34 L154 86" stroke="#fff" stroke-width="1.5" stroke-dasharray="4 4"/>
+            <circle cx="160" cy="92" r="7" fill="none" stroke="#fff" stroke-width="2" stroke-dasharray="3 3"/>
+          </svg>
+          <figcaption>
+            <b data-lang-en>Rectangle</b><b data-lang-da>Firkant</b>
+            <span data-lang-en> — press in one corner and drag to the opposite one. The clearest way to box a zone, a half or the area a defence must not leave.</span>
+            <span data-lang-da> — tryk i det ene hjørne og træk til det modsatte. Den klareste måde at ramme en zone, en banehalvdel eller det område, et forsvar ikke må forlade.</span>
+          </figcaption>
+        </figure>
+
+        <figure class="tool-card">
+          <svg viewBox="0 0 200 120" role="img">
+            <rect x="2" y="2" width="196" height="116" rx="8" fill="#0d5c2b" stroke="#fff" stroke-width="1.5"/>
+            <circle cx="100" cy="40" r="7" fill="none" stroke="#ffd400" stroke-width="2" stroke-dasharray="3 3"/>
+            <text x="100" y="80" font-size="22" font-weight="700" fill="#ffd400" stroke="#0b1220" stroke-width="4" paint-order="stroke" text-anchor="middle" font-family="system-ui">ZONE 1</text>
+          </svg>
+          <figcaption>
+            <b data-lang-en>Text label</b><b data-lang-da>Tekstmærkat</b>
+            <span data-lang-en> — tap where the words belong and type them in the box that opens. Written with a dark halo so it stays readable on any pitch, and it can be dragged afterwards.</span>
+            <span data-lang-da> — tryk der, hvor teksten skal stå, og skriv den i feltet der åbner. Den skrives med en mørk kant, så den kan læses på enhver bane, og kan trækkes bagefter.</span>
+          </figcaption>
+        </figure>
+
+        <figure class="tool-card">
+          <svg viewBox="0 0 200 120" role="img">
+            <rect x="2" y="2" width="196" height="116" rx="8" fill="#0d5c2b" stroke="#fff" stroke-width="1.5"/>
+            <path d="M30 40 L120 40" stroke="#ffd400" stroke-width="4" opacity=".35"/>
+            <circle cx="150" cy="46" r="11" fill="#0a84ff" opacity=".35" stroke="#fff" stroke-width="2"/>
+            <path d="M40 84 L96 84" stroke="#ffd400" stroke-width="4"/>
+            <g stroke="#ff3b5c" stroke-width="5" stroke-linecap="round"><path d="M132 26 L172 66"/><path d="M172 26 L132 66"/></g>
+          </svg>
+          <figcaption>
+            <b data-lang-en>Erase</b><b data-lang-da>Slet</b>
+            <span data-lang-en> — tap a drawing, a label, a prop or a player to remove just that one. Everything else stays; <b>⟳ Reset</b> is the button that clears the whole board.</span>
+            <span data-lang-da> — tryk på en tegning, en tekst, en rekvisit eller en spiller for kun at fjerne den. Alt andet bliver stående; <b>⟳ Nulstil</b> er knappen, der rydder hele tavlen.</span>
+          </figcaption>
+        </figure>
+
+        <figure class="tool-card">
+          <svg viewBox="0 0 200 120" role="img">
+            <rect x="2" y="2" width="196" height="116" rx="8" fill="#0d5c2b" stroke="#fff" stroke-width="1.5"/>
+            <path d="M34 78 L44 50 L54 78 z" fill="#ff8a00" stroke="#fff" stroke-width="1.5"/>
+            <path d="M76 78 L86 50 L96 78 z" fill="#ff8a00" stroke="#fff" stroke-width="1.5"/>
+            <g stroke="#ffd400" stroke-width="3" fill="none"><path d="M118 44 L178 44M118 78 L178 78M130 44 L130 78M148 44 L148 78M166 44 L166 78"/></g>
+            <circle cx="86" cy="50" r="16" fill="none" stroke="#ffd400" stroke-width="2" stroke-dasharray="4 4"/>
+          </svg>
+          <figcaption>
+            <b data-lang-en>Training props</b><b data-lang-da>Træningsrekvisitter</b>
+            <span data-lang-en> — cones, marker discs, hurdles, ladders, rings, dummies, mini-goals and medicine balls. Pick one, tap to place it, drag to move it. Props have their own colour row under the picker.</span>
+            <span data-lang-da> — kegler, markeringsskiver, hække, stiger, ringe, dukker, minimål og medicinbolde. Vælg en, tryk for at placere den, træk for at flytte. Rekvisitter har deres egen farverække under vælgeren.</span>
+          </figcaption>
+        </figure>
+
+      </div>
+      <div class="callout" data-lang-en><svg class="sym"><use href="#i-hand"/></svg> <b>Every drawing tool is one-shot.</b> The moment you finish an arrow, line, circle, rectangle, scribble or text the board switches back to <b>Select</b> — so the very next drag picks that shape up and moves it. Add player and the props deliberately stay on, so you can place several in a row.</div>
+      <div class="callout" data-lang-da><svg class="sym"><use href="#i-hand"/></svg> <b>Alle tegneværktøjer er engangs.</b> I samme øjeblik du er færdig med en pil, linje, cirkel, firkant, streg eller tekst, skifter tavlen tilbage til <b>Vælg</b> — så det næste træk tager fat i figuren og flytter den. Tilføj spiller og rekvisitterne bliver bevidst aktive, så du kan placere flere i træk.</div>
+    </details>
 
     <!-- Board gestures, autosave, screenshot & court size -->
-    <section class="card" id="gestures">
-      <h2><span class="num"><svg class="sym"><use href="#i-hand"/></svg></span> <span data-lang-en>Board Gestures, Autosave &amp; Screenshot</span><span data-lang-da>Tavle-bevægelser, Autogem &amp; Skærmbillede</span></h2>
+    <details class="card sec" id="gestures" open>
+      <summary class="sec-h"><h2><span class="num"><svg class="sym"><use href="#i-hand"/></svg></span> <span data-lang-en>Board Gestures, Autosave &amp; Screenshot</span><span data-lang-da>Tavle-bevægelser, Autogem &amp; Skærmbillede</span></h2></summary>
       <p data-lang-en>With the <b>Select</b> tool the board reacts to how you touch it — a quick tap, a hold, or a drag each do something different. Everything you change is saved automatically.</p>
       <p data-lang-da>Med <b>Vælg</b>-værktøjet reagerer tavlen på hvordan du rører den — et hurtigt tryk, et hold eller et træk gør hver sin ting. Alt du ændrer, gemmes automatisk.</p>
       <ul>
@@ -307,6 +561,8 @@
         <li data-lang-da><b>Hold</b> (tryk og hold stille) på en spiller for at <b>navngive den</b> — en boks åbnes, hvor du skriver et navn og trykker <b>Gem</b> (eller <b>Fjern</b> / <b>Annuller</b>). Navnet vises på en plade <b>under cirklen</b> — ens for røde og blå spillere — og gemmes med spillet.</li>
         <li data-lang-en><b>Drag</b> a player or the ball to <b>move</b> it across the court; release to drop.</li>
         <li data-lang-da><b>Træk</b> en spiller eller bolden for at <b>flytte</b> den over banen; slip for at placere.</li>
+        <li data-lang-en><b>The disc grows while you hold it.</b> The moment you press a player — and for as long as you drag them — their circle, number and outline get a little bigger, so you can still see which one you have got under your own fingertip. It shrinks back the instant you let go. Nothing is stored; it is only there to show you what you are holding.</li>
+        <li data-lang-da><b>Cirklen vokser, mens du holder på den.</b> I samme øjeblik du trykker på en spiller — og så længe du trækker i den — bliver dens cirkel, nummer og kant lidt større, så du stadig kan se, hvilken en du har under din egen fingerspids. Den skrumper tilbage, så snart du slipper. Intet gemmes; den er der kun for at vise dig, hvad du holder på.</li>
       </ul>
       <div class="callout" data-lang-en><svg class="sym"><use href="#i-target"/></svg> <b>Autosave:</b> every move, pass, drawing and frame is saved to your device automatically — no Save button needed. Your board is exactly as you left it next time.</div>
       <div class="callout" data-lang-da><svg class="sym"><use href="#i-target"/></svg> <b>Autogem:</b> hvert træk, aflevering, tegning og frame gemmes automatisk på din enhed — ingen Gem-knap nødvendig. Din tavle er præcis som du forlod den næste gang.</div>
@@ -318,11 +574,11 @@
         <li data-lang-en><b>Always fits the screen</b> — the court resizes itself to the window, in both full and half view, so you never have to scroll to see the whole pitch. Rotate the tablet or open the sidebar and it re-fits instantly.</li>
         <li data-lang-da><b>Passer altid til skærmen</b> — banen tilpasser selv sin størrelse til vinduet, både i hel og halv visning, så du aldrig skal scrolle for at se hele banen. Drej tabletten eller åbn sidemenuen, og den tilpasser sig med det samme.</li>
       </ul>
-    </section>
+    </details>
 
     <!-- 4. Shooting & magnet -->
-    <section class="card" id="shoot">
-      <h2><span class="num">4</span> <span data-lang-en>Shooting the Ball &amp; Magnet Effect</span><span data-lang-da>Skyd Bolden &amp; Magneteffekt</span></h2>
+    <details class="card sec" id="shoot" open>
+      <summary class="sec-h"><h2><span class="num">4</span> <span data-lang-en>Shooting the Ball &amp; Magnet Effect</span><span data-lang-da>Skyd Bolden &amp; Magneteffekt</span></h2></summary>
       <div class="tut">
         <div class="fig">
           <svg viewBox="0 0 280 200" width="100%">
@@ -352,16 +608,18 @@
             <li data-lang-da>Sigt <b>tæt på målmanden</b> <svg class="sym"><use href="#i-right"/></svg> mærket bliver rødt og bolden <b>magnetiseres til målmanden</b> (en redning). Det sker kun, mens målmanden er slået til — knappen <b>⛨ Målmand</b> ligger i panelet til højre for banen, lige under <b>Boldmagnet</b>.</li>
             <li data-lang-en>Aim at <b>bare floor</b> <svg class="sym"><use href="#i-right"/></svg> the ball still stops exactly on the crosshair. Any spot on the court is a valid target — use it to show a loose ball, a bounce pass into space or where a shot should have gone.</li>
             <li data-lang-da>Sigt mod <b>bar gulv</b> <svg class="sym"><use href="#i-right"/></svg> bolden stopper stadig præcis på sigtekornet. Ethvert sted på banen er et gyldigt mål — brug det til at vise en løs bold, en aflevering ud i rummet eller hvor et skud burde have været.</li>
+            <li data-lang-en><b>It lands in the right place when the play runs too.</b> A pass used to sail a little past the receiver on the way through and only settle on them at the next frame. Now every object — the ball included — stops precisely on its frame position the first time, so the pass ends on the team-mate you aimed at.</li>
+            <li data-lang-da><b>Den lander også rigtigt, når spillet kører.</b> En aflevering plejede at sejle lidt forbi modtageren undervejs og først falde på plads ved næste frame. Nu stopper hvert objekt — bolden inklusive — præcis på sin frame-position allerede første gang, så afleveringen ender hos den medspiller, du sigtede efter.</li>
           </ul>
         </div>
       </div>
       <div class="callout" data-lang-en><svg class="sym"><use href="#i-hand"/></svg> <b>Quick way:</b> you don't have to switch tools — with the <b>Select</b> tool, mark a player then tap a team-mate to <b>pass</b> the ball to them, or tap the goal to <b>shoot</b> it into the net.</div>
       <div class="callout" data-lang-da><svg class="sym"><use href="#i-hand"/></svg> <b>Hurtig måde:</b> du behøver ikke skifte værktøj — med <b>Vælg</b>-værktøjet markerer du en spiller og trykker på en medspiller for at <b>aflevere</b> bolden eller på målet for at <b>skyde</b> den i nettet.</div>
-    </section>
+    </details>
 
     <!-- 5. Physics & cue sports -->
-    <section class="card" id="physics">
-      <h2><span class="num">5</span> <span data-lang-en>Physics &amp; Cue Sports</span><span data-lang-da>Fysik &amp; Køllesport</span></h2>
+    <details class="card sec" id="physics" open>
+      <summary class="sec-h"><h2><span class="num">5</span> <span data-lang-en>Physics &amp; Cue Sports</span><span data-lang-da>Fysik &amp; Køllesport</span></h2></summary>
       <p data-lang-en>Cue and precision sports use a real <b>physics engine</b> — balls roll, collide, transfer momentum and slow down with friction.</p>
       <p data-lang-da>Kølle- og præcisionssport bruger en ægte <b>fysikmotor</b> — bolde ruller, kolliderer, overfører bevægelsesenergi og bremses af friktion.</p>
       <ul>
@@ -374,11 +632,11 @@
       </ul>
       <div class="callout" data-lang-en><svg class="sym"><use href="#i-hand"/></svg> Tip: a quick tap gives a soft nudge, a long hold gives a power break. Use the <b>Erase</b> tool to remove drawn lines without moving the balls.</div>
       <div class="callout" data-lang-da><svg class="sym"><use href="#i-hand"/></svg> Tip: et hurtigt tryk giver et blødt puf, et langt hold giver et kraftfuldt break. Brug <b>Slet</b>-værktøjet for at fjerne tegnede linjer uden at flytte kuglerne.</div>
-    </section>
+    </details>
 
     <!-- 6. Record -->
-    <section class="card" id="record">
-      <h2><span class="num">6</span> <span data-lang-en>Record the Board (auto-frames + video)</span><span data-lang-da>Optag Tavlen (auto-frames + video)</span></h2>
+    <details class="card sec" id="record" open>
+      <summary class="sec-h"><h2><span class="num">6</span> <span data-lang-en>Record the Board (auto-frames + video)</span><span data-lang-da>Optag Tavlen (auto-frames + video)</span></h2></summary>
       <p data-lang-en>The <b>Frames &amp; Animation</b> bar <b>above the court</b> records in one press: every move you make becomes an <b>animation frame</b>, and the whole sequence is saved as a <b>video clip</b> you can share with players or other coaches.</p>
       <p data-lang-da><b>Frames &amp; Animation</b>-bjælken <b>over banen</b> optager med ét tryk: hver bevægelse du laver bliver til en <b>animations-frame</b>, og hele sekvensen gemmes som et <b>videoklip</b>, du kan dele med spillere eller andre trænere.</p>
       <ol>
@@ -386,6 +644,8 @@
         <li data-lang-da>Tryk <b><svg class="sym solid dot-rec"><use href="#i-rec"/></svg> Optag (auto-frames)</b> over banen — en blinkende <span class="tag"><svg class="sym solid dot-rec"><use href="#i-rec"/></svg> REC</span> timer og en frame-tæller vises.</li>
         <li data-lang-en>Do your moves / passes / shots on the board. <b>Every move adds a frame</b> automatically — you never press Add Frame.</li>
         <li data-lang-da>Lav dine bevægelser / afleveringer / skud på tavlen. <b>Hver bevægelse tilføjer en frame</b> automatisk — du trykker aldrig Tilføj Frame.</li>
+        <li data-lang-en><b>A curved run is recorded as a curve.</b> While you record, the board follows your finger and drops a frame every few steps along the way, so a loop around a defender, a banana run or a figure of eight plays back on exactly that path — not as a straight line to where you let go. Those points run into each other without pausing, so the movement plays at walking pace while a pose you simply place is still held long enough to talk over.</li>
+        <li data-lang-da><b>Et buet løb optages som en bue.</b> Mens du optager, følger tavlen din finger og lægger en frame hver par skridt undervejs, så en runde om en forsvarer, et banan-løb eller et ottetal afspilles præcis ad den vej — ikke som en lige linje hen til der, hvor du slap. De punkter løber i hinanden uden pause, så bevægelsen afspilles i gåtempo, mens en stilling du blot placerer stadig holdes længe nok til at tale over.</li>
         <li data-lang-en>Press <b><svg class="sym solid"><use href="#i-stop"/></svg> Stop</b>. Nothing downloads on its own — an <b>export bar</b> appears above the court with a button per format (<b>WEBM</b> and, where your browser can encode it, <b>MP4</b>) showing each file's size. Click the one you want to save it, or <b>✕</b> to discard the take. The captured frames stay on the frame strip either way.</li>
         <li data-lang-da>Tryk <b><svg class="sym solid"><use href="#i-stop"/></svg> Stop</b>. Intet downloades af sig selv — en <b>eksport-bjælke</b> vises over banen med en knap pr. format (<b>WEBM</b> og, hvis din browser kan kode det, <b>MP4</b>) med filstørrelsen. Klik på den du vil gemme, eller <b>✕</b> for at kassere optagelsen. De fangede frames bliver liggende på frame-striben uanset hvad.</li>
         <li data-lang-en>Press <b><svg class="sym solid"><use href="#i-play"/></svg> Play</b> to replay the recorded sequence on the board at any time.</li>
@@ -393,11 +653,15 @@
       </ol>
       <div class="callout" data-lang-en><svg class="sym"><use href="#i-video"/></svg> Both containers are recorded in the same take, so choosing MP4 costs no extra time. WebM plays in Chrome, Edge and Firefox; MP4 plays everywhere. If your browser cannot capture video at all, the <b>frames are still recorded</b> — only the export bar is skipped.</div>
       <div class="callout" data-lang-da><svg class="sym"><use href="#i-video"/></svg> Begge formater optages i samme omgang, så MP4 koster ikke ekstra tid. WebM afspilles i Chrome, Edge og Firefox; MP4 afspilles overalt. Kan din browser slet ikke optage video, bliver <b>framesene stadig optaget</b> — kun eksport-bjælken springes over.</div>
-    </section>
+      <ul>
+        <li data-lang-en><b>Already built the animation? Just export it.</b> Under <b>Export clip</b> in the panel beside the court sit <b>⬇ WebM</b> and, below it, <b>⬇ MP4</b>. Either one plays your animation through once, records that pass and downloads it — no recording session and no frame capturing needed. MP4 is greyed out only where the browser cannot encode it.</li>
+        <li data-lang-da><b>Har du allerede bygget animationen? S\u00e5 eksport\u00e9r den bare.</b> Under <b>Eksport\u00e9r klip</b> i panelet ved siden af banen ligger <b>⬇ WebM</b> og, lige under den, <b>⬇ MP4</b>. Begge afspiller din animation \u00e9n gang igennem, optager den og henter filen — uden optagesession og uden at fange frames. MP4 er kun gr\u00e5tonet, hvor browseren ikke kan kode det.</li>
+      </ul>
+    </details>
 
     <!-- 7. Video analysis -->
-    <section class="card" id="video">
-      <h2><span class="num">7</span> <span data-lang-en>Video Analysis</span><span data-lang-da>Videoanalyse</span></h2>
+    <details class="card sec" id="video" open>
+      <summary class="sec-h"><h2><span class="num">7</span> <span data-lang-en>Video Analysis</span><span data-lang-da>Videoanalyse</span></h2></summary>
       <p data-lang-en>Import a match video or paste a live-stream link, bookmark key moments, and export a short clip from any single bookmark — with your comment burned into the picture.</p>
       <p data-lang-da>Importér en kampvideo eller indsæt et live-stream-link, bogmærk vigtige øjeblikke, og eksportér et kort klip fra et enkelt bogmærke — med din kommentar brændt ind i billedet.</p>
       <ol>
@@ -430,11 +694,11 @@
       </ul>
       <div class="callout" data-lang-en><svg class="sym"><use href="#i-clip"/></svg> Export records the bookmark's segment straight from the player in real time — keep the tab visible while it runs. Streaming links can't be exported (only imported files).</div>
       <div class="callout" data-lang-da><svg class="sym"><use href="#i-clip"/></svg> Eksporten optager bogmærkets segment direkte fra afspilleren i realtid — hold fanen synlig mens den kører. Stream-links kan ikke eksporteres (kun importerede filer).</div>
-    </section>
+    </details>
 
     <!-- 8. Squad, matches & training -->
-    <section class="card" id="squad">
-      <h2><span class="num">8</span> <span data-lang-en>Squad, Matches &amp; Training Planner</span><span data-lang-da>Trup, Kampe &amp; Træningsplan</span></h2>
+    <details class="card sec" id="squad" open>
+      <summary class="sec-h"><h2><span class="num">8</span> <span data-lang-en>Squad, Matches &amp; Training Planner</span><span data-lang-da>Trup, Kampe &amp; Træningsplan</span></h2></summary>
       <p data-lang-en>These three modules hold the everyday data the rest of the app builds on — who is on the team, when you play, and what you train.</p>
       <p data-lang-da>Disse tre moduler rummer de daglige data, som resten af appen bygger på — hvem der er på holdet, hvornår I spiller, og hvad I træner.</p>
       <ul>
@@ -448,8 +712,10 @@
         <li data-lang-da>Vælger du <b>Skadet</b>, åbnes feltet <b>Skadesnote</b> — en kort, praktisk linje som ”forstuvet ankel, ingen hop, løber igen om to uger”. Den vises under status i trupoversigten og sendes med til AI-assistenten, når du spørger om skader. Hold diagnoser og behandlingsjournaler udenfor: helbredsoplysninger er følsomme personoplysninger efter GDPR og er klubbens ansvar. Noten ryddes, når spilleren sættes aktiv igen.</li>
         <li data-lang-en><b>Position badges:</b> every position shows as a coloured player badge with its shirt abbreviation — GK, LW, CB, PV, PG, QB and so on — next to the position in the squad list, in the picker and on the Live Scouting player buttons. The colour is the role: <b>orange</b> goalkeeper, <b>blue</b> defence, <b>green</b> midfield / playmaker, <b>red</b> attack, <b>purple</b> other. Each sport has its own set.</li>
         <li data-lang-da><b>Positionsmærker:</b> hver position vises som et farvet spillermærke med sin trøjeforkortelse — GK, LW, CB, PV, PG, QB og så videre — ved siden af positionen i truplisten, i vælgeren og på spillerknapperne i Live Registrering. Farven er rollen: <b>orange</b> målmand, <b>blå</b> forsvar, <b>grøn</b> midtbane / spilfordeler, <b>rød</b> angreb, <b>lilla</b> øvrige. Hver sportsgren har sit eget sæt.</li>
-        <li data-lang-en><b>Rename your team:</b> the line under the <b>Teams &amp; Players</b> heading is editable — click it (✎) to set the <b>team name</b>, <b>division / league</b> and <b>category</b>. Both of the last two have a picker beside them with the usual values for your sport, but you can still type anything you like. The new name is used across the app and is included in your backup.</li>
-        <li data-lang-da><b>Omdøb dit hold:</b> linjen under overskriften <b>Hold &amp; Spillere</b> kan redigeres — klik på den (✎) for at sætte <b>holdnavn</b>, <b>division / liga</b> og <b>kategori</b>. De to sidste har en vælger ved siden af sig med de sædvanlige værdier for din sport, men du kan stadig skrive lige hvad du vil. Det nye navn bruges i hele appen og kommer med i din backup.</li>
+        <li data-lang-en><b>Edit the team's own data:</b> the <b>Teams</b> panel has an <b>✎ Edit team</b> button beside the picker, and the line under the <b>Teams &amp; Players</b> heading does the same when you click it (✎). The form holds the <b>team name</b>, <b>division / league</b>, <b>category</b>, the <b>club</b>, the <b>season</b> and a <b>home venue</b>. Division and category have a picker beside them with the usual values for your sport, but you can still type anything you like. Club and season are their own records, so renaming them here renames them everywhere. The current values are shown as chips under the picker.</li>
+        <li data-lang-da><b>Ret holdets egne data:</b> <b>Hold</b>-panelet har en <b>✎ Ret hold</b>-knap ved siden af vælgeren, og linjen under overskriften <b>Hold &amp; Spillere</b> gør det samme, når du klikker på den (✎). Formularen rummer <b>holdnavn</b>, <b>division / liga</b>, <b>kategori</b>, <b>klub</b>, <b>sæson</b> og en <b>hjemmebane</b>. Division og kategori har en vælger ved siden af sig med de sædvanlige værdier for din sport, men du kan stadig skrive lige hvad du vil. Klub og sæson er deres egne poster, så omdøber du dem her, omdøbes de overalt. De aktuelle værdier vises som chips under vælgeren.</li>
+        <li data-lang-en>The <b>home venue</b> is filled in automatically as the venue of every new match you create, so a full season of fixtures takes one less field each.</li>
+        <li data-lang-da><b>Hjemmebanen</b> udfyldes automatisk som spillested på alle nye kampe, du opretter, så en hel sæsons kampe koster ét felt mindre hver.</li>
         <li data-lang-en><b>Staff:</b> add coaches, physios and analysts under the same view, each with a role and an <b>e-mail address</b> — and start a <b>💬 chat</b> with any player or staff member straight from the list. A staff member with an address can be picked as the <b>sender</b> when you write to a player, so the reply comes back to them.</li>
         <li data-lang-da><b>Stab:</b> tilføj trænere, fysioterapeuter og analytikere i samme visning, hver med en rolle og en <b>e-mailadresse</b> — og start en <b>💬 chat</b> med enhver spiller eller stabsmedlem direkte fra listen. Et stabsmedlem med en adresse kan vælges som <b>afsender</b>, når du skriver til en spiller, så svaret kommer tilbage til dem.</li>
         <li data-lang-en><b>Weight, mobile number and e-mail:</b> every player also has a <b>weight</b> in kilos, a <b>mobile number</b> and an <b>e-mail address</b>. The weight shows in the squad list and on the statistics leaderboard and is used by the AI max test; the number is there so you can still ring them, and the address is what the <b>✉</b> button writes to. Write the number in international form — <b>+45 12 34 56 78</b> — or it will not be accepted.</li>
@@ -458,12 +724,30 @@
         <li data-lang-da><b>Ret hele truppen på én gang:</b> tryk <b>✎ Ret trup</b> i overskriften på Trup-panelet, så bliver hver række til indtastningsfelter — nummer, navn, position, højde, vægt, mobil, e-mail og status. Ret så mange spillere du vil, og tryk <b>Gem trup</b>; kun de rækker, du faktisk har ændret, skrives. En række uden fornavn, eller med et mobilnummer eller en adresse der ikke kan læses, springes over og tælles med i beskeden. <b>Annullér</b> kasserer det hele.</li>
         <li data-lang-en><b>Matches:</b> create fixtures with opponent, date, home/away and venue. The next match appears on the Dashboard and is what <b>Live Scouting</b> registers against.</li>
         <li data-lang-da><b>Kampe:</b> opret kampe med modstander, dato, hjemme/ude og spillested. Næste kamp vises på Oversigten og er den, <b>Live Registrering</b> registrerer på.</li>
+        <li data-lang-en><b>Pick who plays this match.</b> The match form ends with a <b>Line-up</b> list of the whole squad. Tick the players who are actually travelling, and <b>Live Scouting shows only them</b> — no scrolling past twelve names that are not at the hall. <b>Only available</b> ticks everyone who is neither injured nor set to Not Active in one press, and injured players are marked in the list so you do not pick them by mistake.</li>
+        <li data-lang-da><b>Vælg hvem der spiller kampen.</b> Kampformularen slutter med en <b>Trup</b>-liste over hele truppen. Sæt flueben ved de spillere, der rent faktisk tager med, så <b>viser Live Registrering kun dem</b> — ingen rulning forbi tolv navne, der ikke er i hallen. <b>Kun tilgængelige</b> sætter flueben ved alle, der hverken er skadede eller sat til Ikke aktiv, med ét tryk, og skadede spillere er markeret i listen, så du ikke vælger dem ved en fejl.</li>
+        <li data-lang-en>On match day use the <b>👥 Line-up</b> button on the match row — it opens the list on its own, without the rest of the form. The match table shows <b>how many of the squad are picked</b>, or “Whole squad” when you have not narrowed it down. Leaving everyone ticked is the same as not picking at all, so older matches keep working exactly as before.</li>
+        <li data-lang-da>På kampdagen bruger du <b>👥 Trup</b>-knappen på kamplinjen — den åbner listen for sig, uden resten af formularen. Kamptabellen viser, <b>hvor mange af truppen der er udtaget</b>, eller ”Hele truppen” når du ikke har snævret ind. At lade alle stå med flueben er det samme som slet ikke at vælge, så ældre kampe virker præcis som før.</li>
+        <li data-lang-en><b>Export matches / Import matches.</b> The two buttons in the Schedule heading write the fixture list to a file and read one back — and they carry <b>the active team only</b>, together with every event Live Scouting registered on those matches. The line under the heading names the squad it will export. That is how you hand the U19 programme to the assistant who runs it without shipping the rest of the club, or move a season onto a second device.</li>
+        <li data-lang-da><b>Eksportér kampe / Importér kampe.</b> De to knapper i Program-overskriften skriver kampprogrammet til en fil og læser en ind igen — og de omfatter <b>kun det aktive hold</b>, sammen med alle de hændelser, Live Registrering har registreret på de kampe. Linjen under overskriften fortæller, hvilket hold der eksporteres. Sådan giver du U19-programmet til den assistent, der står for det, uden at sende resten af klubben med — eller flytter en sæson over på en anden enhed.</li>
+        <li data-lang-en>An imported file <b>lands in the team you are looking at</b>, and matches are merged on their own id, so importing the same file twice updates the fixtures instead of doubling them. Check the team picker before you import.</li>
+        <li data-lang-da>En importeret fil <b>lander i det hold, du kigger på</b>, og kampe flettes på deres eget id, så importerer du den samme fil to gange, opdateres kampene i stedet for at blive fordoblet. Tjek holdvælgeren, før du importerer.</li>
         <li data-lang-en><b>Training Planner:</b> build a session from your <b>Exercise Library</b> — pick drills, set the order and total duration, then save it as a plan you can reuse or share.</li>
         <li data-lang-da><b>Træningsplan:</b> byg en session ud fra dit <b>Øvelsesbibliotek</b> — vælg øvelser, sæt rækkefølge og samlet varighed, og gem den som en plan, du kan genbruge eller dele.</li>
         <li data-lang-en><b>🤖 AI session:</b> next to <b>+ New Session</b> sits a button that lets ChatGPT build the session for you. Describe what it should do — “leg power before the cup weekend”, “light session the day after a match” — set the length and focus, and press <b>Generate</b>. The answer picks <b>3–6 drills from your own library</b> and writes the run-through: warm-up, how long each drill runs, the finish and two coaching points. Every picked drill is listed with its <b>▶ video link</b>, so you can open the clip while you read the plan.</li>
         <li data-lang-da><b>🤖 AI-session:</b> ved siden af <b>+ Ny Session</b> ligger en knap, der lader ChatGPT bygge sessionen for dig. Beskriv hvad den skal gøre — ”benstyrke før pokalweekenden”, ”let session dagen efter kamp” — sæt længde og fokus, og tryk <b>Generer</b>. Svaret vælger <b>3–6 øvelser fra dit eget bibliotek</b> og skriver forløbet: opvarmning, hvor længe hver øvelse kører, afslutning og to trænerpointer. Hver valgt øvelse står med sit <b>▶ videolink</b>, så du kan åbne klippet mens du læser planen.</li>
-        <li data-lang-en>Nothing is saved automatically: press <b>Use this session</b> and the draft opens in the normal session form with title, focus, length and drills filled in, ready for you to change and save. The model may only choose drills that already exist in your library — it cannot invent one.</li>
-        <li data-lang-da>Intet gemmes automatisk: tryk <b>Brug denne session</b>, så åbner udkastet i den normale sessionsformular med titel, fokus, længde og øvelser udfyldt, klar til at rette og gemme. Modellen må kun vælge øvelser, der allerede findes i dit bibliotek — den kan ikke finde på en ny.</li>
+        <li data-lang-en><b>It only picks drills that belong.</b> The library it may choose from is filtered to <b>your sport's own categories</b> first, and it is told that a drill being in the library is not a reason to use it — so a handball or soccer request never comes back padded with unrelated gym work.</li>
+        <li data-lang-da><b>Den vælger kun øvelser, der hører til.</b> Biblioteket, den må vælge fra, filtreres først til <b>din sportsgrens egne kategorier</b>, og den får besked på, at en øvelse ikke skal med, bare fordi den ligger i biblioteket — så en håndbold- eller fodboldforespørgsel aldrig kommer tilbage fyldt op med urelateret styrketræning.</li>
+        <li data-lang-en><b>What your library does not have, it writes.</b> When the session needs a drill you have not made yet, it drafts <b>one new drill for every exercise your description calls for</b> — describe six and you get six, up to ten — as real work for your sport in the <b>category you chose as the focus</b>, in both English and Danish, each with a <b>video link that has been checked against YouTube</b> and a video search as the fallback. They appear under <b>New drills it wrote for you</b>, under the ones it picked from the library. Nothing is saved while you read: press <b>Use this session</b> and they are added to your library and attached to the session in one go.</li>
+        <li data-lang-da><b>Det, dit bibliotek ikke har, skriver den.</b> Når passet har brug for en øvelse, du ikke har lavet endnu, laver den <b>én ny øvelse for hver øvelse, din beskrivelse lægger op til</b> — beskriv seks, og du får seks, op til ti — som rigtigt arbejde til din sportsgren i <b>den kategori, du valgte som fokus</b>, på både engelsk og dansk, hver med et <b>videolink, der er tjekket mod YouTube</b>, og en videosøgning som reserve. De står under <b>Nye øvelser, den har skrevet til dig</b>, under dem den valgte fra biblioteket. Intet gemmes, mens du læser: tryk <b>Brug denne session</b>, så lægges de i biblioteket og kobles på passet på én gang.</li>
+        <li data-lang-en><b>The clips play in the plan.</b> Every drill in the draft — picked or newly written — shows its <b>video right there in the dialog</b> when the link has a player, so you can watch the drill while you decide whether the session is right. The same happens in <b>Show</b> on a saved session.</li>
+        <li data-lang-da><b>Klippene afspilles i planen.</b> Hver øvelse i udkastet — valgt eller nyskrevet — viser sin <b>video direkte i dialogen</b>, når linket har en afspiller, så du kan se øvelsen, mens du beslutter, om passet er rigtigt. Det samme sker i <b>Vis</b> på et gemt pas.</li>
+        <li data-lang-en>Under each newly written drill the links are <b>editable</b> — correct one, remove it with ✕ or add another with <b>+ Add video</b>, and the player under it follows along. What you leave there is what goes into the library when you press <b>Use this session</b>.</li>
+        <li data-lang-da>Under hver nyskreven øvelse er linkene <b>redigerbare</b> — ret et, fjern det med ✕ eller tilføj et mere med <b>+ Tilføj video</b>, så følger afspilleren nedenunder med. Det, du lader stå, er det, der kommer i biblioteket, når du trykker <b>Brug denne session</b>.</li>
+        <li data-lang-en>Nothing is saved automatically: press <b>Use this session</b> and the draft opens in the normal session form with title, focus, length and drills filled in, ready for you to change and save. A drill it picked must already exist in your library — it cannot pretend one is there.</li>
+        <li data-lang-da>Intet gemmes automatisk: tryk <b>Brug denne session</b>, så åbner udkastet i den normale sessionsformular med titel, fokus, længde og øvelser udfyldt, klar til at rette og gemme. En øvelse, den vælger, skal allerede findes i dit bibliotek — den kan ikke lade som om, der ligger en.</li>
+        <li data-lang-en>The <b>Focus</b> list is your sport's own category list with <b>Warm-up</b> in front — Attack, Defense, Goalkeeper, Passing, Shooting, Transition, Conditioning, Physical for handball. Each one appears once.</li>
+        <li data-lang-da><b>Fokus</b>-listen er din sportsgrens egen kategoriliste med <b>Opvarmning</b> forrest — Angreb, Forsvar, Målmand, Aflevering, Skud, Omstilling, Kondition, Fysisk for håndbold. Hver optræder én gang.</li>
         <li data-lang-en><b>Tactical board animations in a session:</b> both <b>+ New Session</b> and <b>🤖 AI session</b> have a <b>Tactical board animations</b> list holding every animation you saved on the <a class="back" href="#board">Tactical Board</a> for this sport. Pick one or more and they travel with the plan.</li>
         <li data-lang-da><b>Taktiktavle-animationer i en session:</b> både <b>+ Ny Session</b> og <b>🤖 AI-session</b> har en liste med <b>Taktiktavle-animationer</b>, der indeholder alle de animationer, du har gemt på <a class="back" href="#board">Taktiktavlen</a> til denne sport. Vælg en eller flere, så følger de med planen.</li>
         <li data-lang-en><b>Show:</b> every session card has a <b>Show</b> button next to Edit. It opens the whole plan in a dialog — the drills with their length, category and ▶ video link, and under <b>Show tactical board animations</b> a button per attached animation. Press one and the play runs in its own dialog, with <b>▶ Play</b> and arrows for stepping frame by frame. Nothing on the board is changed by watching it.</li>
@@ -474,22 +758,73 @@
         <li data-lang-da><b>🏋 Træningsøvelser</b> er det almindelige arbejde: én linje pr. øvelse med <b>sæt</b>, <b>gentagelser</b> og <b>belastning</b> — ”Bænkpres 4 × 8 @ 90 kg”. Tilføj lige så mange linjer, som passet indeholdt. <b>Volumen</b> (sæt × gentagelser × belastning) beregnes for dig, så du med ét blik kan se, om ugen er tungere eller lettere end den forrige.</li>
         <li data-lang-en><b>🏆 Max tests</b> is the one-off best result: exercise, result, unit (kg, reps, sec, m, cm) and how many repetitions it was done for. For a result in kilos over more than one rep the estimated <b>one-rep max</b> is worked out for you and shown next to the number. An entry can hold several tests, and you can save an entry with only exercises, only tests, or both.</li>
         <li data-lang-da><b>🏆 Maxtest</b> er det éngangs-bedste resultat: øvelse, resultat, enhed (kg, gentagelser, sek, m, cm) og hvor mange gentagelser det blev taget for. For et resultat i kilo over mere end én gentagelse beregnes det anslåede <b>1RM</b> for dig og vises ved siden af tallet. En registrering kan rumme flere test, og du kan gemme den med kun øvelser, kun test eller begge dele.</li>
-        <li data-lang-en><b>🤖 Self AI max test</b> builds the test itself. Pick the player and a training plan, add what the player is after, and the answer says which 3–5 exercises from that plan are worth max-testing, the warm-up ramp set by set, how to find the true max safely, the estimated one-rep max from the numbers already recorded, the working loads as a percentage of that max for the next four weeks, and when to re-test. It also states when to stop: pain, form breaking down, or no spotter. Training advice only — never medical advice.</li>
-        <li data-lang-da><b>🤖 Selv-AI maxtest</b> bygger selve testen. Vælg spilleren og en træningsplan, skriv hvad spilleren vil opnå, og svaret fortæller hvilke 3–5 øvelser fra planen der er værd at maxteste, opvarmningen sæt for sæt, hvordan man finder det rigtige max sikkert, det anslåede 1RM ud fra de tal der allerede er registreret, træningsbelastningerne som procent af det max de næste fire uger, og hvornår der skal testes igen. Den siger også hvornår der skal stoppes: smerte, teknik der skrider, eller ingen makker. Kun træningsråd — aldrig lægelig rådgivning.</li>
+        <li data-lang-en><b>🤖 AI Training Entry</b> builds the test itself. Pick the player and a training plan, add what the player is after, and the answer says which 3–5 exercises from that plan are worth max-testing, the warm-up ramp set by set, how to find the true max safely, the estimated one-rep max from the numbers already recorded, the working loads as a percentage of that max for the next four weeks, and when to re-test. It also states when to stop: pain, form breaking down, or no spotter. Training advice only — never medical advice.</li>
+        <li data-lang-da><b>🤖 AI-træningspost</b> bygger selve testen. Vælg spilleren og en træningsplan, skriv hvad spilleren vil opnå, og svaret fortæller hvilke 3–5 øvelser fra planen der er værd at maxteste, opvarmningen sæt for sæt, hvordan man finder det rigtige max sikkert, det anslåede 1RM ud fra de tal der allerede er registreret, træningsbelastningerne som procent af det max de næste fire uger, og hvornår der skal testes igen. Den siger også hvornår der skal stoppes: smerte, teknik der skrider, eller ingen makker. Kun træningsråd — aldrig lægelig rådgivning.</li>
+        <li data-lang-en><b>It fills in both lists.</b> Press <b>Create entry</b> and the new record already has the <b>🏋 training exercises</b> — 4 to 6 from the plan with sets × reps ready to fill in — <b>and</b> the <b>🏆 max tests</b> it told you to run, each with the right unit. Everything is sized to that one player: the answer uses their <b>position, height and weight</b> and the numbers already recorded, and says in one line how the body data changed its choice. Nothing is stored until you press Save in the form.</li>
+        <li data-lang-da><b>Den udfylder begge lister.</b> Tryk <b>Opret registrering</b>, så har den nye post både <b>🏋 træningsøvelserne</b> — 4 til 6 fra planen med sæt × gentagelser klar til udfyldning — <b>og</b> de <b>🏆 maxtest</b>, den bad dig køre, hver med den rigtige enhed. Alt er tilpasset netop den spiller: svaret bruger deres <b>position, højde og vægt</b> og de tal, der allerede er registreret, og siger på én linje, hvordan kropsdataene ændrede valget. Intet gemmes, før du trykker Gem i formularen.</li>
         <li data-lang-en>The panel has its own <b>Export</b> and <b>Import</b> buttons. Export downloads the personal records as one small JSON file — a backup, or something to hand to a strength coach or to the player. Import reads such a file back in. The player's name and number travel with the file, so it still reads correctly on a device that does not have your squad.</li>
         <li data-lang-da>Panelet har sine egne <b>Eksportér</b>- og <b>Importér</b>-knapper. Eksport downloader de personlige registreringer som én lille JSON-fil — en backup, eller noget du kan give til en styrketræner eller til spilleren. Import læser sådan en fil ind igen. Spillerens navn og nummer følger med filen, så den stadig kan læses på en enhed, der ikke har din trup.</li>
         <li data-lang-en><b>Show:</b> every record has a <b>Show</b> button that opens it in a dialog — the training exercises in one table with their volume, the max tests in a second table with the estimated 1RM, your notes, the training plan behind them, and a <b>body map</b> marking the parts that were trained and max tested. The marking comes from the drill library: an exercise or test named after a drill inherits that drill's muscles, and the linked plan adds the muscles of the drills it runs. Name the lines the way the drills are named and the map fills itself in.</li>
         <li data-lang-da><b>Vis:</b> hver registrering har en <b>Vis</b>-knap, der åbner den i en dialog — træningsøvelserne i én tabel med deres volumen, maxtestene i en anden tabel med det anslåede 1RM, dine noter, træningsplanen bag dem, og et <b>kropskort</b>, der markerer de dele, der er trænet og maxtestet. Markeringen kommer fra øvelsesbiblioteket: en øvelse eller test opkaldt efter en øvelse arver den øvelses muskler, og den tilknyttede plan lægger musklerne fra sine øvelser til. Navngiv linjerne som øvelserne hedder, så udfylder kortet sig selv.</li>
       </ul>
+      <h3 data-lang-en>Status &amp; progression — the curve</h3>
+      <h3 data-lang-da>Status &amp; udvikling — kurven</h3>
+      <p data-lang-en>A section of its own under the sessions that answers one question: is the training work going up, or flattening out?</p>
+      <p data-lang-da>Et afsnit for sig under sessionerne, der svarer på ét spørgsmål: går træningsarbejdet op, eller flader det ud?</p>
+      <ul>
+        <li data-lang-en>Four pickers set what is plotted: <b>Who</b> (everyone or one athlete), <b>Exercise</b> (all of them or a single one), <b>Measure</b> — volume in kilos, estimated 1RM, heaviest load or total reps — and <b>Period</b>, from the last three months to all time. Your choice is remembered.</li>
+        <li data-lang-da>Fire vælgere bestemmer hvad der tegnes: <b>Hvem</b> (alle eller én atlet), <b>Øvelse</b> (alle eller en enkelt), <b>Måling</b> — volumen i kilo, anslået 1RM, tungeste belastning eller gentagelser i alt — og <b>Periode</b>, fra de seneste tre måneder til hele historikken. Dit valg huskes.</li>
+        <li data-lang-en>Above the curve, four cards give the status at a glance: how many entries are in the period, the <b>latest</b> number, the total or the best one, and the <b>change</b> in per cent from the first point to the last.</li>
+        <li data-lang-da>Over kurven giver fire kort status med ét blik: hvor mange registreringer der er i perioden, det <b>seneste</b> tal, summen eller det bedste, og <b>ændringen</b> i procent fra første til sidste punkt.</li>
+        <li data-lang-en>Every record is one point on the curve. <b>Tap a point</b> and the line under the chart reads out the date, the number and who it belongs to. On a phone the chart keeps its real size and <b>scrolls sideways</b> instead of shrinking, so no point is ever too small to hit; on an iPad the whole period fits at once.</li>
+        <li data-lang-da>Hver registrering er ét punkt på kurven. <b>Tryk på et punkt</b>, så aflæser linjen under grafen dato, tal og hvem det hører til. På en telefon beholder grafen sin rigtige størrelse og <b>scroller til siden</b> i stedet for at skrumpe, så intet punkt bliver for lille at ramme; på en iPad er hele perioden med på én gang.</li>
+        <li data-lang-en>The curve is drawn from <b>Personal Training &amp; Max Tests</b> — nothing to plot means nothing has been saved there yet for the chosen period.</li>
+        <li data-lang-da>Kurven tegnes ud fra <b>Personlig træning &amp; maxtest</b> — intet at tegne betyder, at der endnu ikke er gemt noget dér for den valgte periode.</li>
+      </ul>
+      <h3 data-lang-en>Reports you can print or hand out</h3>
+      <h3 data-lang-da>Rapporter du kan udskrive eller dele ud</h3>
+      <p data-lang-en>Every report opens in its own tab, already laid out for paper, and your browser's print dialog can save it as a PDF. No internet and no extra software is needed.</p>
+      <p data-lang-da>Hver rapport åbner i sin egen fane, klar til papir, og browserens udskriftsdialog kan gemme den som PDF. Der kræves hverken internet eller ekstra software.</p>
+      <ul>
+        <li data-lang-en><b>📄 Report on a training session</b> — pick <b>exactly which players</b> the sheet is for. You get the drills of the session in a table (category, length, intensity and the body parts they load, with the descriptions if you want them) and then <b>one page section per player</b> with their number, position, height and weight, and everything they have actually recorded under that plan.</li>
+        <li data-lang-da><b>📄 Rapport på et træningspas</b> — vælg <b>præcis hvilke spillere</b> arket er til. Du får passets øvelser i en tabel (kategori, længde, intensitet og de kropsdele, de belaster, med beskrivelserne hvis du vil have dem) og derefter <b>ét sideafsnit pr. spiller</b> med nummer, position, højde og vægt, og alt hvad de faktisk har registreret på den plan.</li>
+        <li data-lang-en>A player with nothing recorded yet gets <b>blank lines</b> instead — the drills listed with empty sets, reps and load columns — so the same report doubles as the sheet they fill in at the gym. Every player section ends with a notes box and a coach/date signature line. Untick <b>Add blank lines</b> if you only want what is already registered.</li>
+        <li data-lang-da>En spiller uden registreringer får i stedet <b>blanke linjer</b> — øvelserne listet med tomme kolonner til sæt, gentagelser og belastning — så den samme rapport også er det ark, de udfylder i træningscentret. Hvert spillerafsnit slutter med et notefelt og en linje til træner og dato. Fjern fluebenet ved <b>Tilføj blanke linjer</b>, hvis du kun vil have det, der allerede er registreret.</li>
+        <li data-lang-en><b>📄 Report on one record</b> — the button on a personal training entry prints that single entry: the training exercises with their volume, the max tests with the estimated 1RM, your notes and the plan behind them.</li>
+        <li data-lang-da><b>📄 Rapport på én registrering</b> — knappen på en personlig registrering udskriver netop den: træningsøvelserne med deres volumen, maxtestene med anslået 1RM, dine noter og planen bag dem.</li>
+        <li data-lang-en><b>📄 Report in the section header</b> — pick one athlete (or everyone) and you get their whole history: a <b>best results</b> table on the first page, ranked by estimated 1RM, then every record in date order. That is the sheet to bring to a review with a player.</li>
+        <li data-lang-da><b>📄 Rapport i afsnittets hoved</b> — vælg én atlet (eller alle), så får du hele historikken: en tabel med <b>bedste resultater</b> på første side, sorteret efter anslået 1RM, og derefter hver registrering i datorækkefølge. Det er arket, du tager med til en samtale med en spiller.</li>
+      </ul>
       <div class="callout" data-lang-en><svg class="sym"><use href="#i-dumbbell"/></svg> Use the <kbd>/</kbd> search box in the top bar to jump straight to a player, match, drill or saved tactic.</div>
       <div class="callout" data-lang-da><svg class="sym"><use href="#i-dumbbell"/></svg> Brug <kbd>/</kbd>-søgefeltet i topbjælken for at hoppe direkte til en spiller, kamp, øvelse eller gemt taktik.</div>
-    </section>
+    </details>
+
+    <!-- Event planner -->
+    <details class="card sec" id="planner" open>
+      <summary class="sec-h"><h2><span class="num"><svg class="sym"><use href="#i-clip"/></svg></span> <span data-lang-en>Event Planner</span><span data-lang-da>Begivenhedsplan</span></h2></summary>
+      <p data-lang-en>A season is more than fixtures. <b>Event Planner</b> sits right under Matches in the menu and works the same way — a list you add to, edit and tick off — but for everything that is not a match: training camps, parents' meetings, travel, tournaments, team dinners and club duties.</p>
+      <p data-lang-da>En sæson er mere end kampe. <b>Begivenhedsplan</b> ligger lige under Kampe i menuen og fungerer på samme måde — en liste du tilføjer til, retter i og krydser af — men til alt det, der ikke er en kamp: træningslejre, forældremøder, rejser, stævner, holdmiddage og klubtjanser.</p>
+      <ul>
+        <li data-lang-en><b>+ New Event</b> opens the same kind of form as a match: <b>date</b> and <b>time</b>, a <b>name</b>, a <b>type</b> (training, meeting, travel, tournament, social, other), where it is, <b>who</b> it is for — the whole squad, the U19s, the staff — a <b>status</b> and a notes field.</li>
+        <li data-lang-da><b>+ Ny begivenhed</b> åbner samme slags formular som en kamp: <b>dato</b> og <b>tid</b>, et <b>navn</b>, en <b>type</b> (træning, møde, rejse, stævne, socialt, andet), hvor det er, <b>hvem</b> det er for — hele truppen, U19, staben — en <b>status</b> og et notefelt.</li>
+        <li data-lang-en>The <b>status</b> is what makes the list worth keeping: <b>Planned</b> while it is still an idea, <b>Confirmed</b> once the hall is booked, <b>Done</b> afterwards and <b>Cancelled</b> when it falls through — cancelled events stay on the list so you can see what was dropped, but they are left out of the “coming up” count in the heading.</li>
+        <li data-lang-da><b>Status</b> er det, der gør listen værd at holde ved lige: <b>Planlagt</b> mens det stadig er en idé, <b>Bekræftet</b> når hallen er booket, <b>Afholdt</b> bagefter og <b>Aflyst</b> når det falder på gulvet — aflyste begivenheder bliver stående, så du kan se hvad der røg, men de tælles ikke med i ”på vej” i overskriften.</li>
+        <li data-lang-en><b>🗑 Clear all</b> in the panel heading empties the plan in one go — for the start of a new season. It asks first and tells you how many events it is about to delete, and it only touches <b>the team you are looking at</b>.</li>
+        <li data-lang-da><b>🗑 Ryd alle</b> i panelets overskrift tømmer planen på én gang — til starten på en ny sæson. Den spørger først og fortæller, hvor mange begivenheder den er ved at slette, og den rører kun <b>det hold, du kigger på</b>.</li>
+        <li data-lang-en><b>Export plan</b> and <b>Import plan</b> sit beside it. Export writes the whole plan to a file you can mail to an assistant or keep as a copy; import merges a file back in. Events are matched on their own id, so importing the same file twice updates instead of duplicating.</li>
+        <li data-lang-da><b>Eksportér plan</b> og <b>Importér plan</b> ligger ved siden af. Eksport skriver hele planen til en fil, du kan maile til en assistent eller gemme som kopi; import fletter en fil ind igen. Begivenheder matches på deres eget id, så importerer du den samme fil to gange, opdateres den i stedet for at blive lagt til igen.</li>
+        <li data-lang-en>Like the squad, the matches and the training plans, <b>the plan belongs to one team</b>. Switch team in the sidebar and you see that team's plan. It also travels in a full backup under <span class="tag">Settings</span>.</li>
+        <li data-lang-da>Ligesom truppen, kampene og træningsplanerne <b>hører planen til ét hold</b>. Skift hold i sidebjælken, så ser du det holds plan. Den kommer også med i en fuld backup under <span class="tag">Indstillinger</span>.</li>
+      </ul>
+      <div class="callout" data-lang-en><svg class="sym"><use href="#i-target"/></svg> Do not want it in the menu? <span class="tag">Settings</span> → <b>Modules in the menu</b> lets you untick Event Planner like any other module.</div>
+      <div class="callout" data-lang-da><svg class="sym"><use href="#i-target"/></svg> Vil du ikke have den i menuen? <span class="tag">Indstillinger</span> → <b>Moduler i menuen</b> lader dig fjerne fluebenet ved Begivenhedsplan som ved ethvert andet modul.</div>
+    </details>
 
     <!-- 9. Exercise library -->
-    <section class="card" id="exercises">
-      <h2><span class="num">9</span> <span data-lang-en>Exercise Library</span><span data-lang-da>Øvelsesbibliotek</span></h2>
-      <p data-lang-en>Build a library of reusable drills with tags, duration and intensity. The <b>categories match your chosen sport</b> automatically.</p>
-      <p data-lang-da>Byg et bibliotek af genanvendelige øvelser med tags, varighed og intensitet. <b>Kategorierne matcher din valgte sportsgren</b> automatisk.</p>
+    <details class="card sec" id="exercises" open>
+      <summary class="sec-h"><h2><span class="num">9</span> <span data-lang-en>Exercise Library</span><span data-lang-da>Øvelsesbibliotek</span></h2></summary>
+      <p data-lang-en>Build a library of reusable drills with tags, duration and intensity. The <b>categories match your chosen sport</b> automatically, plus a <b>Physical</b> category that every sport has — that is where strength, speed, mobility and prehab work goes, whether you coach handball, chess or darts.</p>
+      <p data-lang-da>Byg et bibliotek af genanvendelige øvelser med tags, varighed og intensitet. <b>Kategorierne matcher din valgte sportsgren</b> automatisk, plus en <b>Fysisk</b>-kategori, som alle sportsgrene har — der ligger styrke, hurtighed, mobilitet og skadesforebyggelse, uanset om du træner håndbold, skak eller dart.</p>
       <p data-lang-en>The library lives inside <span class="tag">Training Planner</span>, right under your sessions — one page for planning and for the drills the plan is built from. It is a fold-out panel like everything else, so you can keep it closed while you work on sessions.</p>
       <p data-lang-da>Biblioteket ligger inde i <span class="tag">Træningsplan</span>, lige under dine sessioner — én side til planlægningen og til de øvelser, planen bygges af. Det er et fold-ud-panel som alt andet, så du kan holde det lukket, mens du arbejder med sessioner.</p>
       <ul>
@@ -499,34 +834,78 @@
         <li data-lang-da>Tryk <b>+ Ny Øvelse</b>, vælg en sports-specifik kategori og intensitet, og tilføj tags.</li>
         <li data-lang-en>In <span class="tag">Training Planner <svg class="sym"><use href="#i-right"/></svg> + New Drill</span> you can also paste a <b>YouTube link</b> and one <b>other video link</b>. They show up as ▶ buttons on the drill card and open in a new tab — handy for showing the squad how a drill is run.</li>
         <li data-lang-da>I <span class="tag">Træningsplan <svg class="sym"><use href="#i-right"/></svg> + Ny Øvelse</span> kan du også indsætte et <b>YouTube-link</b> og ét <b>andet videolink</b>. De vises som ▶-knapper på øvelseskortet og åbner i en ny fane — praktisk til at vise truppen, hvordan en øvelse køres.</li>
-        <li data-lang-en>Next to <b>+ New Drill</b> in the Training Planner sits <b>🤖 AI drill</b>. Write what it should train — “chest and shoulder strength”, “leg power for jumping”, “fast break finishing” — pick a category, length and intensity, and ChatGPT drafts the whole drill with setup, coaching points and a progression. The draft opens in the normal drill form so you can edit it, and nothing is saved until you press Save.</li>
-        <li data-lang-da>Ved siden af <b>+ Ny Øvelse</b> i Træningsplanen ligger <b>🤖 AI-øvelse</b>. Skriv hvad den skal træne — ”bryst- og skulderstyrke”, ”benstyrke til hop”, ”kontraafslutninger” — vælg kategori, længde og intensitet, så laver ChatGPT hele øvelsen med opsætning, trænerpointer og progression. Udkastet åbner i den normale øvelsesformular, så du kan rette det, og intet gemmes, før du trykker Gem.</li>
+        <li data-lang-en>Next to <b>+ New Exercise</b> sits <b>🤖 AI drill</b>. Write what it should train — “chest and shoulder strength”, “leg power for jumping”, “fast break finishing” — pick a category, length and intensity, and ChatGPT drafts the whole drill with setup, coaching points and a progression.</li>
+        <li data-lang-da>Ved siden af <b>+ Ny Øvelse</b> ligger <b>🤖 AI-øvelse</b>. Skriv hvad den skal træne — ”bryst- og skulderstyrke”, ”benstyrke til hop”, ”kontraafslutninger” — vælg kategori, længde og intensitet, så laver ChatGPT hele øvelsen med opsætning, trænerpointer og progression.</li>
+        <li data-lang-en><b>Pick the categories, not a body part.</b> The dialog holds the <b>whole category list for your sport</b> as tick boxes — Attack, Defense, Goalkeeper, Passing, Shooting, Transition, Conditioning, Physical. Tick the ones you want and it drafts a set of <b>real drills for that part of training</b>: ball work, court work, players, not gym exercises. Tick three categories and ask for two each and you get six drills, drafted in <b>three separate requests</b>, one per category, so each set really is about that part of the game.</li>
+        <li data-lang-da><b>Vælg kategorierne, ikke en kropsdel.</b> Dialogen rummer <b>hele kategorilisten for din sportsgren</b> som afkrydsningsfelter — Angreb, Forsvar, Målmand, Aflevering, Skud, Omstilling, Kondition, Fysisk. Sæt flueben ved dem du vil have, så laver den et sæt <b>rigtige øvelser til den del af træningen</b>: boldarbejde, banearbejde, spillere — ikke styrketræning. Sæt flueben ved tre kategorier og bed om to hver, så får du seks øvelser, lavet i <b>tre separate forespørgsler</b>, én pr. kategori, så hvert sæt faktisk handler om den del af spillet.</li>
+        <li data-lang-en><b>Body parts are optional now.</b> They sit in a fold marked <i>optional, for strength splits</i> — open it and tick chest, lats and quads when you are building a gym week, and you get one set per category <b>and</b> body part. Leave it closed and you simply get sport drills.</li>
+        <li data-lang-da><b>Kropsdele er valgfrie nu.</b> De ligger i en fold mærket <i>valgfrit, til styrkesplit</i> — åbn den og sæt flueben ved bryst, lats og forlår, når du bygger en styrkeuge, så får du et sæt pr. kategori <b>og</b> kropsdel. Lad den være lukket, så får du ganske enkelt øvelser til sporten.</li>
+        <li data-lang-en><b>And so are the categories.</b> Nothing has to be ticked. Press <b>Select none</b>, write what you want in your own words, and the assistant drafts exactly that — then files each drill under the category that fits it, taken from your sport's own list. Tick categories when you want a set per category; leave them all blank when you just want the session you described.</li>
+        <li data-lang-da><b>Og det er kategorierne også.</b> Der behøver ikke være flueben nogen steder. Tryk <b>Vælg ingen</b>, skriv med dine egne ord, hvad du vil have, så laver assistenten præcis det — og placerer hver øvelse i den kategori, der passer, taget fra din sportsgrens egen liste. Sæt flueben, når du vil have et sæt pr. kategori; lad dem alle stå tomme, når du bare vil have det, du beskrev.</li>
+        <li data-lang-en><b>It looks for a real video, and checks that it exists.</b> Along with the drill it suggests up to three <b>YouTube addresses</b> that demonstrate it — and every one of them is looked up against YouTube before you see it. An address that does not resolve is thrown away, so a made-up link never reaches your library. The first one that checks out becomes the drill's video and plays inside the card; if none of them do, you still get the <b>ready-made video search</b> for that exact drill, with the sport in the search words.</li>
+        <li data-lang-da><b>Den leder efter en rigtig video og tjekker, at den findes.</b> Sammen med øvelsen foreslår den op til tre <b>YouTube-adresser</b>, der viser den — og hver eneste slås op mod YouTube, før du ser den. En adresse, der ikke findes, kasseres, så et opdigtet link aldrig når dit bibliotek. Den første, der holder, bliver øvelsens video og afspilles inde i kortet; holder ingen af dem, får du stadig den <b>færdige videosøgning</b> på netop den øvelse, med sportsgrenen i søgeordene.</li>
+        <li data-lang-en>More than one drill comes back in a <b>review list</b>: every draft with its category, length, intensity and body parts, all ticked. Untick the ones you do not want, press <b>Edit</b> on a draft to open it in the normal form first, and <b>Save</b> writes the rest straight into the library. Nothing is stored until you press Save.</li>
+        <li data-lang-da>Kommer der mere end én øvelse tilbage, vises de i en <b>gennemgangsliste</b>: hvert udkast med kategori, længde, intensitet og kropsdele, alle med flueben. Fjern fluebenet ved dem du ikke vil have, tryk <b>Rediger</b> på et udkast for først at åbne det i den normale formular, og <b>Gem</b> skriver resten direkte i biblioteket. Intet gemmes, før du trykker Gem.</li>
+        <li data-lang-en><b>Its video links are yours to change.</b> Each draft in the review list carries its <b>video links as editable fields</b>, with a ✕ on each one and <b>+ Add video</b> under them, and the clip plays underneath as you type — so a link that turns out to be the wrong clip is corrected or thrown away <b>before</b> anything reaches your library. The same editor sits under every drill the <b>🤖 AI session</b> writes, so you can fix those links in the plan before pressing Use this session. And a saved drill can always be opened with <b>Edit</b> and changed there.</li>
+        <li data-lang-da><b>Dens videolinks er dine at ændre.</b> Hvert udkast i gennemgangslisten har sine <b>videolinks som redigerbare felter</b>, med et ✕ på hvert og <b>+ Tilføj video</b> under dem, og klippet afspilles nedenunder, mens du skriver — så et link, der viser sig at være det forkerte klip, rettes eller kasseres, <b>før</b> noget når dit bibliotek. Den samme editor sidder under hver øvelse, som <b>🤖 AI-session</b> skriver, så du kan rette de links i planen, før du trykker Brug denne session. Og en gemt øvelse kan altid åbnes med <b>Rediger</b> og ændres der.</li>
+        <li data-lang-en><b>The video plays inside the card.</b> Paste a <b>YouTube</b> address into a drill — a normal link, a <b>Shorts</b> link or a short <b>youtu.be</b> one — or a <b>Google Drive</b> file link, and the clip is shown straight in the drill card, the Show dialog and the edit form: a <b>picture of the video with a ▶ button</b>. Tap it and it plays right there. Paste a link and the picture appears in the form at once, so you can check you got the right clip before you save. Anything else stays an ordinary <b>▶</b> link that opens in a new tab.</li>
+        <li data-lang-da><b>Videoen afspilles inde i kortet.</b> Indsæt en <b>YouTube</b>-adresse i en øvelse — et almindeligt link, et <b>Shorts</b>-link eller et kort <b>youtu.be</b>-link — eller et <b>Google Drive</b>-fillink, så vises klippet direkte i øvelseskortet, i Vis-dialogen og i redigeringsformularen: et <b>billede af videoen med en ▶-knap</b>. Tryk på den, og den afspilles med det samme. Indsæt et link, og billedet dukker op i formularen straks, så du kan tjekke, at du har fat i det rigtige klip, før du gemmer. Alt andet forbliver et almindeligt <b>▶</b>-link, der åbner i en ny fane.</li>
+        <li data-lang-en><b>Why it waits for your tap.</b> YouTube refuses to run a player when it cannot see the page it is sitting in — opening the app straight from a file, a browser that strips the referrer, or a clip whose owner turned embedding off — and all you got was its own message, <i>Error 153, video player configuration error</i>. Now the card shows the picture until you ask for the video, and where the player cannot run, the same tap opens the clip on YouTube instead. The small <b>↗</b> in the corner always opens the original link in a new tab.</li>
+        <li data-lang-da><b>Derfor venter den på dit tryk.</b> YouTube nægter at køre en afspiller, når den ikke kan se den side, den sidder i — hvis appen åbnes direkte fra en fil, hvis browseren fjerner henvisningen, eller hvis ejeren har slået indlejring fra — og det eneste du fik, var dens egen besked, <i>Error 153, video player configuration error</i>. Nu viser kortet billedet, indtil du beder om videoen, og hvor afspilleren ikke kan køre, åbner det samme tryk i stedet klippet på YouTube. Det lille <b>↗</b> i hjørnet åbner altid det oprindelige link i en ny fane.</li>
+        <li data-lang-en><b>As many videos as you like.</b> The form has a <b>Video links</b> list with a <b>+ Add video</b> button and a ✕ on each row — put the technique clip, the match example and your own training footage on the same drill. Up to eight, and the first four that can be played are embedded one under the other on the card. Your club's own <b>Google Drive</b> recordings work the same way as YouTube, as long as the file is shared as “anyone with the link”.</li>
+        <li data-lang-da><b>Så mange videoer du vil.</b> Formularen har en <b>Videolinks</b>-liste med en <b>+ Tilføj video</b>-knap og et ✕ på hver række — læg teknikklippet, kampeksemplet og jeres egne træningsoptagelser på den samme øvelse. Op til otte, og de første fire, der kan afspilles, indlejres under hinanden på kortet. Klubbens egne <b>Google Drive</b>-optagelser virker på samme måde som YouTube, så længe filen er delt som ”alle med linket”.</li>
+        <li data-lang-en>Only an address we could read a YouTube video id or a Google Drive file id out of is ever embedded, so nothing else can be loaded into the card.</li>
+        <li data-lang-da>Kun en adresse, vi kunne læse et YouTube-video-id eller et Google Drive-fil-id ud af, bliver indlejret, så intet andet kan indlæses i kortet.</li>
+        <li data-lang-en><b>Put a tactical board animation on a drill.</b> The drill form ends with a <b>Tactical board animations</b> list holding every animation you have saved on the board for this sport — pick one or several (hold Ctrl or ⌘ to pick more than one). They show up as <b>▶ buttons</b> on the drill card and in its <b>Show</b> dialog, and pressing one replays the animation right there, so the movement you drew is next to the drill you wrote. The list is empty until you have saved an animation on the tactical board.</li>
+        <li data-lang-da><b>Læg en taktiktavle-animation på en øvelse.</b> Øvelsesformularen slutter med en liste <b>Taktiktavle-animationer</b> med alle de animationer, du har gemt på tavlen til denne sport — vælg en eller flere (hold Ctrl eller ⌘ nede for at vælge flere). De vises som <b>▶-knapper</b> på øvelseskortet og i dens <b>Vis</b>-dialog, og et tryk afspiller animationen med det samme, så bevægelsen du tegnede står ved siden af øvelsen du skrev. Listen er tom, indtil du har gemt en animation på taktiktavlen.</li>
+        <li data-lang-en><b>The assistant can attach them too.</b> The <b>🤖 AI drill</b> dialog has the same animation list — whatever you pick there is put on every drill it writes. In the review list each draft carries its own animation picker, so you can move one animation to the drill it actually belongs to before pressing Save.</li>
+        <li data-lang-da><b>Assistenten kan også sætte dem på.</b> Dialogen <b>🤖 AI-øvelse</b> har den samme animationsliste — det du vælger der, lægges på hver øvelse den skriver. I gennemgangslisten har hvert udkast sin egen animationsvælger, så du kan flytte en animation over på den øvelse, den faktisk hører til, inden du trykker Gem.</li>
+        <li data-lang-en>Each drill card has a <b>Show</b> button in front of <b>Edit</b>. It opens the drill on its own: the full description, the video, the body parts it loads, the tags and the links — the read-only view to put on the big screen at a coaches' meeting.</li>
+        <li data-lang-da>Hvert øvelseskort har en <b>Vis</b>-knap foran <b>Rediger</b>. Den åbner øvelsen for sig: hele beskrivelsen, videoen, de kropsdele den belaster, tags og linkene — den skrivebeskyttede visning til det store lærred på trænermødet.</li>
         <li data-lang-en>The AI draft also comes with a <b>video link</b>: if one of your own drill videos shows the same movement it is reused, otherwise the YouTube field is filled with a ready-made search for the drill. Only your description, the sport and the video links already in your library are sent — no player data — and a link the model makes up is thrown away.</li>
         <li data-lang-da>AI-udkastet får også et <b>videolink</b>: hvis en af dine egne øvelsesvideoer viser den samme bevægelse, genbruges den, ellers udfyldes YouTube-feltet med en færdig søgning på øvelsen. Kun din beskrivelse, sportsgrenen og de videolinks, der allerede ligger i biblioteket, sendes — ingen spillerdata — og et link, modellen finder på, kasseres.</li>
-        <li data-lang-en>The app ships with a ready <b>functional strength, agility and running programme</b> — goalkeeper mobility, interval runs, quick feet, jump and leg power, hamstrings, shoulder and rotator cuff work, core and pulling drills — each with its own ▶ video. Pick three upper-body and three lower-body exercises at least twice a week, 5 sets of 10 reps with 60 s rest.</li>
-        <li data-lang-da>Appen leveres med et færdigt <b>funktionel styrke-, agility- og løbeprogram</b> — målmands-mobility, intervaløb, hurtige ben, spring- og benstyrke, hamstrings, skulder og rotator cuff, core og trækøvelser — hver med sin egen ▶-video. Vælg tre overkrops- og tre underkropsøvelser mindst to gange om ugen, 5 sæt af 10 gentagelser med 60 sek. pause.</li>
+        <li data-lang-en><b>The library starts empty.</b> Nothing is shipped with the app any more — you build it from your own work, or let <b>🤖 AI drill</b> draft it. If an earlier version had put its own drills in for you, they are cleared out the first time you open this one; drills you wrote or edited yourself are left alone.</li>
+        <li data-lang-da><b>Biblioteket starter tomt.</b> Der følger ikke længere øvelser med appen — du bygger det af dit eget arbejde, eller lader <b>🤖 AI-øvelse</b> lave udkastet. Hvis en tidligere version havde lagt sine egne øvelser ind, ryddes de væk første gang du åbner denne; øvelser du selv har skrevet eller rettet, røres ikke.</li>
+        <li data-lang-en><b>🗑 Delete all, per category.</b> Every category fold has its own delete button in its heading. It empties just that fold — useful when a batch of AI drafts did not turn out — and it tells you how many drills it is about to remove. They are stripped out of every training session at the same time, so no session is left pointing at a drill that is gone. The red <b>Remove all drills</b> button at the top still clears the whole library.</li>
+        <li data-lang-da><b>🗑 Slet alle, pr. kategori.</b> Hver kategorifold har sin egen sletteknap i overskriften. Den tømmer kun den fold — praktisk når et hold AI-udkast ikke blev godt — og den fortæller, hvor mange øvelser den er ved at fjerne. De fjernes samtidig fra alle træningspas, så intet pas står tilbage og peger på en øvelse, der er væk. Den røde <b>Fjern alle øvelser</b> øverst rydder stadig hele biblioteket.</li>
+      </ul>
+      <div class="drills-h" data-lang-en>Drills in your language</div>
+      <div class="drills-h" data-lang-da>Øvelser på dit sprog</div>
+      <p data-lang-en>A drill can hold its <b>title and description in both English and Danish</b>, and the library shows whichever one matches the <b>EN / DA</b> switch in the top bar. Everything follows along: the drill cards, the Show dialog, the session lists, the printed reports and the drill picker.</p>
+      <p data-lang-da>En øvelse kan rumme sin <b>titel og beskrivelse på både engelsk og dansk</b>, og biblioteket viser den, der passer til <b>EN / DA</b>-skifteren i topbjælken. Alt følger med: øvelseskortene, Vis-dialogen, listerne i træningspassene, de printede rapporter og øvelsesvælgeren.</p>
+      <ul>
+        <li data-lang-en><b>AI drills arrive in both languages at once.</b> The draft is written in English and Danish in the same request, so a drill you generate today reads correctly whichever language the assistant coach uses tomorrow.</li>
+        <li data-lang-da><b>AI-øvelser kommer på begge sprog med det samme.</b> Udkastet skrives på engelsk og dansk i den samme forespørgsel, så en øvelse, du laver i dag, læses rigtigt, uanset hvilket sprog assistenttræneren bruger i morgen.</li>
+        <li data-lang-en><b>🌐 Translate</b> in the library heading fills in what is missing. It finds every drill that has no text in the language you are currently in — the ones you typed yourself, and anything imported from a club that works in the other language — and translates them in one go. It asks first and tells you how many. <b>Nothing you have written is overwritten</b>; only the missing language is added.</li>
+        <li data-lang-da><b>🌐 Oversæt</b> i bibliotekets overskrift udfylder det, der mangler. Den finder alle øvelser uden tekst på det sprog, du står i — dem du selv har skrevet, og alt importeret fra en klub, der arbejder på det andet sprog — og oversætter dem på én gang. Den spørger først og fortæller hvor mange. <b>Intet af det, du har skrevet, overskrives</b>; kun det manglende sprog tilføjes.</li>
+        <li data-lang-en>When you <b>edit</b> a drill, the line at the top of the form says which language you are writing. Switch <b>EN / DA</b> in the top bar, open the same drill again, and you are editing the other wording — that is how you correct a translation by hand.</li>
+        <li data-lang-da>Når du <b>redigerer</b> en øvelse, står der øverst i formularen, hvilket sprog du skriver. Skift <b>EN / DA</b> i topbjælken, åbn den samme øvelse igen, og du redigerer den anden tekst — sådan retter du en oversættelse i hånden.</li>
+        <li data-lang-en>Both languages travel with the drill: in <b>Export</b>, in a full backup and in a file you hand to another club.</li>
+        <li data-lang-da>Begge sprog følger med øvelsen: i <b>Eksport</b>, i en fuld backup og i en fil, du giver til en anden klub.</li>
         <li data-lang-en>Exercises feed the <b>Training Planner</b> when you build sessions.</li>
         <li data-lang-da>Øvelser føder <b>Træningsplanen</b>, når du bygger sessioner.</li>
-        <li data-lang-en>The drills are folded into <b>one panel per category</b> — Strength, Conditioning, Goalkeeper and so on — each with its own drill count. Close the ones you are not working on and a library of fifty drills stays readable; the panels remember what you left open.</li>
-        <li data-lang-da>Øvelserne er foldet ind i <b>ét panel pr. kategori</b> — Styrke, Kondition, Målmand og så videre — hver med sit eget antal øvelser. Luk dem du ikke arbejder med, så bliver et bibliotek på halvtreds øvelser overskueligt; panelerne husker, hvad du lod stå åbent.</li>
-        <li data-lang-en>The <b>muscle map</b> on the left shows a front and a back figure. The highlighted muscles are the ones the drills currently listed train. <b>Click a muscle</b> to see only the exercises that hit it, and <b>Show all muscles</b> to clear the pick. Hovering a drill card lights up just that drill's muscles.</li>
-        <li data-lang-da>Det <b>muskelkort</b>, der ligger til venstre, viser en figur forfra og bagfra. De markerede muskler er dem, de viste øvelser træner. <b>Klik på en muskel</b> for kun at se de øvelser, der rammer den, og <b>Vis alle muskler</b> for at rydde valget. Når du holder musen over et øvelseskort, lyser netop den øvelses muskler op.</li>
+        <li data-lang-en>The drills are folded into <b>one panel per category</b> — Strength, Conditioning, Goalkeeper and so on — each with its own drill count. <b>Expand all</b> and <b>Collapse all</b> above the list open or close every category in one press, and the panels remember what you left open.</li>
+        <li data-lang-da>Øvelserne er foldet ind i <b>ét panel pr. kategori</b> — Styrke, Kondition, Målmand og så videre — hver med sit eget antal øvelser. <b>Fold alle ud</b> og <b>Fold alle sammen</b> over listen åbner eller lukker hver kategori med ét tryk, og panelerne husker, hvad du lod stå åbent.</li>
+        <li data-lang-en><b>Remove all drills</b> in the library header empties the whole library in one go — and takes those drills out of every training session that used them. It asks first, and it cannot be undone, so export the library to a file if you might want it back.</li>
+        <li data-lang-da><b>Fjern alle øvelser</b> i bibliotekets hoved tømmer hele biblioteket på én gang — og fjerner også de øvelser fra alle træningspas, der brugte dem. Der spørges først, og det kan ikke fortrydes, så eksportér biblioteket til en fil, hvis du kunne tænkes at ville have det tilbage.</li>
+        <li data-lang-en>The <b>muscle map</b> on the left shows a front and a back figure on a <b>black plate</b>: the body is white, and everything that is picked or trained turns <b>red</b>. <b>Click a muscle</b> to see only the exercises that hit it, and <b>Show all muscles</b> to clear the pick. Hovering a drill card lights up just that drill's muscles. The colours are the same in light and dark mode.</li>
+        <li data-lang-da>Det <b>muskelkort</b>, der ligger til venstre, viser en figur forfra og bagfra på en <b>sort plade</b>: kroppen er hvid, og alt der er valgt eller trænet bliver <b>rødt</b>. <b>Klik på en muskel</b> for kun at se de øvelser, der rammer den, og <b>Vis alle muskler</b> for at rydde valget. Når du holder musen over et øvelseskort, lyser netop den øvelses muskler op. Farverne er de samme i lyst og mørkt tema.</li>
         <li data-lang-en>Above the categories sit the <b>body-area pills</b> — Whole body, Upper body, Core and Lower body — so you can build a leg day or an upper-body day in one click. The area and category filters work together.</li>
         <li data-lang-da>Over kategorierne ligger <b>kropsdel-pillerne</b> — Hele kroppen, Overkrop, Core og Underkrop — så du kan bygge en bendag eller en overkropsdag med ét klik. Område- og kategorifiltrene virker sammen.</li>
         <li data-lang-en>The figure is drawn as a <b>proper human silhouette</b> — neck, chest, waist, hips, real arms and legs — and each muscle sits where it sits on a body: pecs and abs on the front, lats, glutes and hamstrings on the back, calves below the knee. Hovering a body-area pill lights up <b>every</b> muscle that area covers, so you can see exactly what “Core” or “Lower body” means before you filter.</li>
         <li data-lang-da>Figuren er tegnet som en <b>rigtig menneskesilhuet</b> — hals, bryst, talje, høfter, virkelige arme og ben — og hver muskel sidder, hvor den sidder på en krop: bryst og mave forfra, lats, balder og hamstrings bagfra, lægge under knæet. Holder du musen over en kropsdel-pille, lyser <b>alle</b> de muskler, området dækker, så du kan se præcis hvad ”Core” eller ”Underkrop” betyder, før du filtrerer.</li>
-        <li data-lang-en>When you create or edit a drill, tick the <b>muscles trained</b> in the form. Your own drills then show up on the muscle map exactly like the built-in ones.</li>
-        <li data-lang-da>Når du opretter eller retter en øvelse, sætter du flueben ved de <b>muskler der trænes</b> i formularen. Dine egne øvelser dukker så op på muskelkortet præcis som de indbyggede.</li>
+        <li data-lang-en>When you create or edit a drill, tick the <b>muscles trained</b> in the form. Your own drills then show up on the muscle map exactly like an AI-drafted one.</li>
+        <li data-lang-da>Når du opretter eller retter en øvelse, sætter du flueben ved de <b>muskler der trænes</b> i formularen. Dine egne øvelser dukker så op på muskelkortet præcis som en AI-lavet.</li>
         <li data-lang-en><b>Export</b> writes your whole drill library to one JSON file you can mail or AirDrop to an assistant coach; <b>Import</b> reads such a file back and merges it into the library — drills with the same id are updated, new ones are added, and nothing else is touched. The same buttons sit in the <b>Training Planner</b> (sessions plus the drills they use) and on the <b>Tactical Board</b> (plays and animations).</li>
         <li data-lang-da><b>Eksportér</b> skriver hele dit øvelsesbibliotek til én JSON-fil, som du kan maile eller AirDroppe til en hjælpetræner; <b>Importér</b> læser sådan en fil ind igen og fletter den ind i biblioteket — øvelser med samme id opdateres, nye tilføjes, og intet andet røres. De samme knapper findes i <b>Træningsplanen</b> (sessioner plus de øvelser, de bruger) og på <b>Taktiktavlen</b> (spil og animationer).</li>
-        <li data-lang-en>The video links on the built-in drills now point at a <b>ready-made YouTube search</b> for the movement. The old links went to a private Google Drive that asked every viewer to sign in, so they were replaced automatically the first time you open this version.</li>
-        <li data-lang-da>Videolinkene på de indbyggede øvelser peger nu på en <b>færdig YouTube-søgning</b> efter bevægelsen. De gamle links gik til et privat Google Drev, der bad alle om at logge ind, så de blev udskiftet automatisk, første gang du åbner denne version.</li>
+        <li data-lang-en>Every drill can carry a <b>YouTube link</b> and one <b>other video link</b>. They show up as ▶ buttons on the drill card and open in a new tab — handy for showing the squad how a drill is run. An AI draft fills the YouTube field with a ready-made search for the movement.</li>
+        <li data-lang-da>Hver øvelse kan bære et <b>YouTube-link</b> og ét <b>andet videolink</b>. De vises som ▶-knapper på øvelseskortet og åbner i en ny fane — praktisk til at vise truppen, hvordan en øvelse køres. Et AI-udkast udfylder YouTube-feltet med en færdig søgning på bevægelsen.</li>
       </ul>
-    </section>
+    </details>
 
     <!-- 10. Opponent analysis -->
-    <section class="card" id="opponents">
-      <h2><span class="num">10</span> <span data-lang-en>Opponent Analysis</span><span data-lang-da>Modstanderanalyse</span></h2>
+    <details class="card sec" id="opponents" open>
+      <summary class="sec-h"><h2><span class="num">10</span> <span data-lang-en>Opponent Analysis</span><span data-lang-da>Modstanderanalyse</span></h2></summary>
       <p data-lang-en>Track opponents with scouting reports, key players, tendencies and a <b>preferred formation that matches your sport</b>.</p>
       <p data-lang-da>Følg modstandere med scoutingrapporter, nøglespillere, tendenser og en <b>foretrukken opstilling der matcher din sport</b>.</p>
       <ul>
@@ -538,6 +917,8 @@
         <li data-lang-da>Åbn <b>Scoutingrapport</b> for at generere et delbart resumé pr. modstander.</li>
         <li data-lang-en>The report dialog has an <b>⬇ PDF</b> button. It opens a clean, printable page — formation, key players, tendencies, every match you have played against them with venue and result, and the recommendation — and sends it to your printer. Choose <b>Save as PDF</b> there to get a file you can email to an assistant. Next to it, <b>Import</b> reads a scouting file someone sent you.</li>
         <li data-lang-da>Rapportvinduet har en <b>⬇ PDF</b>-knap. Den åbner en ren, printklar side — opstilling, nøglespillere, tendenser, alle jeres kampe mod dem med bane og resultat samt anbefalingen — og sender den til printeren. Vælg <b>Gem som PDF</b> der for at få en fil, du kan maile til en assistent. Ved siden af læser <b>Importér</b> en scoutingfil, en anden har sendt dig.</li>
+        <li data-lang-en>Each opponent card has its own <b>⬇ PDF</b> button, so you do not have to open the report first. And <b>⬇ Export all as PDF</b> in the panel heading prints <b>every scouted opponent</b> into one document, each on its own page block — the pre-season folder in a single press.</li>
+        <li data-lang-da>Hvert modstanderkort har sin egen <b>⬇ PDF</b>-knap, så du ikke behøver åbne rapporten først. Og <b>⬇ Eksportér alle som PDF</b> i panelets overskrift udskriver <b>alle scoutede modstandere</b> i ét dokument, hver i sin egen blok — hele sæsonmappen med ét tryk.</li>
         <li data-lang-en>The panel heading also has <b>Export</b> and <b>Import</b>: one JSON file with every scouted opponent, for a backup or to swap a scouting board with another coach in the same league.</li>
         <li data-lang-da>Panelets overskrift har også <b>Eksportér</b> og <b>Importér</b>: én JSON-fil med alle scoutede modstandere, til backup eller til at bytte scoutingoversigt med en anden træner i samme række.</li>
         <li data-lang-en><b>🤖 AI opponent</b> creates a scouting card for a team you have <b>not</b> scouted yet. Pick one of the opponents from your match list, add anything you already know, and the model drafts a name, formation, key players and tendencies from the results you have recorded against them. The draft opens in the normal opponent form — read it through, correct it and save it yourself. Nothing is stored until you press Save.</li>
@@ -547,20 +928,28 @@
         <li data-lang-en>The AI match plan looks at <b>one</b> opponent. <b>🤖 AI suggestion</b>, in the heading of the opponent panel, looks at <b>all of them at once</b>: the pattern your coming opponents share and the single biggest threat, the formation and defence that works against most of them, the matchups to protect using your own shirt numbers, two set plays worth drilling, what to scout next on the thinnest profiles, and the drills to train this week with their video links. Use it to plan a block of matches instead of the next one.</li>
         <li data-lang-da>AI-kampplanen ser på <b>én</b> modstander. <b>🤖 AI-forslag</b>, i overskriften på modstanderpanelet, ser på <b>dem alle på én gang</b>: det mønster jeres kommende modstandere deler og den største enkelttrussel, den opstilling og det forsvar der virker mod de fleste af dem, de matchups I skal beskytte med jeres egne trøjenumre, to døde bolde værd at træne, hvad I skal scoute næste gang på de tyndeste profiler, og de øvelser I skal træne i denne uge med deres videolinks. Brug det til at planlægge en blok af kampe i stedet for den næste.</li>
       </ul>
-    </section>
+    </details>
 
     <!-- 11. Live scouting -->
-    <section class="card" id="scout">
-      <h2><span class="num">11</span> <span data-lang-en>Live Scouting</span><span data-lang-da>Live Registrering</span></h2>
+    <details class="card sec" id="scout" open>
+      <summary class="sec-h"><h2><span class="num">11</span> <span data-lang-en>Live Scouting</span><span data-lang-da>Live Registrering</span></h2></summary>
       <ul>
         <li data-lang-en>Pick the match, press <b>Start</b> to run the clock.</li>
         <li data-lang-da>Vælg kampen, tryk <b>Start</b> for at køre uret.</li>
         <li data-lang-en>Choose a category (Attack, Defense, Fouls…), select the player, and tap an event — goals update the scoreboard instantly.</li>
         <li data-lang-da>Vælg en kategori (Angreb, Forsvar, Frikast…), vælg spilleren og tryk på en hændelse — mål opdaterer scoretavlen med det samme.</li>
+        <li data-lang-en><b>Only the players who are playing.</b> If you picked a <b>line-up</b> for this match under <span class="tag">Matches</span>, the view lists just those players and shows a <b>👥 12/18</b> chip next to the match picker. Pick another match and the list follows it. A match with no line-up shows the whole squad, exactly as before.</li>
+        <li data-lang-da><b>Kun de spillere, der spiller.</b> Har du valgt en <b>trup</b> til denne kamp under <span class="tag">Kampe</span>, viser visningen kun de spillere og en <b>👥 12/18</b>-chip ved siden af kampvælgeren. Vælger du en anden kamp, følger listen med. En kamp uden udtaget trup viser hele truppen, præcis som før.</li>
         <li data-lang-en>In sports that field one (handball, soccer, ice hockey, floorball) there is a <b>Goalkeeper</b> tab with keeper actions: <b>Save</b>, <b>Penalty Save</b>, <b>One-on-One Save</b>, <b>Rebound Control</b>, <b>Goal Conceded</b> and <b>Assist</b>. It lists <b>only your goalkeepers</b>, so give a player the position <b>Goalkeeper</b> under <span class="tag">Squad</span> first — keepers are marked with a 🧤 glove everywhere in the list. A conceded goal is registered on the keeper but never changes the scoreboard.</li>
         <li data-lang-da>I de sportsgrene der har en (håndbold, fodbold, ishockey, floorball) er der en <b>Målmand</b>-fane med målmandshandlinger: <b>Redning</b>, <b>Straffekastredning</b>, <b>Duelredning</b>, <b>Returkontrol</b>, <b>Mål imod</b> og <b>Assist</b>. Den viser <b>kun dine målmænd</b>, så giv først en spiller positionen <b>Målmand</b> under <span class="tag">Trup</span> — målmænd er markeret med en 🧤 handske overalt i listen. Et mål imod registreres på målmanden, men ændrer aldrig scoretavlen.</li>
         <li data-lang-en>Every event feeds the <b>Statistics</b> and <b>Reports</b> modules automatically — saves from the Goalkeeper tab land in the keeper's <b>Saves</b> column.</li>
         <li data-lang-da>Hver hændelse føder automatisk <b>Statistik</b>- og <b>Rapport</b>-modulerne — redninger fra Målmand-fanen havner i målmandens <b>Redninger</b>-kolonne.</li>
+        <li data-lang-en><b>Event log:</b> every registration lands in the log on the right with its time, and each line has its own <b>Remove</b> for the one press that went to the wrong player. To start the match over, use <b>🗑 Clear all</b> in the log's heading: it deletes <b>every event for this match</b> and puts our score back to 0. You are asked to confirm, the count is in the question, and the other fixtures keep their own logs. Handy after a test run at training before the real match starts.</li>
+        <li data-lang-da><b>Hændelseslog:</b> hver registrering havner i loggen til højre med sit tidspunkt, og hver linje har sin egen <b>Fjern</b> til det ene tryk, der ramte den forkerte spiller. Skal kampen begynde forfra, bruger du <b>🗑 Ryd alle</b> i loggens overskrift: den sletter <b>alle hændelser for denne kamp</b> og sætter vores mål tilbage til 0. Du bliver spurgt først, antallet står i spørgsmålet, og de andre kampe beholder deres egne logs. Praktisk efter en prøvetur til træning, inden den rigtige kamp går i gang.</li>
+        <li data-lang-en><b>Built for a thumb, not a mouse.</b> Each player has their own strip: the <b>position badge sits on top with the shirt number and surname underneath it</b>, so a long name is read down instead of squeezed sideways. The event boxes beside it are one grid — <b>every box in a row is the same size</b>, however long the label, so “One-on-One Save” and “Assist” line up and you can hit them without looking.</li>
+        <li data-lang-da><b>Lavet til en tommelfinger, ikke en mus.</b> Hver spiller har sin egen stribe: <b>positionsmærket ligger øverst med trøjenummer og efternavn under</b>, så et langt navn læses nedad i stedet for at blive klemt sammen. Hændelsesboksene ved siden af er ét gitter — <b>alle bokse i en række er lige store</b>, uanset hvor lang teksten er, så ”Duelredning” og ”Assist” flugter, og du kan ramme dem uden at kigge.</li>
+        <li data-lang-en><b>🎯 Focus areas:</b> the button next to the match picker opens a list of every focus area (Attack, Defense, Fouls, Turnovers, Goalkeeper) and every single action inside it. Tick only what matters in this match — everything you untick disappears from the tabs and the buttons, so the ones that are left are bigger and easier to hit on a tablet at the side of the court. The choice is saved per sport and survives a reload; <b>Select all</b> brings everything back. At least one focus area must stay on.</li>
+        <li data-lang-da><b>🎯 Fokusområder:</b> knappen ved siden af kampvælgeren åbner en liste over alle fokusområder (Angreb, Forsvar, Frikast, Boldtab, Målmand) og hver enkelt handling i dem. Sæt kun flueben ved det, der betyder noget i denne kamp — alt du fjerner, forsvinder fra fanerne og knapperne, så dem der er tilbage bliver større og lettere at ramme på en tablet ved sidelinjen. Valget gemmes pr. sportsgren og overlever en genindlæsning; <b>Vælg alle</b> henter det hele tilbage. Mindst ét fokusområde skal blive stående.</li>
       </ul>
       <h3 data-lang-en>CrossFit and bodybuilding: the set logger</h3>
       <h3 data-lang-da>CrossFit og bodybuilding: sæt-loggen</h3>
@@ -576,11 +965,11 @@
         <li data-lang-en>The list survives a reload, so a dropped phone does not cost you the session. <b>Save to records</b> files the best set of every exercise into <b>Personal training &amp; max tests</b> in the <a class="back" href="#exercises">Training Planner</a>; <b>Clear session</b> throws it away.</li>
         <li data-lang-da>Listen overlever en genindlæsning, så en tabt telefon ikke koster dig passet. <b>Gem i rekorder</b> lægger det bedste sæt fra hver øvelse over i <b>Personlig træning &amp; maxtest</b> i <a class="back" href="#exercises">Træningsplanlæggeren</a>; <b>Ryd passet</b> smider det væk.</li>
       </ul>
-    </section>
+    </details>
 
     <!-- 12. Statistics & reports -->
-    <section class="card" id="stats">
-      <h2><span class="num">12</span> <span data-lang-en>Statistics &amp; Reports</span><span data-lang-da>Statistik &amp; Rapporter</span></h2>
+    <details class="card sec" id="stats" open>
+      <summary class="sec-h"><h2><span class="num">12</span> <span data-lang-en>Statistics &amp; Reports</span><span data-lang-da>Statistik &amp; Rapporter</span></h2></summary>
       <p data-lang-en>Everything you register while scouting is turned into numbers you can read and hand out.</p>
       <p data-lang-da>Alt hvad du registrerer under scouting bliver til tal, du kan læse og dele ud.</p>
       <ul>
@@ -592,25 +981,31 @@
         <li data-lang-da>Ranglisten har en <b>Vægt</b>-kolonne ved siden af positionen, direkte fra spillerkortet — praktisk når du læser tallene sammen med den fysiske profil. Den viser en streg for spillere, du ikke har vejet.</li>
         <li data-lang-en><b>Reports</b> generates a <b>Match Report</b>, <b>Player Report</b> or <b>Season Report</b> — pick the report, then the match or player.</li>
         <li data-lang-da><b>Rapporter</b> genererer en <b>Kamprapport</b>, <b>Spillerrapport</b> eller <b>Sæsonrapport</b> — vælg rapporten og derefter kampen eller spilleren.</li>
-        <li data-lang-en>Export any report as <span class="tag">CSV</span> for a spreadsheet, or <span class="tag">PDF / Print</span> to print or save it as a PDF.</li>
-        <li data-lang-da>Eksportér enhver rapport som <span class="tag">CSV</span> til et regneark, eller <span class="tag">PDF / Udskriv</span> for at printe eller gemme som PDF.</li>
+        <li data-lang-en>Export any report as <span class="tag">CSV</span> for a spreadsheet, <span class="tag">⬇ PDF</span> to save or print it, or <span class="tag">✉ E-mail</span> to send it. The e-mail button opens the normal mail window with the report already written into the message and your squad in the recipient list, so a player report reaches the player in two clicks.</li>
+        <li data-lang-da>Eksportér enhver rapport som <span class="tag">CSV</span> til et regneark, <span class="tag">⬇ PDF</span> for at gemme eller printe den, eller <span class="tag">✉ E-mail</span> for at sende den. E-mailknappen åbner det normale mailvindue med rapporten skrevet ind i beskeden og truppen i modtagerlisten, så en spillerrapport når spilleren på to klik.</li>
+        <li data-lang-en><b>One player on one page:</b> every row of the leaderboard has a <span class="tag">⬇ PDF</span> button. It prints that single player — the season figures as headline numbers, their profile (position, height, weight, availability) and then <b>every event they were registered for, match by match</b>. That is the sheet for a player review or a parents' meeting.</li>
+        <li data-lang-da><b>Én spiller på én side:</b> hver række i ranglisten har en <span class="tag">⬇ PDF</span>-knap. Den udskriver netop den spiller — sæsonens tal som overskrifter, spillerens profil (position, højde, vægt, tilgængelighed) og derefter <b>hver hændelse de er registreret for, kamp for kamp</b>. Det er arket til en spillersamtale eller et forældremøde.</li>
         <li data-lang-en>Each row of the leaderboard ends with a <b>🤖 Train</b> button. It sends that single player's numbers — and the team's, for comparison — to ChatGPT and answers what <b>this player</b> should work on: the two biggest gaps, what to train for each, which drills from your library to use with their <b>video links</b>, and one measurable target for the next three matches.</li>
         <li data-lang-da>Hver række i ranglisten slutter med en <b>🤖 Træn</b>-knap. Den sender netop den spillers tal — og holdets, til sammenligning — til ChatGPT og svarer på, hvad <b>denne spiller</b> skal arbejde med: de to største huller, hvad der skal trænes til hvert, hvilke øvelser fra dit bibliotek der skal bruges med deres <b>videolinks</b>, og ét målbart mål til de næste tre kampe.</li>
         <li data-lang-en>Every report card also has a <b>🤖 AI analysis</b> button next to <b>New</b>. It reads the same numbers out loud: the match report gets what went well, the two clearest problems and what they mean for the next match; the player report gets strengths, gaps and a four-week focus; the season report gets the trend, the three things that decide the rest of the season and who is carrying the load. Drills named in an answer come with their video link.</li>
         <li data-lang-da>Hvert rapportkort har også en <b>🤖 AI-analyse</b>-knap ved siden af <b>Ny</b>. Den læser de samme tal højt: kamprapporten får hvad der gik godt, de to tydeligste problemer og hvad de betyder til næste kamp; spillerrapporten får styrker, huller og et fire-ugers fokus; sæsonrapporten får tendensen, de tre ting der afgør resten af sæsonen, og hvem der trækker læsset. Øvelser, der nævnes i et svar, følges af deres videolink.</li>
         <li data-lang-en>All three AI buttons use the same key and the same data snapshot as the <a class="back" href="#ai">AI Assistant</a> — your squad, results, injuries and drill library are sent to OpenAI with the question.</li>
         <li data-lang-da>Alle tre AI-knapper bruger samme nøgle og samme datasnapshot som <a class="back" href="#ai">AI-assistenten</a> — jeres trup, resultater, skader og øvelsesbibliotek sendes til OpenAI med spørgsmålet.</li>
+        <li data-lang-en>Every AI answer comes back in the <b>language the app is set to</b> — switch to Dansk and the next answer is Danish, headings and drill notes included, even though the stored data is in English. The language is read at the moment you press the button, so a mid-session switch takes effect straight away.</li>
+        <li data-lang-da>Alle AI-svar kommer tilbage på det <b>sprog appen står på</b> — skift til Dansk, og næste svar er på dansk, overskrifter og øvelsesnoter med, selvom de gemte data er på engelsk. Sproget aflæses i det øjeblik du trykker på knappen, så et skift midt i en session slår igennem med det samme.</li>
       </ul>
-    </section>
+    </details>
 
     <!-- 13. Share -->
-    <section class="card" id="share">
-      <h2><span class="num">13</span> <span data-lang-en>Share Data (no account)</span><span data-lang-da>Del Data (ingen konto)</span></h2>
+    <details class="card sec" id="share" open>
+      <summary class="sec-h"><h2><span class="num">13</span> <span data-lang-en>Share Data (no account)</span><span data-lang-da>Del Data (ingen konto)</span></h2></summary>
       <p data-lang-en>SportTactic needs <b>no Google account and no login</b>. You share everything as small <b>files</b>, so it works fully offline.</p>
       <p data-lang-da>SportTactic kræver <b>ingen Google-konto og intet login</b>. Du deler alt som små <b>filer</b>, så det virker helt offline.</p>
       <ul>
         <li data-lang-en><b>Full backup:</b> <span class="tag">Settings <svg class="sym"><use href="#i-right"/></svg> Export Backup</span> downloads a JSON of <b>everything</b> — squad, staff, matches, events, videos, exercises, reports, tactics, opponents, training and your settings. Recorded animation clips are packed into the same file, so nothing is left behind. Another device loads it with <span class="tag">Import Backup</span>, which also reads older backup files.</li>
         <li data-lang-da><b>Fuld backup:</b> <span class="tag">Indstillinger <svg class="sym"><use href="#i-right"/></svg> Export Backup</span> downloader en JSON med <b>det hele</b> — trup, trænerstab, kampe, hændelser, videoer, øvelser, rapporter, taktikker, modstandere, træning og dine indstillinger. Optagede animationsklip pakkes med i samme fil, så intet går tabt. En anden enhed indlæser den med <span class="tag">Import Backup</span>, som også kan læse ældre backup-filer.</li>
+        <li data-lang-en><b>Your set-up travels with it.</b> A full backup also carries the preferences the app keeps outside the database: which modules you left in the menu, your athlete name, the live-scouting focus areas, the progression filters, which panels you left folded open and the mail set-up. Import it on a new device and it comes up configured the way you left it — the app reloads once so the restored settings take effect. The only thing left out on purpose is your <b>OpenAI key</b>, which is a password and must never sit in a file you mail around.</li>
+        <li data-lang-da><b>Din opsætning følger med.</b> En fuld backup rummer også de indstillinger, appen gemmer uden for databasen: hvilke moduler du lod stå i menuen, dit atletnavn, fokusområderne i live registrering, filtrene på udviklingskurven, hvilke paneler du lod stå åbne og mailopsætningen. Importér den på en ny enhed, så starter den op, som du forlod den — appen genindlæser én gang, så de gendannede indstillinger slår igennem. Det eneste der bevidst udelades, er din <b>OpenAI-nøgle</b>, som er en adgangskode og aldrig må ligge i en fil, du sender rundt.</li>
         <li data-lang-en><b>Send to coach:</b> <span class="tag">Send to Coach <svg class="sym"><use href="#i-mail"/></svg></span> first asks <b>what</b> to share. Tick any of squad &amp; staff, matches &amp; events, training &amp; drills, personal tests, opponent analysis and saved reports — each with a count of how many records it holds, and anything you have nothing saved for is greyed out. Only the ticked blocks are written out; the rest never leaves the device.</li>
         <li data-lang-da><b>Send til træner:</b> <span class="tag">Send til Træner <svg class="sym"><use href="#i-mail"/></svg></span> spørger først <b>hvad</b> der skal deles. Sæt flueben ved trup &amp; stab, kampe &amp; hændelser, træning &amp; øvelser, personlige tests, modstanderanalyse og gemte rapporter — hver med et tal for, hvor mange poster den rummer, og alt du intet har gemt til er nedtonet. Kun de afkrydsede blokke skrives ud; resten forlader aldrig enheden.</li>
         <li data-lang-en>Write the coach’s address in <b>Send to</b> and press <b>Send</b>: they get a <b>readable report</b> in the mail — the squad with positions, heights and availability, the results with the events tallied, the training sessions with their drills, the max tests with estimated 1RMs, and the opponent notes. It is written to be read, not imported, so it works in any mail program on any device.</li>
@@ -632,15 +1027,29 @@
         <li data-lang-en><b>Into a spreadsheet:</b> <b>Export squad as CSV</b> gives you a file that Excel, Numbers and Google Sheets all read directly. Sort it, chart it, print it for the bus. Reports have their own CSV button for match statistics. A spreadsheet cannot hold video clips, so use the JSON backup when you need everything.</li>
         <li data-lang-da><b>Ind i et regneark:</b> <b>Eksportér trup som CSV</b> giver dig en fil, som Excel, Numbers og Google Sheets alle læser direkte. Sortér, lav grafer, print til bussen. Rapporter har deres egen CSV-knap til kampstatistik. Et regneark kan ikke rumme videoklip, så brug JSON-backuppen, når alt skal med.</li>
       </ul>
+      <div class="drills-h" data-lang-en>Automatic backup</div>
+      <div class="drills-h" data-lang-da>Automatisk backup</div>
+      <p data-lang-en>Remembering to export is the part that fails. The <b>Automatic backup</b> card writes the whole backup for you on a timer — every 5, 15, 30, 60 minutes, every 3 hours or every 12 — while the app is open.</p>
+      <p data-lang-da>Det, der glipper, er at huske at eksportere. Kortet <b>Automatisk backup</b> skriver hele backuppen for dig med faste mellemrum — hvert 5., 15., 30. eller 60. minut, hver 3. time eller hver 12. — mens appen er åben.</p>
+      <ul>
+        <li data-lang-en><b>On a laptop it writes one file, over and over.</b> Press <b>Choose backup file</b>, pick where it should live — your Documents folder, or straight into the Google Drive or OneDrive folder on your machine so the copy leaves the laptop by itself — and from then on the app rewrites <b>that same file</b>. No download folder filling up with a hundred copies.</li>
+        <li data-lang-da><b>På en bærbar skriver den én fil, igen og igen.</b> Tryk <b>Vælg backup-fil</b>, vælg hvor den skal ligge — i Dokumenter, eller direkte i Google Drive- eller OneDrive-mappen på maskinen, så kopien selv kommer væk fra den bærbare — og derefter skriver appen <b>den samme fil</b> hver gang. Ingen download-mappe der fyldes med hundrede kopier.</li>
+        <li data-lang-en>The browser asks you to allow writing again after it has been closed and reopened. Press <b>Back up now</b> once and say yes, and the timer carries on. The card always shows the interval, which file is in use and when the last backup ran.</li>
+        <li data-lang-da>Browseren beder om lov til at skrive igen, når den har været lukket og åbnet. Tryk <b>Tag backup nu</b> én gang og sig ja, så kører timeren videre. Kortet viser altid intervallet, hvilken fil der bruges, og hvornår den seneste backup blev taget.</li>
+        <li data-lang-en><b>On an iPad or in Firefox</b> a page cannot write to a file on its own, so each backup arrives as an ordinary download instead. That works, but it leaves a copy per run — on those devices it is usually better to leave the timer off and press <b>Export Backup</b> after training.</li>
+        <li data-lang-da><b>På en iPad eller i Firefox</b> kan en side ikke skrive til en fil af sig selv, så hver backup kommer i stedet som en almindelig download. Det virker, men det efterlader en kopi pr. kørsel — på de enheder er det som regel bedre at lade timeren være slået fra og trykke <b>Eksportér backup</b> efter træning.</li>
+        <li data-lang-en>The file is the same one <b>Export Backup</b> writes — every store plus your settings — so <b>Import Backup</b> reads it back on any device.</li>
+        <li data-lang-da>Filen er den samme, som <b>Eksportér backup</b> skriver — alle datalagre plus dine indstillinger — så <b>Importér backup</b> læser den ind igen på en hvilken som helst enhed.</li>
+      </ul>
       <div class="callout" data-lang-en><svg class="sym"><use href="#i-lock"/></svg> A backup file holds everything, including the per-person chat keys and any injury notes. Treat it like a password list — store it somewhere only you can reach and never mail it to the whole squad.</div>
       <div class="callout" data-lang-da><svg class="sym"><use href="#i-lock"/></svg> En backupfil indeholder alt, også de personlige chat-nøgler og eventuelle skadesnoter. Behandl den som en liste af adgangskoder — gem den et sted kun du kan nå, og send den aldrig til hele truppen.</div>
       <div class="callout" data-lang-en><svg class="sym"><use href="#i-target"/></svg> To talk to your squad instead of swapping files, use the <a class="back" href="#messenger">Secure Messenger</a> — a live, end-to-end encrypted chat that needs no account.</div>
       <div class="callout" data-lang-da><svg class="sym"><use href="#i-target"/></svg> Vil du tale med truppen i stedet for at bytte filer, så brug <a class="back" href="#messenger">Sikre Beskeder</a> — en live, end-to-end krypteret chat uden konto.</div>
-    </section>
+    </details>
 
     <!-- Send e-mail -->
-    <section class="card" id="mail">
-      <h2><span class="num"><svg class="sym"><use href="#i-mail"/></svg></span> <span data-lang-en>Send e-mail to your players</span><span data-lang-da>Send e-mail til dine spillere</span></h2>
+    <details class="card sec" id="mail" open>
+      <summary class="sec-h"><h2><span class="num"><svg class="sym"><use href="#i-mail"/></svg></span> <span data-lang-en>Send e-mail to your players</span><span data-lang-da>Send e-mail til dine spillere</span></h2></summary>
       <p data-lang-en>Next to the <b>💬 Chat</b> button on every squad row there is a <b>✉ Mail</b> button, and the squad header has <b>✉ Send e-mail</b> for the whole team. It writes an e-mail to that player — and lets you tick exactly which of <b>their own data</b> should travel with it.</p>
       <p data-lang-da>Ved siden af <b>💬 Chat</b>-knappen i hver truprække sidder en <b>✉ Mail</b>-knap, og trupoverskriften har <b>✉ Send e-mail</b> til hele holdet. Den skriver en e-mail til spilleren — og lader dig sætte flueben ved præcis de af <b>spillerens egne data</b>, der skal med.</p>
       <ul>
@@ -679,11 +1088,11 @@
       <p data-lang-da>Der er ikke længere IMAP-, POP3- eller SMTP-indstillinger at udfylde, og ingen server du selv skal bygge. EmailJS har forbindelsen til din mailkonto; SportTactic afleverer kun beskeden.</p>
       <div class="callout" data-lang-en><svg class="sym"><use href="#i-lock"/></svg> SportTactic never asks for, stores or transmits a mail password — your password is only ever given to EmailJS when you connect the service. Injury notes are health data: only ever send them to the player they belong to, never to the whole squad.</div>
       <div class="callout" data-lang-da><svg class="sym"><use href="#i-lock"/></svg> SportTactic beder aldrig om, gemmer eller sender en mailadgangskode — din adgangskode gives kun til EmailJS, når du forbinder tjenesten. Skadesnoter er helbredsoplysninger: send dem kun til den spiller, de handler om, aldrig til hele truppen.</div>
-    </section>
+    </details>
 
     <!-- Secure messenger -->
-    <section class="card" id="messenger">
-      <h2><span class="num"><svg class="sym"><use href="#i-lock"/></svg></span> <span data-lang-en>Secure Messenger (live &amp; encrypted)</span><span data-lang-da>Sikre Beskeder (live &amp; krypteret)</span></h2>
+    <details class="card sec" id="messenger" open>
+      <summary class="sec-h"><h2><span class="num"><svg class="sym"><use href="#i-lock"/></svg></span> <span data-lang-en>Secure Messenger (live &amp; encrypted)</span><span data-lang-da>Sikre Beskeder (live &amp; krypteret)</span></h2></summary>
       <p data-lang-en>When you and the other person are both online, you can talk <b>live</b>. Open <span class="tag">Settings <svg class="sym"><use href="#i-right"/></svg> Secure Messenger</span> (team sports). It carries <b>text, files, voice and video</b> — all of it travels <b>directly between the two devices</b> over WebRTC, and there is no account and no message stored on a server.</p>
       <p data-lang-da>Når du og den anden begge er online, kan I tale <b>live</b>. Åbn <span class="tag">Indstillinger <svg class="sym"><use href="#i-right"/></svg> Sikre Beskeder</span> (holdsport). Den kan <b>tekst, filer, tale og video</b> — det hele går <b>direkte mellem de to enheder</b> over WebRTC, og der er hverken konto eller beskeder gemt på en server.</p>
       <p data-lang-en>The two browsers still have to find each other, and that is the only job <b>PeerJS</b> does: it is a switchboard that is handed a scrambled version of your key, introduces the two devices, and then steps out of the way. Everything after the introduction is peer-to-peer, and your text and files are encrypted a second time with <b>AES-GCM</b> before they are sent, on top of the encryption WebRTC already applies to every byte and every call.</p>
@@ -740,11 +1149,11 @@
         <li data-lang-en>Need to reach someone who is <b>not</b> online right now? Write them an <b>e-mail</b> instead — a live connection needs both devices awake at the same time.</li>
         <li data-lang-da>Skal du fat i nogen, der <b>ikke</b> er online lige nu? Skriv en <b>e-mail</b> i stedet — en live-forbindelse kræver, at begge enheder er vågne samtidig.</li>
       </ul>
-    </section>
+    </details>
 
     <!-- 14. Shortcuts -->
-    <section class="card" id="keys">
-      <h2><span class="num">14</span> <span data-lang-en>Keyboard Shortcuts</span><span data-lang-da>Tastaturgenveje</span></h2>
+    <details class="card sec" id="keys" open>
+      <summary class="sec-h"><h2><span class="num">14</span> <span data-lang-en>Keyboard Shortcuts</span><span data-lang-da>Tastaturgenveje</span></h2></summary>
       <ul>
         <li><kbd>1</kbd>–<kbd>9</kbd> <span data-lang-en>Switch modules (Dashboard, Teams, Matches, Live Scouting, Statistics, Tactical Board, Video, Training, Exercises)</span><span data-lang-da>Skift modul (Oversigt, Hold, Kampe, Live Registrering, Statistik, Taktiktavle, Video, Træning, Øvelser)</span></li>
         <li><kbd>/</kbd> <span data-lang-en>Focus search</span><span data-lang-da>Fokus på søgning</span></li>
@@ -752,11 +1161,11 @@
         <li><kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>Z</kbd> <span data-lang-en>Undo on the tactical board</span><span data-lang-da>Fortryd på taktiktavlen</span></li>
         <li><kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd> <span data-lang-en>or</span><span data-lang-da>eller</span> <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>Y</kbd> <span data-lang-en>Redo on the tactical board</span><span data-lang-da>Gendan på taktiktavlen</span></li>
       </ul>
-    </section>
+    </details>
 
     <!-- AI assistant -->
-    <section class="card" id="ai">
-      <h2><span class="num"><svg class="sym"><use href="#i-bot"/></svg></span> <span data-lang-en>AI Assistant</span><span data-lang-da>AI-assistent</span></h2>
+    <details class="card sec" id="ai" open>
+      <summary class="sec-h"><h2><span class="num"><svg class="sym"><use href="#i-bot"/></svg></span> <span data-lang-en>AI Assistant</span><span data-lang-da>AI-assistent</span></h2></summary>
       <p data-lang-en>The <b>AI Assistant</b> card sits at the top of the Dashboard, Teams &amp; Players, Statistics, Training Planner and Opponent Analysis pages. It is ChatGPT with your own data already attached, so the answers are about <b>your</b> squad instead of coaching in general.</p>
       <p data-lang-da><b>AI-assistenten</b> ligger øverst på siderne Oversigt, Hold &amp; Spillere, Statistik, Træningsplan og Modstanderanalyse. Det er ChatGPT med jeres egne data koblet på, så svarene handler om <b>jeres</b> trup i stedet for træning i al almindelighed.</p>
       <ul>
@@ -772,8 +1181,8 @@
         <li data-lang-da>Hvert spørgsmål sender et kompakt uddrag af jeres sportsgren, trup med positioner og status, skader, seneste resultater, sæsontal, planlagte sessioner og øvelsesbibliotek — derfor kan den nævne rigtige trøjenumre.</li>
         <li data-lang-en>The drill library is sent <b>with its video links</b>, so when the assistant suggests one of your drills it puts the ▶ link right in the answer, ready to tap. It may only use links that came from your own library — it is told never to invent one.</li>
         <li data-lang-da>Øvelsesbiblioteket sendes <b>med sine videolinks</b>, så når assistenten foreslår en af jeres øvelser, kommer ▶-linket med i svaret, klar til at trykke på. Den må kun bruge links fra jeres eget bibliotek — den får besked på aldrig at finde på et.</li>
-        <li data-lang-en>It answers in the language the app is set to, so switching to <b>DA</b> also switches the assistant — even mid-conversation.</li>
-        <li data-lang-da>Den svarer på det sprog, appen er sat til, så skift til <b>DA</b> skifter også assistenten — også midt i en samtale.</li>
+        <li data-lang-en>It answers in the language the app is set to, so switching to <b>DA</b> also switches the assistant — even mid-conversation. The same rule now covers <b>every</b> AI feature in the app, not just this panel: the drill generator, the AI training entry, the opponent match plan and all three report analyses read the language at the moment you press the button.</li>
+        <li data-lang-da>Den svarer på det sprog, appen er sat til, så skift til <b>DA</b> skifter også assistenten — også midt i en samtale. Den samme regel gælder nu <b>alle</b> AI-funktioner i appen, ikke kun dette panel: øvelsesgeneratoren, AI-træningsposten, modstanderplanen og alle tre rapportanalyser aflæser sproget i det øjeblik, du trykker på knappen.</li>
         <li data-lang-en>Everything the AI writes stays inside <b>the sport you have selected</b>. Your sport's own drill categories, positions and formations are sent with every question, and the assistant is told to use that sport's rules, scoring and vocabulary only — so a handball squad never gets a basketball drill back. Switch sport in the sidebar and the answers switch with it.</li>
         <li data-lang-da>Alt hvad AI'en skriver, holder sig inden for <b>den sportsgren du har valgt</b>. Sportsgrenens egne øvelseskategorier, positioner og formationer sendes med hvert spørgsmål, og assistenten får besked på kun at bruge den sports regler, pointsystem og begreber — så en håndboldtrup aldrig får en basketballøvelse retur. Skift sportsgren i menuen, og svarene skifter med.</li>
       </ul>
@@ -781,11 +1190,11 @@
       <div class="callout" data-lang-da><svg class="sym"><use href="#i-lock"/></svg> <b>Din egen nøgle, din egen konto.</b> Tryk på <b>🔑 API-nøgle</b> og indsæt en personlig OpenAI-nøgle fra platform.openai.com. Den gemmes kun i denne browser, kommer aldrig med i en backup-eksport, og forbruget betales af din egen OpenAI-konto. Fjern den når som helst med <b>Fjern nøgle</b>.</div>
       <div class="callout" data-lang-en><svg class="sym"><use href="#i-target"/></svg> The assistant is the one part of the app that needs the internet — offline it simply tells you so. It is also not a doctor: injury answers cover load management and return-to-play structure, and everything must still be cleared with your medical staff.</div>
       <div class="callout" data-lang-da><svg class="sym"><use href="#i-target"/></svg> Assistenten er den ene del af appen, der kræver internet — offline siger den blot fra. Den er heller ikke læge: svar om skader handler om belastningsstyring og en plan for tilbagevenden, og alt skal fortsat godkendes af jeres medicinske personale.</div>
-    </section>
+    </details>
 
     <!-- Support / donate -->
-    <section class="card" id="support">
-      <h2><span class="num"><svg class="sym"><use href="#i-heart"/></svg></span> <span data-lang-en>Support the App</span><span data-lang-da>Støt appen</span></h2>
+    <details class="card sec" id="support" open>
+      <summary class="sec-h"><h2><span class="num"><svg class="sym"><use href="#i-heart"/></svg></span> <span data-lang-en>Support the App</span><span data-lang-da>Støt appen</span></h2></summary>
       <p data-lang-en>SportTactic is free, works offline and shows no ads. There is no subscription and no data is ever sold — because none of it leaves your device.</p>
       <p data-lang-da>SportTactic er gratis, virker offline og viser ingen reklamer. Der er intet abonnement, og ingen data sælges — for intet forlader din enhed.</p>
       <ul>
@@ -798,12 +1207,12 @@
       </ul>
       <div class="callout" data-lang-en><svg class="sym"><use href="#i-heart"/></svg> Every feature stays available whether you donate or not. Support simply pays for the time that goes into new sports, drills and tools.</div>
       <div class="callout" data-lang-da><svg class="sym"><use href="#i-heart"/></svg> Alle funktioner er tilgængelige, uanset om du donerer eller ej. Støtten betaler blot for den tid, der bruges på nye sportsgrene, øvelser og værktøjer.</div>
-    </section>
+    </details>
   </div>
 
   <footer>
     <p><a class="back" href="index.html"><svg class="sym"><use href="#i-left"/></svg> <span data-lang-en>Return to main page</span><span data-lang-da>Tilbage til hovedsiden</span></a></p>
-    <p style="margin-top:10px">© 2026 ArcToCore — Steen Østerby Rasmussen</p>
+    <p style="margin-top:10px">© 2026 ArcToCore · <span data-lang-en>Author</span><span data-lang-da>Forfatter</span>: Steen Østerby Rasmussen</p>
     <p style="margin-top:8px"><a class="back" href="license.html"><span data-lang-en>License</span><span data-lang-da>Licens</span></a></p>
   </footer>
 
@@ -839,6 +1248,34 @@
       window.addEventListener('scroll', onScroll, { passive: true });
       btn.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
       onScroll();
+    })();
+
+    // Every topic is a fold. What you leave open is remembered, and following a
+    // link from the list of contents opens the topic it points at.
+    (function(){
+      const secs = [...document.querySelectorAll('details.card.sec')];
+      if (!secs.length) return;
+      let state = {};
+      try { state = JSON.parse(localStorage.getItem('ht_help_secs') || 'null'); } catch(e){ state = null; }
+      const save = () => { try { localStorage.setItem('ht_help_secs', JSON.stringify(state)); } catch(e){} };
+      // First visit: every topic starts folded, so the page opens as a list of
+      // what is here rather than one very long read.
+      if (!state) { state = {}; secs.forEach(d => { state[d.id] = 0; }); save(); }
+      secs.forEach(d => {
+        if (state[d.id] === 0) d.open = false;
+        d.addEventListener('toggle', () => { state[d.id] = d.open ? 1 : 0; save(); });
+      });
+      const setAll = open => { secs.forEach(d => { d.open = open; state[d.id] = open ? 1 : 0; }); save(); };
+      const o = document.getElementById('secOpen'), c = document.getElementById('secClose');
+      if (o) o.addEventListener('click', () => setAll(true));
+      if (c) c.addEventListener('click', () => setAll(false));
+      const openTarget = () => {
+        const id = decodeURIComponent(location.hash.slice(1));
+        const d = id && document.getElementById(id);
+        if (d && d.tagName === 'DETAILS' && !d.open) { d.open = true; state[d.id] = 1; save(); d.scrollIntoView(); }
+      };
+      window.addEventListener('hashchange', openTarget);
+      openTarget();
     })();
 
     try { setLang(localStorage.getItem('ht_help_lang') || 'en'); } catch(e){}

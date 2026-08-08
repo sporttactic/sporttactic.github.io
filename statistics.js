@@ -35,7 +35,7 @@ Views.statistics = function (mount) {
         <tbody>
           ${rows.map(({ p, s }) => `
             <tr>
-              <td><div style="display:flex;align-items:center;gap:8px"><span class="avatar">${UI.initials(p.firstName, p.lastName)}</span>${UI.esc(p.lastName)}</div></td>
+              <td><div style="display:flex;align-items:center;gap:8px"><span class="avatar">${UI.initials(p.firstName, p.lastName)}</span>${UI.esc([p.firstName, p.lastName].filter(Boolean).join(' ').trim())}</div></td>
               <td>${UI.esc(tt('pos', p.position))}</td>
               <td>${p.weight ? p.weight + ' kg' : '—'}</td>
               <td><strong>${s.goals}</strong></td>
@@ -46,6 +46,7 @@ Views.statistics = function (mount) {
               <td>${s.saves}</td>
               <td><span class="tag ${s.rating >= 7 ? 'green' : s.rating >= 5 ? 'amber' : 'red'}">${s.rating}</span></td>
               <td style="white-space:nowrap">
+                <button class="btn sm" data-pdf="${p.id}" title="${UI.esc(T('stats.playerPdf'))}">⬇ ${T('reports.pdf')}</button>
                 <button class="btn sm" data-chat="${p.id}" title="${UI.esc(T('chat.title'))}">💬</button>
                 <button class="btn sm" data-aip="${p.id}" title="${UI.esc(T('stats.aiPlayer'))}">🤖 ${T('stats.aiTrain')}</button></td>
             </tr>`).join('') || `<tr><td colspan="11" class="empty">${T('common.noData')}</td></tr>`}
@@ -64,6 +65,48 @@ Views.statistics = function (mount) {
   UI.bindAcc(mount);
   AI.bind(mount);
 
+  // One player on one page: profile, season totals and every event they were
+  // registered for, match by match. Printing it is how a PDF is saved.
+  function playerPdf(p) {
+    if (!p) return;
+    const s = Store.playerStats(p.id);
+    const name = ('#' + (p.number || '?') + ' ' + [p.firstName, p.lastName].filter(Boolean).join(' ')).trim();
+    const kpi = [
+      [s.goals, T('stat.goals')], [s.attempts, T('stat.attempts')], [s.shotPct + '%', T('stat.shotPct')],
+      [s.assists, T('stat.assists')], [s.turnovers, T('stat.to')], [s.saves, T('stat.saves')], [s.rating, T('stat.rating')]
+    ].map(k => `<div><b>${UI.esc(k[0])}</b><span>${UI.esc(k[1])}</span></div>`).join('');
+    const profile = [
+      [T('stat.pos'), tt('pos', p.position)],
+      [T('teams.height'), p.height ? p.height + ' cm' : '—'],
+      [T('teams.weight'), p.weight ? p.weight + ' kg' : '—'],
+      [T('teams.status'), tt('status', p.status || 'active')]
+    ].map(r => `<tr><th>${UI.esc(r[0])}</th><td>${UI.esc(r[1])}</td></tr>`).join('');
+    // Every logged event for this player, grouped by the match it belongs to.
+    const mine = Store.all('events').filter(e => e.playerId === p.id);
+    const byMatch = new Map();
+    mine.forEach(e => {
+      if (!byMatch.has(e.matchId)) byMatch.set(e.matchId, []);
+      byMatch.get(e.matchId).push(e);
+    });
+    const perMatch = [...byMatch.entries()].map(([mid, list]) => {
+      const m = Store.find('matches', mid);
+      const tally = {};
+      list.forEach(e => { tally[e.type] = (tally[e.type] || 0) + 1; });
+      const when = m ? UI.fmtDate(m.date) : '—';
+      const who = m ? ((m.home ? T('common.vs') : T('common.at')) + ' ' + m.opponent) : '—';
+      const what = Object.keys(tally).sort().map(k => k + ' × ' + tally[k]).join(', ');
+      return `<tr><td>${UI.esc(when)}</td><td>${UI.esc(who)}</td><td>${UI.esc(what)}</td></tr>`;
+    }).join('');
+    const html = `<div class="kpi">${kpi}</div>`
+      + `<h2>${T('stats.profile')}</h2><table>${profile}</table>`
+      + `<h2>${T('stats.perMatch')}</h2>`
+      + (perMatch ? `<table><thead><tr><th>${T('training.date')}</th><th>${T('matches.opponent')}</th><th>${T('scout.events')}</th></tr></thead><tbody>${perMatch}</tbody></table>`
+        : `<p class="none">${T('common.noData')}</p>`);
+    const sub = [team && team.name, SPORTS.name(App.getSport(), I18N.getLang()), matches.length + ' ' + T('stat.matches')].filter(Boolean).join(' · ');
+    UI.printDoc(T('reports.playerReport') + ' — ' + name, sub, html, () => UI.toast(T('training.popupBlocked'), 'error'));
+  }
+  mount.querySelectorAll('[data-pdf]').forEach(b => b.onclick = () => playerPdf(Store.find('players', b.dataset.pdf)));
+
   // Talk the squad through the numbers they just produced.
   mount.querySelector('#chatBoard').onclick = () => App.go('messenger', { from: 'statistics' });
   mount.querySelectorAll('[data-chat]').forEach(b => b.onclick = () => {
@@ -81,7 +124,7 @@ Views.statistics = function (mount) {
     const p = Store.find('players', b.dataset.aip);
     const s = Store.playerStats(p.id);
     AI.report({
-      title: T('stats.aiPlayer') + ' — #' + p.number + ' ' + p.lastName,
+      title: T('stats.aiPlayer') + ' — #' + p.number + ' ' + [p.firstName, p.lastName].filter(Boolean).join(' ').trim(),
       task: `What should #${p.number} ${p.firstName} ${p.lastName} (${p.position}) train?\n`
         + `Their numbers: ${s.goals} goals from ${s.attempts} attempts (${s.shotPct}%), ${s.assists} assists, ${s.turnovers} turnovers, ${s.saves} saves, rating ${s.rating}.\n`
         + `Team over ${matches.length} finished matches: ${agg.goals} goals from ${agg.shots} shots (${shotPct}%), ${agg.assists} assists, ${agg.turnovers} turnovers, ${agg.fastbreaks} fast breaks, ${agg.saves} saves.\n`

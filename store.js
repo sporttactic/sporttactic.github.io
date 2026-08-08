@@ -78,70 +78,20 @@ const Store = (() => {
     };
   }
 
-  // Default drill library — functional strength, agility & running programme.
-  // The club's own clips lived on a private Google Drive that asks every viewer
-  // to sign in, so each drill instead links to a YouTube search that always works.
-  const YT = q => 'https://www.youtube.com/results?search_query=' + encodeURIComponent(q);
-  const REPS = '5 sets x 10 reps per exercise, 60 s rest between exercises.';
-  const DEFAULT_DRILLS = [
-    { title: 'Goalkeeper Mobility Routine', category: 'Goalkeeper', duration: 10, intensity: 'Medium', tags: ['mobility', 'goalkeeper', 'warm-up'], muscles: ['shoulders', 'hipflexors', 'adductors', 'lowerback'], videoYt: YT('handball goalkeeper mobility routine'), description: 'Mobility work for handball goalkeepers: hips, shoulders and spine. Run it before shot training so the keeper can reach the corners without forcing the joints.' },
-    { title: 'Interval Sprint Run', category: 'Conditioning', duration: 20, intensity: 'High', tags: ['running', 'intervals', 'endurance'], muscles: ['quads', 'hamstrings', 'glutes', 'calves'], videoYt: YT('interval sprint running workout'), description: '1 km warm-up, then 20 minutes of intervals: sprint past three lamp posts, jog easy past the next three. No lamp posts? Sprint the long sides of a football pitch and jog the short ones.' },
-    { title: 'Quick Feet Program', category: 'Conditioning', duration: 10, intensity: 'High', tags: ['agility', 'footwork', 'speed'], muscles: ['calves', 'quads', 'hipflexors'], videoYt: YT('quick feet agility ladder drills'), description: 'Finish every interval run with 10 minutes of quick-feet work. Build the course with whatever gear you have — cones, sticks or lines on the floor.' },
-    { title: 'Asymmetric Single-Leg Squat with Kettlebell', category: 'Conditioning', duration: 12, intensity: 'Medium', tags: ['legs', 'balance', 'core'], muscles: ['quads', 'glutes', 'abs', 'obliques'], videoYt: YT('single leg squat kettlebell offset load'), description: 'Single-leg squat with the load on one side only. Challenges stability, balance and muscle control, and trains core and legs in particular. ' + REPS },
-    { title: 'Lateral Squat', category: 'Conditioning', duration: 12, intensity: 'Medium', tags: ['legs', 'hips', 'mobility'], muscles: ['adductors', 'glutes', 'quads'], videoYt: YT('lateral squat side squat technique'), description: 'Squat sideways over a wide stance, optionally holding a kettlebell or dumbbell. Strengthens legs, hips and core while improving stability, mobility and body control in sideways movement. ' + REPS },
-    { title: 'Lateral Band Sidewalk', category: 'Conditioning', duration: 8, intensity: 'Low', tags: ['hips', 'glutes', 'stability'], muscles: ['glutes', 'adductors', 'hipflexors'], videoYt: YT('lateral band walk glute exercise'), description: 'Walk sideways with a resistance band around the legs, 2 m to each side. Strengthens the small stabilising muscles around hips, glutes and thighs. ' + REPS },
-    { title: 'Lateral Jumps with Medicine Ball', category: 'Conditioning', duration: 12, intensity: 'High', tags: ['power', 'legs', 'balance'], muscles: ['quads', 'glutes', 'calves', 'obliques'], videoYt: YT('lateral jumps with medicine ball'), description: 'Explosive sideways jumps holding a medicine ball. Combines power, coordination and stability in one functional exercise for legs, core and balance. ' + REPS },
-    { title: 'Explosive Step-Up to Jump with Knee Drive', category: 'Conditioning', duration: 12, intensity: 'High', tags: ['explosiveness', 'legs', 'acceleration'], muscles: ['quads', 'glutes', 'hipflexors', 'calves'], videoYt: YT('explosive step up jump knee drive'), description: 'Step up and jump with a hard knee drive while a band pulls you backwards. The resistance forces an aggressive forward lean and more power in every push-off. ' + REPS },
-    { title: 'Explosive Step-Up to Overhead Grab', category: 'Conditioning', duration: 12, intensity: 'High', tags: ['power', 'jump', 'coordination'], muscles: ['quads', 'glutes', 'calves', 'shoulders'], videoYt: YT('step up jump overhead reach exercise'), description: 'Turn a powerful one-legged push-off into maximum jump height and grab the bar or plate at the top. Mirrors the handball jump shot by combining explosive legs with coordination and reach. ' + REPS },
-    { title: 'Handball Jumping', category: 'Conditioning', duration: 12, intensity: 'High', tags: ['jump', 'timing', 'explosiveness'], muscles: ['quads', 'glutes', 'calves'], videoYt: YT('handball jump shot plyometric training'), description: 'Jump series that trains explosiveness, jump height, coordination and timing — directly transferable to game situations, above all the jump shot. ' + REPS },
-    { title: 'Bulgarian Split Squat', category: 'Conditioning', duration: 12, intensity: 'Medium', tags: ['legs', 'balance', 'prevention'], muscles: ['quads', 'glutes', 'hamstrings'], videoYt: YT('bulgarian split squat technique'), description: 'Rear foot elevated split squat. One of the most effective single-leg exercises for balance, mobility and stability, and a real gamechanger for both strength and injury prevention. ' + REPS },
-    { title: 'Nordic Hamstrings', category: 'Conditioning', duration: 10, intensity: 'High', tags: ['hamstrings', 'prevention', 'legs'], muscles: ['hamstrings', 'glutes', 'lowerback'], videoYt: YT('nordic hamstring curl technique'), description: 'Lower yourself slowly with the ankles held down. Extremely effective for the hamstrings, both for performance and for preventing ACL and muscle tears. Can also be done lying on your back with two cloths under the feet, pushing out and pulling back. ' + REPS },
-    { title: 'Nordic Hamstrings Alternative', category: 'Conditioning', duration: 10, intensity: 'Medium', tags: ['hamstrings', 'prevention'], muscles: ['hamstrings', 'glutes'], videoYt: YT('nordic hamstring alternative slider curl'), description: 'Alternative to the Nordic hamstring curl when you have no partner or bench — same target muscles, lower entry level. ' + REPS },
-    { title: 'Overhead Triceps Extension', category: 'Conditioning', duration: 10, intensity: 'Medium', tags: ['triceps', 'throwing', 'arms'], muscles: ['triceps', 'shoulders'], videoYt: YT('overhead triceps extension technique'), description: 'Strengthens the triceps, which plays a key role in throwing, passing and shooting — particularly relevant for handball players. ' + REPS },
-    { title: 'Throwing Power Push', category: 'Conditioning', duration: 10, intensity: 'Medium', tags: ['throwing', 'shoulder', 'power'], muscles: ['chest', 'triceps', 'shoulders'], videoYt: YT('handball throwing power exercise band'), description: 'Builds throwing power in handball. Coaching point: keep the elbow in close to the body as the ball is pushed away. ' + REPS },
-    { title: 'Cable/Band Woodchop', category: 'Conditioning', duration: 10, intensity: 'Medium', tags: ['core', 'rotation', 'power'], muscles: ['obliques', 'abs', 'shoulders'], videoYt: YT('cable woodchop core exercise'), description: 'Standing rotational pull. A functional power exercise for the core that trains explosive rotation and resistance to twist — the key to a harder shot, better balance in duels and prevention of back and shoulder injuries. ' + REPS },
-    { title: 'Trapezius Band Training', category: 'Conditioning', duration: 8, intensity: 'Low', tags: ['shoulder', 'posture', 'prevention'], muscles: ['traps', 'neck', 'shoulders'], videoYt: YT('trapezius resistance band exercise'), description: 'Band work for the trapezius, the shoulder brake muscle. Strengthens the neck and shoulder area, improves posture and stability and prevents injuries where the upper body is loaded by throwing and contact. ' + REPS },
-    { title: 'Rotator Cuff Training', category: 'Conditioning', duration: 8, intensity: 'Low', tags: ['shoulder', 'prevention', 'stability'], muscles: ['shoulders', 'traps'], videoYt: YT('rotator cuff band exercises'), description: 'Training the stabilising muscles of the shoulder is essential for keeping shoulder function and mobility and for preventing injuries. Light load, controlled tempo. ' + REPS },
-    { title: 'Single-Arm Chest Press', category: 'Conditioning', duration: 10, intensity: 'Medium', tags: ['chest', 'shoulder', 'core'], muscles: ['chest', 'shoulders', 'triceps', 'abs'], videoYt: YT('single arm dumbbell chest press'), description: 'One-arm press with a kettlebell or dumbbell for shoulder and chest. Adds variation, increases muscle activation and corrects upper-body imbalances while challenging stability and core control. ' + REPS },
-    { title: 'Landmine Press', category: 'Conditioning', duration: 10, intensity: 'Medium', tags: ['shoulder', 'core', 'chest'], muscles: ['shoulders', 'chest', 'abs'], videoYt: YT('landmine press technique'), description: 'Combines shoulder strength with core stability in a joint-friendly, very functional press — a good variation when you want to get away from the barbell or dumbbell. ' + REPS },
-    { title: 'Rotational Plank', category: 'Conditioning', duration: 8, intensity: 'Medium', tags: ['core', 'stability', 'mobility'], muscles: ['abs', 'obliques', 'shoulders'], videoYt: YT('rotational plank exercise'), description: 'Plank with a switch between left and right rotation. Trains core strength, stability and mobility while improving coordination and control in both upper and lower body. ' + REPS },
-    { title: 'Core Hip Drill', category: 'Conditioning', duration: 10, intensity: 'Medium', tags: ['core', 'hips', 'shoulder'], muscles: ['abs', 'hipflexors', 'glutes', 'shoulders'], videoYt: YT('core hip stability drill resistance band'), description: 'Advanced drill that combines static stability with dynamic power. Keeps the upper body still while the legs move, exactly like a shot or a feint; the band loads hip flexors and glutes for acceleration and sideways defensive movement, and the support arm builds shoulder stability. ' + REPS },
-    { title: 'Arm Pull', category: 'Conditioning', duration: 10, intensity: 'Medium', tags: ['arms', 'back', 'pull'], muscles: ['lats', 'biceps', 'forearms', 'shoulders'], videoYt: YT('inverted row arm pull exercise'), description: 'Simple pull where you increase the load by going further down, so more force is needed to pull yourself up. Strengthens arms, shoulders and back and builds the stability and coordination that throwing and passing need. ' + REPS },
-    { title: 'Pull with Lateral Movement', category: 'Conditioning', duration: 10, intensity: 'Medium', tags: ['back', 'shoulder', 'core'], muscles: ['lats', 'shoulders', 'obliques', 'biceps'], videoYt: YT('single arm row with lateral movement'), description: 'Pull combined with a sideways movement. Strengthens shoulders, back and core while improving the lateral stability and coordination handball demands. ' + REPS }
-  ];
-  // Titles of the drills that shipped before the default library existed.
-  const OLD_DEMO_DRILLS = ['3v3 Continuous Attack', 'Goalkeeper Reaction Wall', 'Fast Break Waves', '6-0 Defensive Shifting'];
-
-  // Starter libraries for the two strength disciplines. Their categories come from
-  // SPORTS.exerciseCategories, so these only ever surface under their own sport.
-  const STRENGTH_DRILLS = [
-    // ---- CrossFit ----
-    { title: 'Back Squat 5x5', category: 'Strength', duration: 25, intensity: 'High', tags: ['squat', 'legs', 'barbell'], muscles: ['quads', 'glutes', 'hamstrings', 'lowerback'], videoYt: YT('back squat technique tutorial'), description: 'Five sets of five at a load you can hold form on for every rep. Add 2.5 kg once all five sets move cleanly. Brace before you unrack, knees track over the toes, depth before weight.' },
-    { title: 'Deadlift 5x3', category: 'Strength', duration: 25, intensity: 'High', tags: ['hinge', 'posterior', 'barbell'], muscles: ['hamstrings', 'glutes', 'lowerback', 'traps'], videoYt: YT('conventional deadlift technique tutorial'), description: 'Five sets of three, heavy but never grinding. Bar over mid-foot, lats locked, hips and shoulders rise together. Reset every rep instead of bouncing off the floor.' },
-    { title: 'Clean & Jerk Technique', category: 'Olympic Lifting', duration: 30, intensity: 'High', tags: ['olympic', 'power', 'barbell'], muscles: ['quads', 'glutes', 'traps', 'shoulders'], videoYt: YT('clean and jerk technique progression'), description: 'Technique before load: hang power clean, then full clean, then the jerk. Ten minutes of empty-bar work first. Stop the session the moment the bar path drifts forward.' },
-    { title: 'Snatch Progression', category: 'Olympic Lifting', duration: 30, intensity: 'High', tags: ['olympic', 'mobility', 'barbell'], muscles: ['shoulders', 'traps', 'quads', 'glutes'], videoYt: YT('snatch progression drills beginner'), description: 'Overhead squat, snatch balance, hang snatch, full snatch. The hardest lift in the gym to fake — keep the load light until the overhead position is stable.' },
-    { title: 'Pull-Up & Muscle-Up Ladder', category: 'Gymnastics', duration: 20, intensity: 'High', tags: ['pull', 'gymnastics', 'bar'], muscles: ['lats', 'biceps', 'abs', 'shoulders'], videoYt: YT('strict pull up to muscle up progression'), description: 'Strict pull-ups, then kipping, then transition work. Band-assisted if strict is not there yet. Quality over volume: stop the set two reps before failure.' },
-    { title: 'Handstand & Wall Walk', category: 'Gymnastics', duration: 15, intensity: 'Medium', tags: ['handstand', 'shoulders', 'core'], muscles: ['shoulders', 'triceps', 'abs'], videoYt: YT('wall walk handstand hold progression'), description: 'Wall walks into a handstand hold. Builds the overhead strength and midline control every pressing movement needs. Hollow body, ribs down, look at your hands.' },
-    { title: 'Cindy (AMRAP 20)', category: 'Metcon', duration: 20, intensity: 'High', tags: ['amrap', 'bodyweight', 'benchmark'], muscles: ['chest', 'lats', 'quads', 'abs'], videoYt: YT('crossfit cindy workout standard'), description: 'As many rounds as possible in 20 minutes: 5 pull-ups, 10 push-ups, 15 air squats. A benchmark — write the score down and chase it again in eight weeks.' },
-    { title: 'Fran (21-15-9)', category: 'Metcon', duration: 12, intensity: 'High', tags: ['for time', 'benchmark', 'barbell'], muscles: ['quads', 'shoulders', 'lats', 'glutes'], videoYt: YT('crossfit fran workout standard'), description: '21-15-9 thrusters and pull-ups, for time. Scale the bar so the first set of 21 is unbroken. Short, brutal and the classic measure of engine plus strength.' },
-    { title: 'EMOM Engine Builder', category: 'Conditioning', duration: 20, intensity: 'Medium', tags: ['emom', 'rowing', 'engine'], muscles: ['quads', 'lats', 'hamstrings', 'calves'], videoYt: YT('emom rowing bike workout'), description: 'Every minute on the minute for 20: odd minutes 15 calories on the rower or bike, even minutes 12 kettlebell swings. Rest is whatever is left of the minute.' },
-    { title: 'Rowing Intervals 500 m', category: 'Conditioning', duration: 25, intensity: 'High', tags: ['rowing', 'intervals', 'engine'], muscles: ['lats', 'quads', 'glutes', 'lowerback'], videoYt: YT('rowing 500m interval technique'), description: '6 x 500 m with 2 minutes rest. Hold the same split on every piece; if the last one falls apart, the first was too fast. Legs, hips, arms — then the reverse.' },
-    { title: 'Shoulder & Hip Mobility Flow', category: 'Mobility', duration: 15, intensity: 'Low', tags: ['mobility', 'warm-up', 'overhead'], muscles: ['shoulders', 'hipflexors', 'adductors', 'lowerback'], videoYt: YT('shoulder hip mobility flow crossfit warm up'), description: 'Run this before anything overhead: banded shoulder dislocates, thoracic openers, deep squat holds and couch stretch. Ten minutes here buys a clean overhead position.' },
-    { title: 'Post-Session Recovery', category: 'Recovery', duration: 15, intensity: 'Low', tags: ['recovery', 'stretching', 'foam roll'], muscles: ['quads', 'hamstrings', 'calves', 'lats'], videoYt: YT('post workout recovery stretching routine'), description: 'Easy bike or walk for five minutes, then foam roll quads, glutes and lats and hold each stretch 60 seconds. Do it on the hard days, not just the easy ones.' },
-
-    // ---- Bodybuilding ----
-    { title: 'Barbell Bench Press', category: 'Chest', duration: 20, intensity: 'High', tags: ['press', 'chest', 'barbell'], muscles: ['chest', 'triceps', 'shoulders'], videoYt: YT('barbell bench press proper form'), description: '4 sets of 6-10. Shoulder blades pinned back and down, bar to the lower chest, feet driving into the floor. Leave one rep in reserve on the first three sets.' },
-    { title: 'Incline Dumbbell Press', category: 'Chest', duration: 15, intensity: 'Medium', tags: ['chest', 'dumbbell', 'upper chest'], muscles: ['chest', 'shoulders', 'triceps'], videoYt: YT('incline dumbbell press technique'), description: '3 sets of 8-12 at 30 degrees. Higher than that and it becomes a shoulder press. Control the descent for three seconds and stop just short of locking out.' },
-    { title: 'Barbell Row', category: 'Back', duration: 20, intensity: 'High', tags: ['row', 'back', 'barbell'], muscles: ['lats', 'traps', 'biceps', 'lowerback'], videoYt: YT('barbell row proper form'), description: '4 sets of 8. Torso around 45 degrees, bar to the navel, no jerking with the lower back. If the weight needs body English, it is too heavy.' },
-    { title: 'Lat Pulldown & Pull-Up', category: 'Back', duration: 18, intensity: 'Medium', tags: ['pull', 'lats', 'width'], muscles: ['lats', 'biceps', 'forearms'], videoYt: YT('lat pulldown vs pull up technique'), description: '4 sets of 10-12. Pull the elbows down and back rather than the hands, and let the lats stretch fully at the top of every rep.' },
-    { title: 'Overhead Press', category: 'Shoulders', duration: 18, intensity: 'High', tags: ['press', 'shoulders', 'barbell'], muscles: ['shoulders', 'triceps', 'traps'], videoYt: YT('overhead press standing barbell technique'), description: '4 sets of 6-8, standing. Squeeze the glutes so the lower back does not take the load, and move the head through as the bar passes the forehead.' },
-    { title: 'Lateral Raise Triple Set', category: 'Shoulders', duration: 12, intensity: 'Medium', tags: ['shoulders', 'isolation', 'dumbbell'], muscles: ['shoulders', 'traps'], videoYt: YT('lateral raise side delt technique'), description: '3 rounds of side, front and rear raises with no rest between them. Light weight, slow tempo, no swinging — the side delt responds to time under tension, not load.' },
-    { title: 'Barbell Curl & Skullcrusher', category: 'Arms', duration: 18, intensity: 'Medium', tags: ['biceps', 'triceps', 'superset'], muscles: ['biceps', 'triceps', 'forearms'], videoYt: YT('barbell curl skullcrusher superset'), description: 'Superset: 10 curls straight into 10 skullcrushers, 4 rounds. Elbows stay pinned to the sides on the curl and pointed at the ceiling on the extension.' },
-    { title: 'Back Squat Hypertrophy', category: 'Legs', duration: 25, intensity: 'High', tags: ['squat', 'quads', 'barbell'], muscles: ['quads', 'glutes', 'hamstrings'], videoYt: YT('back squat hypertrophy 8 to 12 reps'), description: '4 sets of 8-12 with two minutes rest. Lighter and deeper than a strength day — the goal is the stretch under load, not the number on the bar.' },
-    { title: 'Romanian Deadlift', category: 'Legs', duration: 18, intensity: 'Medium', tags: ['hinge', 'hamstrings', 'barbell'], muscles: ['hamstrings', 'glutes', 'lowerback'], videoYt: YT('romanian deadlift technique hamstrings'), description: '4 sets of 10. Push the hips back, keep the bar against the legs and stop when the hamstrings run out of stretch, not when the bar hits the floor.' },
-    { title: 'Leg Press & Calf Raise', category: 'Legs', duration: 18, intensity: 'Medium', tags: ['quads', 'calves', 'machine'], muscles: ['quads', 'glutes', 'calves'], videoYt: YT('leg press calf raise technique'), description: '4 sets of 12 on the press, then 4 sets of 15 calf raises with a two-second pause at the top. Never lock the knees out under load.' },
-    { title: 'Core Circuit', category: 'Core', duration: 12, intensity: 'Medium', tags: ['abs', 'core', 'circuit'], muscles: ['abs', 'obliques', 'hipflexors'], videoYt: YT('abs core circuit plank hanging leg raise'), description: '3 rounds: 45 s plank, 15 hanging leg raises, 20 cable crunches, 30 s side plank each side. Breathe out hard at the top of every crunch.' },
-    { title: 'Steady-State Cardio', category: 'Cardio', duration: 30, intensity: 'Low', tags: ['cardio', 'conditioning', 'fat loss'], muscles: ['quads', 'calves', 'hamstrings'], videoYt: YT('low intensity steady state cardio guide'), description: '30 minutes at a pace where you can still hold a conversation. Keeps conditioning and appetite in check without eating into recovery from the lifting days.' }
+  // Drills that earlier builds shipped with. The library now starts EMPTY —
+  // a coach builds it from their own work or with the AI drill generator — so
+  // these titles exist only to sweep the old seeded rows out on upgrade.
+  const SEED_DRILL_TITLES = [
+    '3v3 Continuous Attack', 'Goalkeeper Reaction Wall', 'Fast Break Waves', '6-0 Defensive Shifting', 'Goalkeeper Mobility Routine',
+    'Interval Sprint Run', 'Quick Feet Program', 'Asymmetric Single-Leg Squat with Kettlebell', 'Lateral Squat', 'Lateral Band Sidewalk',
+    'Lateral Jumps with Medicine Ball', 'Explosive Step-Up to Jump with Knee Drive', 'Explosive Step-Up to Overhead Grab', 'Handball Jumping',
+    'Bulgarian Split Squat', 'Nordic Hamstrings', 'Nordic Hamstrings Alternative', 'Overhead Triceps Extension', 'Throwing Power Push',
+    'Cable/Band Woodchop', 'Trapezius Band Training', 'Rotator Cuff Training', 'Single-Arm Chest Press', 'Landmine Press', 'Rotational Plank',
+    'Core Hip Drill', 'Arm Pull', 'Pull with Lateral Movement', 'Back Squat 5x5', 'Deadlift 5x3', 'Clean & Jerk Technique', 'Snatch Progression',
+    'Pull-Up & Muscle-Up Ladder', 'Handstand & Wall Walk', 'Cindy (AMRAP 20)', 'Fran (21-15-9)', 'EMOM Engine Builder', 'Rowing Intervals 500 m',
+    'Shoulder & Hip Mobility Flow', 'Post-Session Recovery', 'Barbell Bench Press', 'Incline Dumbbell Press', 'Barbell Row', 'Lat Pulldown & Pull-Up',
+    'Overhead Press', 'Lateral Raise Triple Set', 'Barbell Curl & Skullcrusher', 'Back Squat Hypertrophy', 'Romanian Deadlift', 'Leg Press & Calf Raise',
+    'Core Circuit', 'Steady-State Cardio'
   ];
 
   async function seedIfEmpty() {
@@ -173,11 +123,9 @@ const Store = (() => {
     ];
     await DB.bulkPut('matches', matches);
 
-    const exercises = DEFAULT_DRILLS.map(d => Object.assign({ id: uid('exe') }, d));
-    await DB.bulkPut('exercises', exercises);
-
+    // The exercise library starts empty — the coach fills it themselves.
     const training = [
-      { id: uid('trn'), teamId: team.id, title: 'Strength & Agility', date: Date.now() + 864e5, duration: 60, focus: 'Physical', exercises: exercises.slice(0, 3).map(e => e.id) }
+      { id: uid('trn'), teamId: team.id, title: 'Strength & Agility', date: Date.now() + 864e5, duration: 60, focus: 'Physical', exercises: [] }
     ];
     await DB.bulkPut('training', training);
 
@@ -204,12 +152,12 @@ const Store = (() => {
     await setSetting('demoPurged', true);
   }
 
-  // One-time upgrade: drop the four demo drills and install the real default
-  // library (functional strength, agility & running) with its video links.
-  async function installDefaultDrills() {
-    if (await getSetting('drillsV2', false)) return;
-    let touched = false;
-    const victims = all('exercises').filter(e => OLD_DEMO_DRILLS.indexOf(e.title) >= 0);
+  // One-time upgrade: the app no longer ships a drill library, so every drill an
+  // earlier build seeded is removed and its id stripped out of the plans that
+  // used it. A drill the coach edited or wrote themselves is left alone.
+  async function purgeSeedDrills() {
+    if (await getSetting('drillsNoneV1', false)) return;
+    const victims = all('exercises').filter(e => SEED_DRILL_TITLES.indexOf(e.title) >= 0);
     if (victims.length) {
       const ids = victims.map(e => e.id);
       for (const e of victims) await DB.remove('exercises', e.id);
@@ -217,48 +165,9 @@ const Store = (() => {
         const keep = (s.exercises || []).filter(id => ids.indexOf(id) < 0);
         if (keep.length !== (s.exercises || []).length) await DB.put('training', Object.assign({}, s, { exercises: keep }));
       }
-      touched = true;
+      await loadAll();
     }
-    const have = new Set(all('exercises').map(e => e.title));
-    const add = DEFAULT_DRILLS.filter(d => !have.has(d.title)).map(d => Object.assign({ id: uid('exe') }, d));
-    if (add.length) { await DB.bulkPut('exercises', add); touched = true; }
-    if (touched) await loadAll();
-    await setSetting('drillsV2', true);
-  }
-
-  // One-time repair: the first default library pointed at a private Google Drive
-  // that asks every viewer to sign in. Swap those dead links for the working ones
-  // and add the muscle groups each default drill trains.
-  async function repairDrillLinks() {
-    if (await getSetting('drillsV4', false)) return;
-    const isDead = (u) => {
-      try { return /(^|\.)drive\.google\.com$/i.test(new URL(String(u)).hostname); }
-      catch { return false; }
-    };
-    const byTitle = new Map(DEFAULT_DRILLS.map(d => [d.title, d]));
-    const fixed = [];
-    for (const e of all('exercises')) {
-      const def = byTitle.get(e.title);
-      if (!def) continue;
-      const next = Object.assign({}, e, {
-        videoUrl: isDead(e.videoUrl) ? '' : (e.videoUrl || ''),
-        videoYt: e.videoYt || def.videoYt,
-        muscles: (e.muscles && e.muscles.length) ? e.muscles : def.muscles.slice()
-      });
-      if (next.videoUrl !== e.videoUrl || next.videoYt !== e.videoYt || next.muscles !== e.muscles) fixed.push(next);
-    }
-    if (fixed.length) { await DB.bulkPut('exercises', fixed); await loadAll(); }
-    await setSetting('drillsV4', true);
-  }
-
-  // Starter workouts for CrossFit and bodybuilding. Their categories belong to
-  // those sports only, so the library stays empty for every other sport.
-  async function installStrengthDrills() {
-    if (await getSetting('drillsStrengthV1', false)) return;
-    const have = new Set(all('exercises').map(e => e.title));
-    const add = STRENGTH_DRILLS.filter(d => !have.has(d.title)).map(d => Object.assign({ id: uid('exe') }, d));
-    if (add.length) { await DB.bulkPut('exercises', add); await loadAll(); }
-    await setSetting('drillsStrengthV1', true);
+    await setSetting('drillsNoneV1', true);
   }
 
   // ---- Sport-bound squads ------------------------------------------------
@@ -271,7 +180,7 @@ const Store = (() => {
   // preference (localStorage, per sport) rather than a settings row, because
   // players()/matches() are synchronous and getSetting is not.
   const K_TEAM = 'stx_team_';
-  const TEAM_SCOPED = ['players', 'coaches', 'matches', 'opponents', 'training', 'personal'];
+  const TEAM_SCOPED = ['players', 'coaches', 'matches', 'opponents', 'training', 'personal', 'planner'];
   function teams() {
     const s = sportNow();
     return all('teams').filter(t => !t.sport || t.sport === s);
@@ -366,25 +275,40 @@ const Store = (() => {
   // A training plan is useless without the drills it points at, so it takes both.
   const PACK_STORES = {
     exercises: ['exercises'], training: ['training', 'exercises'], tactics: ['tactics'],
-    personal: ['personal'], opponents: ['opponents']
+    personal: ['personal'], opponents: ['opponents'],
+    matches: ['matches', 'events'], planner: ['planner']
   };
   function packKinds() { return Object.keys(PACK_STORES); }
-  async function exportPack(kind) {
+  // opts.teamId narrows the file to ONE squad: team-scoped stores are filtered
+  // on teamId, and the events store follows the matches that survived.
+  async function exportPack(kind, opts) {
     const stores = PACK_STORES[kind];
     if (!stores) throw new Error('unknown pack');
+    const teamId = opts && opts.teamId;
     const data = {};
-    for (const s of stores) data[s] = await pack(await DB.getAll(s));
-    return { app: 'SportTactic', pack: kind, format: 1, exportedAt: new Date().toISOString(), stores, data };
+    let keep = null;
+    for (const s of stores) {
+      let rows = await DB.getAll(s);
+      if (teamId && TEAM_SCOPED.indexOf(s) >= 0) rows = rows.filter(r => r.teamId === teamId);
+      if (s === 'matches') keep = new Set(rows.map(r => r.id));
+      if (s === 'events' && keep) rows = rows.filter(r => keep.has(r.matchId));
+      data[s] = await pack(rows);
+    }
+    return { app: 'SportTactic', pack: kind, format: 1, exportedAt: new Date().toISOString(), teamId: teamId || '', stores, data };
   }
   // Rows are merged by id: re-importing the same file updates instead of duplicating.
-  async function importPack(kind, dump) {
+  // opts.teamId re-stamps every team-scoped row, so a file from another club
+  // lands in the squad you are looking at instead of disappearing.
+  async function importPack(kind, dump, opts) {
     const stores = PACK_STORES[kind];
     if (!stores) throw new Error('unknown pack');
+    const teamId = opts && opts.teamId;
     const data = (dump && typeof dump.data === 'object' && dump.data) || dump || {};
     let n = 0;
     for (const s of stores) {
       if (!Array.isArray(data[s])) continue;
-      const rows = unpack(data[s]).filter(r => r && typeof r === 'object' && typeof r.id === 'string');
+      let rows = unpack(data[s]).filter(r => r && typeof r === 'object' && typeof r.id === 'string');
+      if (teamId && TEAM_SCOPED.indexOf(s) >= 0) rows = rows.map(r => Object.assign({}, r, { teamId }));
       if (!rows.length) continue;
       await DB.bulkPut(s, rows);
       n += rows.length;
@@ -397,7 +321,7 @@ const Store = (() => {
   return {
     uid, loadAll, all, find, save, remove, onChange,
     getSetting, setSetting, teamStats, playerStats, matchEvents,
-    seedIfEmpty, purgeDemoPlayers, installDefaultDrills, repairDrillLinks, installStrengthDrills,
+    seedIfEmpty, purgeDemoPlayers, purgeSeedDrills,
     players, stampSquadSport,
     teams, activeTeam, activeTeamId, setActiveTeam, scoped, matches, coaches, stampTeamScope,
     pack, unpack, packKinds, exportPack, importPack, GOAL_TYPES

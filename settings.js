@@ -6,6 +6,37 @@ window.Views = window.Views || {};
 // and Blobs are base64-encoded by Store.pack, because JSON.stringify silently
 // turns a Blob into `{}` — that is how recorded animation clips used to vanish.
 const BACKUP_FORMAT = 2;
+// Everything the app keeps outside IndexedDB lives in localStorage under `stx_`:
+// the athlete name, the scouting focus areas, the progression filters, which
+// panels are folded open, the mail setup. A backup that skipped them restored a
+// half-configured app, so they travel with it — except the OpenAI key, which is
+// a credential and must never end up in a file that gets mailed around.
+const PREF_PREFIX = 'stx_';
+const PREF_SECRETS = ['stx_ai_key'];
+function readPrefs() {
+  const out = {};
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (!k || k.indexOf(PREF_PREFIX) !== 0 || PREF_SECRETS.indexOf(k) >= 0) continue;
+      out[k] = localStorage.getItem(k);
+    }
+  } catch (e) { /* private mode */ }
+  return out;
+}
+function writePrefs(prefs) {
+  if (!prefs || typeof prefs !== 'object') return 0;
+  let n = 0;
+  try {
+    Object.keys(prefs).forEach(k => {
+      if (k.indexOf(PREF_PREFIX) !== 0 || PREF_SECRETS.indexOf(k) >= 0) return;
+      const v = prefs[k];
+      if (typeof v !== 'string') return;
+      localStorage.setItem(k, v); n++;
+    });
+  } catch (e) { /* private mode / quota */ }
+  return n;
+}
 async function buildBackup(stores) {
   const list = stores && stores.length ? stores : DB.STORES;
   const data = {};
@@ -15,11 +46,14 @@ async function buildBackup(stores) {
     data[s] = await Store.pack(rows);
     counts[s] = rows.length;
   }
-  return {
+  const dump = {
     app: 'SportTactic', format: BACKUP_FORMAT,
     exportedAt: new Date().toISOString(),
     stores: list.slice(), counts, data
   };
+  // Only a whole-app backup carries the preferences; a picked share does not.
+  if (!stores || !stores.length) dump.prefs = readPrefs();
+  return dump;
 }
 async function restoreBackup(dump) {
   if (!dump || typeof dump !== 'object') throw new Error('bad backup');
@@ -31,6 +65,7 @@ async function restoreBackup(dump) {
     await DB.clear(s);
     await DB.bulkPut(s, Store.unpack(data[s]));
   }
+  writePrefs(dump.prefs);
 }
 function downloadJson(json, name) {
   const a = document.createElement('a');
@@ -38,6 +73,8 @@ function downloadJson(json, name) {
   a.download = name; a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 20000);
 }
+// The unattended backup timer lives in backup.js and needs these two.
+window.Backup = { build: buildBackup, restore: restoreBackup, download: downloadJson };
 
 // ---- "Send to Coach": pick what actually leaves the device ---------------
 // Grouped the way a coach thinks about the data, not the way it is stored.
@@ -172,7 +209,7 @@ function shareDialog() {
       ${SHARE_GROUPS.map(row).join('')}
       <p class="hint mail-note">${UI.esc(tt('settings.shareWarn', 'The squad block carries mobile numbers, e-mail addresses, injury notes and each person\u2019s private chat key. Only send it to someone entitled to see them, and only over a channel you trust.'))}</p>
       <label class="field"><span>${UI.esc(tt('settings.shareTo', 'Send to'))}</span>
-        <input id="shareTo" type="email" autocomplete="off" spellcheck="false" placeholder="traener@klub.dk">
+        <input id="shareTo" type="email" autocomplete="off" spellcheck="false" placeholder="${UI.esc(T('teams.emailPh'))}">
         <span class="hint">${UI.esc(MAIL.canSendDirect()
       ? tt('settings.shareToHint', 'Send writes a readable report into the mail. Download file writes the same data as a backup the other coach can import.')
       : tt('settings.shareToOff', 'Sending is switched off until EmailJS is set up under Send e-mail. You can still download the file.'))}</span></label>
@@ -264,14 +301,20 @@ function guideDialog(title, intro, steps, tail) {
   });
 }
 
+// Long intervals read better as hours than as "every 720 minutes".
+function everyLabel(m) {
+  if (!m) return T('settings.autoOff');
+  return m % 60 === 0 && m >= 120
+    ? T('settings.autoHours').replace('{0}', m / 60)
+    : T('settings.autoMin').replace('{0}', m);
+}
+
 Views.settings = async function (mount) {
-  const theme = document.documentElement.getAttribute('data-theme');
   const role = await Store.getSetting('role', 'Coach');
 
   mount.innerHTML = `
     <div class="page-head"><div><h1>${T('settings.title')}</h1><p>${T('settings.subtitle')}</p></div></div>
-    ${UI.acc('setLook', T('settings.appearance'), `
-      <label class="field"><span>${T('settings.theme')}</span><select id="s_theme"><option value="dark" ${theme === 'dark' ? 'selected' : ''}>${T('settings.dark')}</option><option value="light" ${theme === 'light' ? 'selected' : ''}>${T('settings.light')}</option></select></label>`)}
+    ${menuCard()}
     ${UI.acc('setRole', T('settings.roleAccess'), `
       <label class="field"><span>${T('settings.activeRole')}</span><select id="s_role">${['Super Admin', 'Club Admin', 'Coach', 'Analyst', 'Player'].map(r => `<option value="${r}" ${r === role ? 'selected' : ''}>${T('role.' + r)}</option>`).join('')}</select></label>
       <p style="color:var(--muted);font-size:12px">${T('settings.roleHint')}</p>`)}
@@ -284,6 +327,17 @@ Views.settings = async function (mount) {
         <button class="btn" id="emailAll">${T('settings.sendCoach')}</button>
         <button class="btn danger" id="wipe">${T('settings.resetData')}</button>
       </div>`)}
+    ${UI.acc('setAuto', T('settings.autoCard'), `
+      <p style="color:var(--muted);font-size:13px">${T('settings.autoHint')}</p>
+      <div class="row" style="flex:0;margin-top:8px;flex-wrap:wrap;align-items:flex-end">
+        <label class="field" style="max-width:220px"><span>${T('settings.autoEvery')}</span>
+          <select id="autoMin">${AUTOBK.MINUTES.map(m => `<option value="${m}" ${m === AUTOBK.minutes() ? 'selected' : ''}>${everyLabel(m)}</option>`).join('')}</select></label>
+        ${AUTOBK.supported() ? `<button class="btn" id="autoPick">${T('settings.autoPick')}</button>
+        <button class="btn" id="autoForget">${T('settings.autoForget')}</button>` : ''}
+        <button class="btn primary" id="autoNow">${T('settings.autoNow')}</button>
+      </div>
+      <p><span class="tag" id="autoState"></span></p>
+      <p class="hint">${AUTOBK.supported() ? T('settings.autoFileHint') : T('settings.autoDlHint')}</p>`)}
     ${UI.acc('setMail', T('settings.mailCard'), `
       <p style="color:var(--muted);font-size:13px">${T('settings.mailHint')}</p>
       <p><span class="tag" id="mailSrvState">${UI.esc(MAIL.serverLabel())}</span></p>
@@ -297,6 +351,27 @@ Views.settings = async function (mount) {
       </p>`)}
     ${messengerCard()}`;
 
+  // The sidebar is a long list and most coaches only live in three or four of
+  // the modules — this is where they choose which ones stay on it.
+  function menuCard() {
+    const hidden = App.getMenuHidden();
+    const rows = App.ROUTES.map(r => {
+      const fixed = r === 'settings';
+      return `<label class="check-row menu-row">
+        <input type="checkbox" data-menu="${r}" ${hidden.indexOf(r) < 0 || fixed ? 'checked' : ''} ${fixed ? 'disabled' : ''}>
+        <span>${UI.esc(T('nav.' + r))}${fixed ? ` <span class="tag">${T('settings.menuAlways')}</span>` : ''}</span>
+      </label>`;
+    }).join('');
+    return UI.acc('setMenu', T('settings.menuCard'), `
+      <p style="color:var(--muted);font-size:13px">${T('settings.menuHint')}</p>
+      <div class="menu-picker">${rows}</div>
+      <div class="row" style="flex:0;margin-top:10px;flex-wrap:wrap">
+        <button class="btn sm" id="menuAll">${T('settings.shareAll')}</button>
+        <button class="btn sm" id="menuMin">${T('settings.menuMin')}</button>
+      </div>
+      <p class="hint">${T('settings.menuNote')}</p>`);
+  }
+
   function messengerCard() {
     return UI.acc('setMsg', T('sync.messenger'), `
       <p style="color:var(--muted);font-size:13px">${T('sync.messengerDesc')}</p>
@@ -305,7 +380,17 @@ Views.settings = async function (mount) {
 
   UI.bindAcc(mount);
 
-  mount.querySelector('#s_theme').onchange = e => { App.setTheme(e.target.value); };
+  // ---- Module menu ----
+  const menuBoxes = [...mount.querySelectorAll('[data-menu]')];
+  const saveMenu = () => App.setMenuHidden(menuBoxes.filter(b => !b.checked).map(b => b.dataset.menu));
+  menuBoxes.forEach(b => b.onchange = saveMenu);
+  mount.querySelector('#menuAll').onclick = () => { menuBoxes.forEach(b => { b.checked = true; }); saveMenu(); };
+  mount.querySelector('#menuMin').onclick = () => {
+    const keep = ['dashboard', 'training', 'settings'];
+    menuBoxes.forEach(b => { b.checked = keep.indexOf(b.dataset.menu) >= 0 || b.disabled; });
+    saveMenu();
+  };
+
   mount.querySelector('#s_role').onchange = e => { Store.setSetting('role', e.target.value); document.getElementById('roleBadge').textContent = T('role.' + e.target.value); App.render(); };
   const openMsg = mount.querySelector('#openMessenger');
   if (openMsg) openMsg.onclick = () => App.go('messenger');
@@ -328,13 +413,50 @@ Views.settings = async function (mount) {
       UI.toast(T('settings.exported'), 'success');
     } catch (e) { UI.toast(T('settings.exportFailed'), 'error'); }
   };
+
+  // ---- Automatic backup ----
+  async function autoState() {
+    const tag = mount.querySelector('#autoState');
+    if (!tag) return;
+    const min = AUTOBK.minutes();
+    const file = await AUTOBK.hasFile() ? (AUTOBK.fileLabel() || T('settings.autoFileSet')) : T('settings.autoNoFile');
+    const last = AUTOBK.last();
+    tag.textContent = everyLabel(min)
+      + (AUTOBK.supported() ? ' · ' + file : '')
+      + ' · ' + (last ? T('settings.autoLast').replace('{0}', UI.fmtDate(last) + ' ' + new Date(last).toTimeString().slice(0, 5)) : T('settings.autoNever'));
+  }
+  autoState();
+  mount.querySelector('#autoMin').onchange = e => {
+    AUTOBK.setMinutes(e.target.value);
+    UI.toast(+e.target.value ? T('settings.autoOn').replace('{0}', everyLabel(+e.target.value)) : T('settings.autoOffMsg'), 'success');
+    autoState();
+  };
+  const pick = mount.querySelector('#autoPick');
+  if (pick) pick.onclick = async () => {
+    const h = await AUTOBK.chooseFile();
+    if (h) { UI.toast(T('settings.autoFileSet'), 'success'); await AUTOBK.now(); }
+    autoState();
+  };
+  const forget = mount.querySelector('#autoForget');
+  if (forget) forget.onclick = async () => { await AUTOBK.forgetFile(); UI.toast(T('settings.autoNoFile')); autoState(); };
+  mount.querySelector('#autoNow').onclick = async () => {
+    const ok = await AUTOBK.now();
+    UI.toast(ok ? T('settings.exported') : T('settings.exportFailed'), ok ? 'success' : 'error');
+    autoState();
+  };
   mount.querySelector('#importAll').onchange = e => {
     const f = e.target.files[0]; if (!f) return;
     const r = new FileReader();
     r.onload = async () => {
       try {
-        await restoreBackup(JSON.parse(r.result));
-        await Store.loadAll(); UI.toast(T('settings.imported'), 'success'); App.render();
+        const dump = JSON.parse(r.result);
+        await restoreBackup(dump);
+        await Store.loadAll();
+        UI.toast(T('settings.imported'), 'success');
+        // Restored preferences (menu, theme, folds) are read once at start-up,
+        // so a reload is the only way to actually apply them.
+        if (dump && dump.prefs) setTimeout(() => location.reload(), 900);
+        else App.render();
       } catch { UI.toast(T('settings.invalidBackup'), 'error'); }
     };
     r.readAsText(f);

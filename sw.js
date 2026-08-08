@@ -8,7 +8,7 @@
 
    BUMP `VERSION` and the matching `?v=` entries in SHELL whenever an asset changes.
 */
-const VERSION = 'v70';
+const VERSION = 'v103';
 const CACHE = 'sporttactic-' + VERSION;
 
 const SHELL = [
@@ -19,34 +19,36 @@ const SHELL = [
   './oldipads.html',
   './manifest.webmanifest',
   './logo.svg?v=6',
-  './styles.css?v=74',
-  './db.js?v=13',
-  './i18n.js?v=72',
-  './sports.js?v=18',
+  './styles.css?v=87',
+  './db.js?v=14',
+  './i18n.js?v=95',
+  './sports.js?v=20',
   './playbook.js?v=12',
-  './store.js?v=19',
-  './ui.js?v=18',
-  './mail.js?v=10',
-  './ai.js?v=8',
+  './store.js?v=21',
+  './ui.js?v=26',
+  './mail.js?v=11',
+  './ai.js?v=11',
   './dashboard.js?v=16',
-  './teams.js?v=27',
-  './matches.js?v=16',
-  './scouting.js?v=20',
-  './statistics.js?v=21',
+  './teams.js?v=30',
+  './matches.js?v=19',
+  './planner.js?v=1',
+  './scouting.js?v=27',
+  './statistics.js?v=23',
   './chess.js?v=13',
   './bridge.js?v=13',
   './poker.js?v=13',
   './backgammon.js?v=13',
-  './tactics.js?v=52',
+  './tactics.js?v=61',
   './anim.js?v=1',
-  './video.js?v=21',
-  './training.js?v=25',
-  './exercises.js?v=16',
-  './opponents.js?v=17',
-  './reports.js?v=19',
-  './settings.js?v=38',
+  './video.js?v=22',
+  './training.js?v=36',
+  './exercises.js?v=30',
+  './opponents.js?v=19',
+  './reports.js?v=21',
+  './settings.js?v=43',
+  './backup.js?v=1',
   './messenger.js?v=16',
-  './app.js?v=23'
+  './app.js?v=26'
 ];
 
 self.addEventListener('install', e => {
