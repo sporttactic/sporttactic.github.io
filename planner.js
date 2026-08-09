@@ -31,9 +31,12 @@ Views.planner = function (mount) {
                 <td>${UI.esc(e.place || '—')}</td>
                 <td>${UI.esc(e.who || '—')}</td>
                 <td><span class="tag ${e.status === 'done' ? 'green' : e.status === 'cancelled' ? 'warn' : 'amber'}">${UI.esc(T('plannerStatus.' + e.status) !== 'plannerStatus.' + e.status ? T('plannerStatus.' + e.status) : e.status)}</span></td>
-                <td style="text-align:right;white-space:nowrap">
-                  <button class="btn sm" data-edit="${e.id}">${T('common.edit')}</button>
-                  <button class="btn sm danger" data-del="${e.id}">${T('common.delete')}</button>
+                <td style="text-align:right">
+                  <div class="row-acts">
+                    <button class="btn sm" data-show="${e.id}">${T('common.show')}</button>
+                    <button class="btn sm" data-edit="${e.id}">${T('common.edit')}</button>
+                    <button class="btn sm danger" data-del="${e.id}">${T('common.delete')}</button>
+                  </div>
                 </td>
               </tr>`).join('') || `<tr><td colspan="8" class="empty">${T('common.noData')}</td></tr>`}
           </tbody>
@@ -56,6 +59,7 @@ Views.planner = function (mount) {
     mount.querySelector('#addEvent').onclick = () => form();
     const clear = mount.querySelector('#clearPlanner');
     if (clear) clear.onclick = () => clearAll(events);
+    mount.querySelectorAll('[data-show]').forEach(b => b.onclick = () => show(Store.find('planner', b.dataset.show)));
     mount.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => form(Store.find('planner', b.dataset.edit)));
     mount.querySelectorAll('[data-del]').forEach(b => b.onclick = () => UI.confirm(T('planner.delAsk'), async () => {
       await Store.remove('planner', b.dataset.del);
@@ -71,6 +75,33 @@ Views.planner = function (mount) {
       for (const e of events) await Store.remove('planner', e.id);
       UI.toast(T('planner.cleared'));
       render();
+    });
+  }
+
+  // The whole event on one page, for reading out loud at practice.
+  function show(ev) {
+    if (!ev) return;
+    const label = (grp, v) => { const k = grp + '.' + v; const r = T(k); return r === k ? v : r; };
+    const line = (lbl, val) => `<tr><th>${UI.esc(lbl)}</th><td>${UI.esc(val || '\u2014')}</td></tr>`;
+    UI.modal({
+      title: UI.esc(ev.title || T('planner.titleField')),
+      width: 560,
+      body: `
+        <p class="hint" style="margin-top:0">${UI.fmtDate(ev.date)}${ev.time ? ' \u00b7 ' + UI.esc(ev.time) : ''}
+          \u00b7 <span class="tag blue">${UI.esc(label('plannerKind', ev.kind))}</span>
+          <span class="tag ${ev.status === 'done' ? 'green' : ev.status === 'cancelled' ? 'warn' : 'amber'}">${UI.esc(label('plannerStatus', ev.status))}</span></p>
+        <table class="show-table">
+          ${line(T('planner.place'), ev.place)}
+          ${line(T('planner.who'), ev.who)}
+          ${team ? line(T('teams.activeTeam'), team.name) : ''}
+        </table>
+        <h4 style="margin:14px 0 6px">${T('planner.notes')}</h4>
+        <p class="plan-note" style="white-space:pre-wrap">${UI.esc(ev.notes || T('common.noData'))}</p>`,
+      footer: `<button class="btn ghost" data-close2>${T('common.close')}</button><button class="btn primary" data-edit>${T('common.edit')}</button>`,
+      onOpen: (m, close) => {
+        m.querySelector('[data-close2]').onclick = close;
+        m.querySelector('[data-edit]').onclick = () => { close(); form(ev); };
+      }
     });
   }
 

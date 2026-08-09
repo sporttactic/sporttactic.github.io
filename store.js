@@ -14,7 +14,42 @@ const Store = (() => {
   function all(store) { return cache[store] || []; }
   function find(store, id) { return (cache[store] || []).find(x => x.id === id); }
 
+  // ---- Read-only lock ----------------------------------------------------
+  // A backup exported with a pass key opens view-only: the recipient can look
+  // at everything but cannot change it until they type the key. The guard lives
+  // in localStorage because save()/remove() are synchronous entry points and a
+  // settings row would be cleared by the very import that sets the lock.
+  const LOCK_KEY = 'stx_lock';
+  const LOCK_FREE = ['settings'];       // device preferences stay editable
+  let lockGuard = null;
+  try { lockGuard = JSON.parse(localStorage.getItem(LOCK_KEY) || 'null'); } catch (e) { lockGuard = null; }
+  // Boot migrations write too; staying quiet for the first seconds keeps their
+  // blocked writes from throwing a toast in the coach's face on every load.
+  let lockQuiet = true;
+  setTimeout(() => { lockQuiet = false; }, 4000);
+  let lastNag = 0;
+  function locked() { return !!lockGuard; }
+  function lockInfo() { return lockGuard; }
+  function setLock(g) {
+    lockGuard = (g && g.hash) ? g : null;
+    try {
+      if (lockGuard) localStorage.setItem(LOCK_KEY, JSON.stringify(lockGuard));
+      else localStorage.removeItem(LOCK_KEY);
+    } catch (e) { /* private mode */ }
+    emit();
+  }
+  function blockWrite(store) {
+    if (!lockGuard || LOCK_FREE.indexOf(store) >= 0) return false;
+    const now = Date.now();
+    if (!lockQuiet && now - lastNag > 2000 && window.UI && UI.toast) {
+      lastNag = now;
+      UI.toast(window.T ? T('lock.blocked') : 'Read-only copy', 'error');
+    }
+    return true;
+  }
+
   async function save(store, obj) {
+    if (blockWrite(store)) return obj;
     if (!obj.id) obj.id = uid(store.slice(0, 3));
     // Anything a team owns is stamped once, so no view has to remember to do it.
     if (TEAM_SCOPED.indexOf(store) >= 0 && !obj.teamId) obj.teamId = activeTeamId();
@@ -28,9 +63,11 @@ const Store = (() => {
   }
 
   async function remove(store, id) {
+    if (blockWrite(store)) return false;
     await DB.remove(store, id);
     cache[store] = (cache[store] || []).filter(x => x.id !== id);
     emit();
+    return true;
   }
 
   function onChange(fn) { listeners.add(fn); return () => listeners.delete(fn); }
@@ -276,8 +313,14 @@ const Store = (() => {
   const PACK_STORES = {
     exercises: ['exercises'], training: ['training', 'exercises'], tactics: ['tactics'],
     personal: ['personal'], opponents: ['opponents'],
-    matches: ['matches', 'events'], planner: ['planner']
+    matches: ['matches', 'events'], planner: ['planner'],
+    // The team record comes first so the club and season it points at can be found.
+    team: ['teams', 'clubs', 'seasons', 'players', 'coaches'],
+    stats: ['players', 'matches', 'events'], video: ['videos']
   };
+  // A team pack carries its own team record, so its rows must keep the teamId
+  // they arrive with instead of being re-stamped onto the active squad.
+  const SELF_TEAM = ['team'];
   function packKinds() { return Object.keys(PACK_STORES); }
   // opts.teamId narrows the file to ONE squad: team-scoped stores are filtered
   // on teamId, and the events store follows the matches that survived.
@@ -287,9 +330,15 @@ const Store = (() => {
     const teamId = opts && opts.teamId;
     const data = {};
     let keep = null;
+    let mine = null;
     for (const s of stores) {
       let rows = await DB.getAll(s);
       if (teamId && TEAM_SCOPED.indexOf(s) >= 0) rows = rows.filter(r => r.teamId === teamId);
+      if (teamId && s === 'teams') { rows = rows.filter(r => r.id === teamId); mine = rows; }
+      if (mine && (s === 'clubs' || s === 'seasons')) {
+        const want = new Set(mine.map(t => s === 'clubs' ? t.clubId : t.seasonId).filter(Boolean));
+        rows = rows.filter(r => want.has(r.id));
+      }
       if (s === 'matches') keep = new Set(rows.map(r => r.id));
       if (s === 'events' && keep) rows = rows.filter(r => keep.has(r.matchId));
       data[s] = await pack(rows);
@@ -302,13 +351,15 @@ const Store = (() => {
   async function importPack(kind, dump, opts) {
     const stores = PACK_STORES[kind];
     if (!stores) throw new Error('unknown pack');
+    // bulkPut goes straight to the database, so the read-only lock is checked here.
+    if (blockWrite(stores[0])) throw new Error('read-only');
     const teamId = opts && opts.teamId;
     const data = (dump && typeof dump.data === 'object' && dump.data) || dump || {};
     let n = 0;
     for (const s of stores) {
       if (!Array.isArray(data[s])) continue;
       let rows = unpack(data[s]).filter(r => r && typeof r === 'object' && typeof r.id === 'string');
-      if (teamId && TEAM_SCOPED.indexOf(s) >= 0) rows = rows.map(r => Object.assign({}, r, { teamId }));
+      if (teamId && SELF_TEAM.indexOf(kind) < 0 && TEAM_SCOPED.indexOf(s) >= 0) rows = rows.map(r => Object.assign({}, r, { teamId }));
       if (!rows.length) continue;
       await DB.bulkPut(s, rows);
       n += rows.length;
@@ -320,6 +371,7 @@ const Store = (() => {
 
   return {
     uid, loadAll, all, find, save, remove, onChange,
+    locked, lockInfo, setLock,
     getSetting, setSetting, teamStats, playerStats, matchEvents,
     seedIfEmpty, purgeDemoPlayers, purgeSeedDrills,
     players, stampSquadSport,

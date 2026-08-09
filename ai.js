@@ -361,8 +361,9 @@ window.AI = (() => {
       width: 640,
       body: `<p>${esc(T('ai.helpIntro'))}</p>
         <h4>${esc(T('ai.helpStepsTitle'))}</h4>
-        <ol class="ai-guide">${['ai.helpS1', 'ai.helpS2', 'ai.helpS3', 'ai.helpS4', 'ai.helpS5'].map(li).join('')}</ol>
-        <p><a class="btn sm" href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer">${esc(T('ai.helpLink'))}</a></p>
+        <p><a class="btn sm primary" href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer">${esc(T('ai.helpLink'))}</a></p>
+        <ol class="ai-guide ai-steps">${['ai.helpS1', 'ai.helpS2', 'ai.helpS3', 'ai.helpS4', 'ai.helpS5', 'ai.helpS6'].map(li).join('')}</ol>
+        <p class="ai-ready">${esc(T('ai.helpReady'))}</p>
         <h4>${esc(T('ai.helpCostTitle'))}</h4>
         <p>${esc(T('ai.helpCost'))}</p>
         <h4>${esc(T('ai.helpSafeTitle'))}</h4>

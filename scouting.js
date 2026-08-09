@@ -189,11 +189,13 @@ Views.scouting = function (mount, params) {
     }).join('') || `<p style="color:var(--muted)">${T('scout.noEvents')}</p>`}
           </div>`, {
       sub: events.length + ' ' + T('scout.events'),
-      actions: events.length ? `<button class="btn sm danger" id="clearLog">🗑 ${T('scout.clearLog')}</button>` : ''
+      actions: UI.shareBar('matches', { exportLabel: T('scout.exportBtn'), importLabel: T('scout.importBtn') })
+        + (events.length ? `<button class="btn sm danger" id="clearLog">🗑 ${T('scout.clearLog')}</button>` : '')
     })}
       </div>`;
 
     UI.bindAcc(mount);
+    UI.bindShare(mount, 'matches', render, { scoped: true });
     mount.querySelector('#matchSel').onchange = e => { matchId = e.target.value; render(); };
     mount.querySelector('#focusBtn').onclick = focusDialog;
     mount.querySelector('#startBtn').onclick = toggleClock;

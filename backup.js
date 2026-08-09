@@ -80,12 +80,12 @@ window.AUTOBK = (() => {
         const w = await h.createWritable();
         await w.write(json);
         await w.close();
-      } else if (manual || !supported()) {
+      } else if (manual || !h) {
         // No file to write into — hand it to the download folder instead.
-        Backup.download(json, fileName());
+        if (!Backup.download(json, fileName())) { busy = false; return false; }
       } else {
         busy = false;
-        return false;                                  // silent tick, no permission
+        return false;                                  // a file is set but the write was not allowed
       }
       put(K_LAST, Date.now());
       busy = false;

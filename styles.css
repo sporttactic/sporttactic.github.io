@@ -454,6 +454,16 @@ th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--bo
 th { font-size: 12px; text-transform: uppercase; color: var(--muted); font-weight: 600; }
 tr:hover td { background: var(--surface-2); }
 .table-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
+/* Read-only detail table inside a dialog: label column left, value right. */
+.show-table { width: 100%; }
+.show-table th { width: 38%; vertical-align: top; }
+.show-table td { vertical-align: top; }
+/* Read-only badge: a guarded backup can be read but not changed. */
+.lock-badge { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 999px; border: 1px solid var(--warning); background: transparent; color: var(--warning); font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+.lock-badge:hover { background: var(--surface-2); }
+/* Row actions: one button per line, so a long label never squeezes the column. */
+.row-acts { display: flex; flex-direction: column; align-items: stretch; gap: 6px; min-width: 108px; }
+.row-acts > .btn { width: 100%; }
 
 .tag { display: inline-flex; align-items: center; justify-content: center; padding: 2px 8px; border-radius: 12px; font-size: 11px; line-height: 1.45; background: var(--surface-2); border: 1px solid var(--border); white-space: normal; overflow-wrap: break-word; text-align: center; max-width: 100%; }
 .tag.green { color: var(--accent); border-color: var(--accent); }
@@ -562,7 +572,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--primary); }
 .board-actions > * { flex: 0 0 auto; }
 .board-actions input { width: 120px; padding: 6px 8px; font-size: 12px; }
 @media (max-width: 900px) { .board-wrap { grid-template-columns: 1fr; } }
-.tool-panel { display: flex; flex-direction: column; gap: 8px; max-height: calc(100vh - 160px); overflow-y: auto; }
+.tool-panel { display: flex; flex-direction: column; gap: 8px; max-height: calc(100vh - 160px); overflow-y: auto; overscroll-behavior: contain; }
 .board-stage { min-width: 0; display: flex; flex-direction: column; align-items: center; }
 .tool-group { display: flex; flex-wrap: wrap; gap: 6px; }
 .tool-btn { flex: 1; min-width: 44px; padding: 8px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface-2); cursor: pointer; text-align: center; }
@@ -578,11 +588,16 @@ input:focus, select:focus, textarea:focus { border-color: var(--primary); }
   -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
 /* Fullscreen board — also used as a plain CSS overlay on iPadOS, which has no element Fullscreen API */
 body.board-fs { overflow: hidden; }
-.board-wrap.fs { position: fixed; inset: 0; z-index: 200; background: var(--bg); overflow: hidden; grid-template-columns: 240px minmax(0, 1fr);
+.board-wrap.fs { position: fixed; inset: 0; z-index: 200; background: var(--bg); overflow: hidden; overscroll-behavior: contain; grid-template-columns: 240px minmax(0, 1fr);
   padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); }
 .board-wrap.fs .board-stage { justify-content: center; }
 .board-wrap.fs #tacticalCanvas { max-height: calc(100vh - 60px); }
 .board-wrap.fs .board-side { flex-basis: 158px; width: 158px; }
+/* The pinned board is only left through this button — a stray drag or swipe
+   that drops the browser out of fullscreen keeps the CSS pin instead. */
+#fsExit { position: fixed; top: 10px; right: 12px; z-index: 210; opacity: .55; }
+#fsExit:hover, #fsExit:focus { opacity: 1; }
+.board-wrap:not(.fs) #fsExit, .board-wrap.fs.zen #fsExit { display: none; }
 
 /* Board only: the court and the players, nothing else — made for an iPad.
    It pins itself rather than relying on the Fullscreen API, which iPadOS
@@ -677,6 +692,11 @@ body.board-fs { overflow: hidden; }
 .anim-select option:disabled { color: var(--muted); }
 .frames-anim .tool-group.anim-acts { flex-direction: row; gap: 4px; }
 .anim-acts #animLoad { flex: 1; min-width: 0; }
+/* The same drawing tools as the left panel, sized for the narrow board column. */
+#framesToolsWrap { display: flex; flex-direction: column; gap: 6px; }
+#framesTools.tool-group { display: grid; grid-template-columns: repeat(auto-fill, minmax(50px, 1fr)); gap: 4px; align-items: stretch; }
+#framesTools .tool-btn { flex: none; min-width: 0; display: flex; align-items: center; justify-content: center; min-height: 30px; padding: 4px 3px; font-size: 11px; line-height: 1.15; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.frames-anim .tool-group#framesColors { flex-direction: row; flex-wrap: wrap; }
 #magnetWrap .check-row, #facingWrap .check-row { margin: 4px 0 0; align-items: flex-start; }
 #magnetWrap .check-row span, #facingWrap .check-row span { font-size: 12px; line-height: 1.25; }
 #magnetWrap .hint, #facingWrap .hint { margin: 4px 0 0; font-size: 11px; }
@@ -865,6 +885,9 @@ body.board-fs { overflow: hidden; }
 @media (max-width: 640px) { .ai-ask { flex-direction: column; } }
 .ai-guide { margin: 6px 0 12px; padding-left: 20px; color: var(--text); font-size: 13px; line-height: 1.5; }
 .ai-guide li { margin-bottom: 6px; }
+.ai-steps { font-size: 14px; line-height: 1.6; }
+.ai-steps li { margin-bottom: 10px; }
+.ai-ready { margin: 4px 0 14px; padding: 8px 12px; border-left: 3px solid var(--accent); background: var(--surface-2); border-radius: 8px; font-weight: 600; }
 .ai-fig { margin: 8px 0; padding: 8px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
 .ai-fig svg { display: block; width: 100%; max-height: 320px; height: auto; }
 .injury-note { margin-top: 6px; max-width: 240px; font-size: 12px; line-height: 1.4; color: var(--muted); white-space: normal; }
@@ -916,6 +939,7 @@ body { overscroll-behavior-y: contain; }
   .btn.sm { padding: 9px 12px; font-size: 13px; }
   .tool-btn { min-height: 46px; display: flex; align-items: center; justify-content: center; }
   #tools .tool-btn, #props .tool-btn { min-height: 46px; }
+  #framesTools .tool-btn { min-height: 40px; }
   .sport-btn { min-height: 48px; }
   .event-btn { min-height: 52px; display: flex; align-items: center; justify-content: center; text-align: center; }
   .play-item { padding: 12px; }

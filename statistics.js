@@ -45,10 +45,13 @@ Views.statistics = function (mount) {
               <td>${s.turnovers}</td>
               <td>${s.saves}</td>
               <td><span class="tag ${s.rating >= 7 ? 'green' : s.rating >= 5 ? 'amber' : 'red'}">${s.rating}</span></td>
-              <td style="white-space:nowrap">
-                <button class="btn sm" data-pdf="${p.id}" title="${UI.esc(T('stats.playerPdf'))}">⬇ ${T('reports.pdf')}</button>
-                <button class="btn sm" data-chat="${p.id}" title="${UI.esc(T('chat.title'))}">💬</button>
-                <button class="btn sm" data-aip="${p.id}" title="${UI.esc(T('stats.aiPlayer'))}">🤖 ${T('stats.aiTrain')}</button></td>
+              <td>
+                <div class="row-acts">
+                  <button class="btn sm" data-pdf="${p.id}" title="${UI.esc(T('stats.playerPdf'))}">⬇ ${T('reports.pdf')}</button>
+                  <button class="btn sm" data-chat="${p.id}" title="${UI.esc(T('chat.title'))}">💬 ${T('chat.chat')}</button>
+                  <button class="btn sm" data-aip="${p.id}" title="${UI.esc(T('stats.aiPlayer'))}">🤖 ${T('stats.aiTrain')}</button>
+                </div>
+              </td>
             </tr>`).join('') || `<tr><td colspan="11" class="empty">${T('common.noData')}</td></tr>`}
         </tbody>
       </table>
@@ -59,10 +62,12 @@ Views.statistics = function (mount) {
     <div class="page-head"><div><h1>${T('stats.title')}</h1><p>${T('stats.subtitle')}</p></div></div>
     ${UI.acc('statSeason', T('stats.season'), cards)}
     ${UI.acc('statBoard', T('stats.leaderboard'), board, {
-    actions: `<button class="btn sm" id="chatBoard">💬 ${T('chat.title')}</button>`
+    actions: UI.shareBar('stats', { exportLabel: T('stats.exportBtn'), importLabel: T('stats.importBtn') })
+      + `<button class="btn sm" id="chatBoard">💬 ${T('chat.title')}</button>`
   })}`;
 
   UI.bindAcc(mount);
+  UI.bindShare(mount, 'stats', () => App.render(), { scoped: true });
   AI.bind(mount);
 
   // One player on one page: profile, season totals and every event they were

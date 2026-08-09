@@ -263,6 +263,18 @@ const App = (() => {
     setInterval(() => { ind.textContent = T('autosave.auto'); setTimeout(() => ind.textContent = T('autosave.saved'), 1500); }, 30000);
   }
 
+  // A backup exported with a pass key opens read-only; the badge is the way back.
+  function refreshLockBadge() {
+    const b = document.getElementById('lockBadge');
+    if (!b) return;
+    const on = Store.locked();
+    b.classList.toggle('hidden', !on);
+    if (!on) return;
+    b.querySelector('span').textContent = T('lock.badge');
+    b.title = T('lock.cardHint');
+    b.onclick = () => { if (window.Backup && Backup.unlock) Backup.unlock(); };
+  }
+
   async function boot() {
     await Store.loadAll();
     await Store.seedIfEmpty();
@@ -286,6 +298,8 @@ const App = (() => {
     populateTeamPicker();
     applyNav();
     bindChrome();
+    refreshLockBadge();
+    Store.onChange(refreshLockBadge);
     startAutosave();
     if (window.AUTOBK) AUTOBK.start();   // unattended backups, if the coach turned them on
     go('dashboard');

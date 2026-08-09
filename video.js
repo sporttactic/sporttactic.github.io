@@ -162,6 +162,7 @@ Views.video = function (mount) {
           <span class="tool-group">
             <button class="btn sm primary" id="exportWebm">${T('video.exportWebm')}</button>
             <button class="btn sm primary" id="exportMp4">${T('video.exportMp4')}</button>
+            ${UI.shareBar('video', { exportLabel: T('video.exportBtn'), importLabel: T('video.importBtn') })}
           </span>
         </div>
         <p class="hint" style="margin:6px 0 4px">${T('video.bmEmpty')}</p>
@@ -178,6 +179,8 @@ Views.video = function (mount) {
     ${UI.acc('videoPlayer', T('video.player'), playerPanel)}`;
 
   UI.bindAcc(mount);
+  // An imported bookmark file replaces the list, so it is re-read before drawing.
+  UI.bindShare(mount, 'video', () => { loadBookmarks(); renderBm(); });
 
   const wrap = mount.querySelector('#mediaWrap');
   const localControls = mount.querySelector('#localControls');

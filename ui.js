@@ -348,6 +348,8 @@ const UI = (() => {
       const f = e.target.files[0];
       e.target.value = '';
       if (!f) return;
+      // A read-only copy says so plainly instead of blaming the file.
+      if (Store.locked && Store.locked()) return toast(tr('lock.blocked', 'Read-only copy'), 'error');
       const r = new FileReader();
       r.onload = async () => {
         try {

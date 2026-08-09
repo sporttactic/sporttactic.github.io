@@ -12,7 +12,9 @@ const BACKUP_FORMAT = 2;
 // half-configured app, so they travel with it — except the OpenAI key, which is
 // a credential and must never end up in a file that gets mailed around.
 const PREF_PREFIX = 'stx_';
-const PREF_SECRETS = ['stx_ai_key'];
+// stx_lock is decided by the guard inside the file being imported, never by a
+// preference copied out of someone else's device.
+const PREF_SECRETS = ['stx_ai_key', 'stx_lock'];
 function readPrefs() {
   const out = {};
   try {
@@ -66,15 +68,75 @@ async function restoreBackup(dump) {
     await DB.bulkPut(s, Store.unpack(data[s]));
   }
   writePrefs(dump.prefs);
+  // A file exported with a pass key opens read-only; an ordinary one hands the
+  // device back its full editing rights.
+  Store.setLock(dump.guard && dump.guard.readOnly ? dump.guard : null);
 }
 function downloadJson(json, name) {
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([json], { type: 'application/json' }));
-  a.download = name; a.click();
-  setTimeout(() => URL.revokeObjectURL(a.href), 20000);
+  let url = '';
+  try {
+    url = URL.createObjectURL(new Blob([json], { type: 'application/json' }));
+    const a = document.createElement('a');
+    a.href = url; a.download = name; a.rel = 'noopener'; a.style.display = 'none';
+    // Firefox and iPadOS ignore a click on an anchor that is not in the document.
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    return true;
+  } catch (e) { return false; }
+  finally { if (url) setTimeout(() => URL.revokeObjectURL(url), 20000); }
 }
 // The unattended backup timer lives in backup.js and needs these two.
-window.Backup = { build: buildBackup, restore: restoreBackup, download: downloadJson };
+window.Backup = { build: buildBackup, restore: restoreBackup, download: downloadJson, unlock: unlockDialog };
+
+// ---- Pass key ------------------------------------------------------------
+// A backup can be exported with a pass key. It then opens read-only wherever it
+// is imported, and only someone who knows the key can switch editing back on.
+// The key itself never travels — only a PBKDF2 hash of it and its salt.
+const GUARD_ITER = 310000;
+const cryptoOk = () => !!(window.crypto && crypto.subtle && crypto.getRandomValues);
+function b64(buf) { let s = ''; new Uint8Array(buf).forEach(b => { s += String.fromCharCode(b); }); return btoa(s); }
+function unb64(s) { return Uint8Array.from(atob(s), c => c.charCodeAt(0)); }
+async function guardHash(key, salt) {
+  const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(key), 'PBKDF2', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt, iterations: GUARD_ITER, hash: 'SHA-256' }, base, 256);
+  return b64(bits);
+}
+async function makeGuard(key) {
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  return { v: 1, readOnly: true, salt: b64(salt), hash: await guardHash(key, salt) };
+}
+async function checkGuard(guard, key) {
+  if (!guard || !guard.salt || !guard.hash || !cryptoOk()) return false;
+  try { return await guardHash(key, unb64(guard.salt)) === guard.hash; } catch (e) { return false; }
+}
+function unlockDialog(onDone) {
+  const guard = Store.lockInfo();
+  UI.modal({
+    title: T('lock.unlockTitle'),
+    width: 480,
+    body: `<p>${UI.esc(T('lock.unlockIntro'))}</p>
+      <label class="field"><span>${UI.esc(T('lock.key'))}</span>
+        <input id="lockKey" type="password" autocomplete="off" spellcheck="false"></label>
+      <p class="hint">${UI.esc(T('lock.unlockHint'))}</p>`,
+    footer: `<button class="btn ghost" data-close2>${T('common.cancel')}</button>
+      <button class="btn primary" data-go>${UI.esc(T('lock.unlock'))}</button>`,
+    onOpen: (m, close) => {
+      const inp = m.querySelector('#lockKey');
+      inp.focus();
+      const go = async () => {
+        if (!await checkGuard(guard, inp.value)) return UI.toast(T('lock.wrong'), 'error');
+        Store.setLock(null);
+        close();
+        UI.toast(T('lock.unlocked'), 'success');
+        if (typeof onDone === 'function') onDone(); else App.render();
+      };
+      inp.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); go(); } });
+      m.querySelector('[data-close2]').onclick = close;
+      m.querySelector('[data-go]').onclick = go;
+    }
+  });
+}
 
 // ---- "Send to Coach": pick what actually leaves the device ---------------
 // Grouped the way a coach thinks about the data, not the way it is stored.
@@ -86,6 +148,77 @@ const SHARE_GROUPS = [
   { id: 'opponents', stores: ['opponents'], key: 'settings.shareGOpponents', def: 'Opponent analysis' },
   { id: 'reports', stores: ['reports'], key: 'settings.shareGReports', def: 'Saved reports' }
 ];
+// A backup is the whole app, so it offers the three blocks a mailed share does not.
+const EXPORT_GROUPS = SHARE_GROUPS.concat([
+  { id: 'tactics', stores: ['tactics'], key: 'tactics.savedAnims', def: 'Saved animations' },
+  { id: 'planner', stores: ['planner'], key: 'nav.planner', def: 'Event planner' },
+  { id: 'video', stores: ['videos'], key: 'nav.video', def: 'Video bookmarks' }
+]);
+
+// ---- Export Backup: pick what travels, and whether it can be edited ------
+function exportDialog() {
+  const tt = (k, f) => { const r = T(k); return r === k ? f : r; };
+  const count = g => g.stores.reduce((n, s) => n + (Store.all(s) || []).length, 0);
+  const row = g => {
+    const n = count(g);
+    return `<label class="check-row share-row">
+      <input type="checkbox" data-grp="${g.id}" ${n ? 'checked' : ''} ${n ? '' : 'disabled'}>
+      <span>${UI.esc(tt(g.key, g.def))}
+        ${g.sensitive ? `<span class="tag warn">${UI.esc(tt('settings.shareSensitive', 'personal data'))}</span>` : ''}
+        <span class="share-n">${n ? n + ' ' + UI.esc(tt('settings.shareRecords', 'records')) : UI.esc(tt('settings.shareEmpty', 'nothing saved yet'))}</span>
+      </span>
+    </label>`;
+  };
+  UI.modal({
+    title: T('settings.exportBackup'),
+    width: 620,
+    body: `<p>${UI.esc(T('settings.exportIntro'))}</p>
+      <div class="row" style="flex:0;margin-bottom:6px">
+        <button type="button" class="btn sm" data-all>${UI.esc(tt('settings.shareAll', 'Select all'))}</button>
+        <button type="button" class="btn sm" data-none>${UI.esc(tt('settings.shareNone', 'Select none'))}</button>
+      </div>
+      ${EXPORT_GROUPS.map(row).join('')}
+      <label class="field" style="margin-top:12px"><span>${UI.esc(T('settings.exportKey'))}</span>
+        <input id="exp_key" type="password" autocomplete="off" spellcheck="false" placeholder="${UI.esc(T('settings.exportKeyPh'))}" ${Store.locked() ? 'disabled' : ''}>
+        <span class="hint">${UI.esc(Store.locked() ? T('settings.exportStaysLocked') : T('settings.exportKeyHint'))}</span></label>
+      ${cryptoOk() ? '' : `<p class="hint mail-note">${UI.esc(T('settings.exportNoCrypto'))}</p>`}
+      <p class="hint" id="expTotal"></p>`,
+    footer: `<button class="btn ghost" data-close2>${T('common.cancel')}</button>
+      <button class="btn primary" data-go>${UI.esc(tt('settings.shareDownload', 'Download file'))}</button>`,
+    onOpen: (m, close) => {
+      const boxes = [...m.querySelectorAll('[data-grp]')];
+      const chosen = () => EXPORT_GROUPS.filter(g => { const b = boxes.find(x => x.dataset.grp === g.id); return b && b.checked && !b.disabled; });
+      const total = () => {
+        const picked = chosen();
+        const n = picked.reduce((sum, g) => sum + count(g), 0);
+        m.querySelector('#expTotal').textContent = n + ' ' + tt('settings.shareRecords', 'records') + ' \u00b7 ' + picked.length + '/' + EXPORT_GROUPS.length;
+        m.querySelector('[data-go]').disabled = !picked.length;
+      };
+      boxes.forEach(b => b.onchange = total);
+      m.querySelector('[data-all]').onclick = () => { boxes.forEach(b => { if (!b.disabled) b.checked = true; }); total(); };
+      m.querySelector('[data-none]').onclick = () => { boxes.forEach(b => b.checked = false); total(); };
+      total();
+      m.querySelector('[data-close2]').onclick = close;
+      m.querySelector('[data-go]').onclick = async () => {
+        const picked = chosen();
+        if (!picked.length) return;
+        const key = m.querySelector('#exp_key').value.trim();
+        if (key && key.length < 4) return UI.toast(T('settings.exportKeyShort'), 'error');
+        if (key && !cryptoOk()) return UI.toast(T('settings.exportNoCrypto'), 'error');
+        // Everything ticked means a true whole-app backup, preferences included.
+        const whole = EXPORT_GROUPS.every(g => !count(g) || picked.indexOf(g) >= 0);
+        try {
+          const dump = await buildBackup(whole ? [] : [...new Set(picked.flatMap(g => g.stores))]);
+          if (key) dump.guard = await makeGuard(key);
+          else if (Store.locked()) dump.guard = Store.lockInfo();   // a read-only copy stays read-only
+          downloadJson(JSON.stringify(dump, null, 2), 'sporttactic-backup-' + new Date().toISOString().slice(0, 10) + '.json');
+          close();
+          UI.toast(key || Store.locked() ? T('settings.exportedLocked') : T('settings.exported'), 'success');
+        } catch (e) { UI.toast(T('settings.exportFailed'), 'error'); }
+      };
+    }
+  });
+}
 
 // ---- The readable report ------------------------------------------------
 // What gets mailed is written for a person, not for a parser: the file download
@@ -314,6 +447,9 @@ Views.settings = async function (mount) {
 
   mount.innerHTML = `
     <div class="page-head"><div><h1>${T('settings.title')}</h1><p>${T('settings.subtitle')}</p></div></div>
+    ${Store.locked() ? UI.acc('setLock', '🔒 ' + T('lock.title'), `
+      <p style="color:var(--muted);font-size:13px">${T('lock.cardHint')}</p>
+      <button class="btn primary" id="unlockBtn">🔓 ${T('lock.unlock')}</button>`) : ''}
     ${menuCard()}
     ${UI.acc('setRole', T('settings.roleAccess'), `
       <label class="field"><span>${T('settings.activeRole')}</span><select id="s_role">${['Super Admin', 'Club Admin', 'Coach', 'Analyst', 'Player'].map(r => `<option value="${r}" ${r === role ? 'selected' : ''}>${T('role.' + r)}</option>`).join('')}</select></label>
@@ -406,13 +542,9 @@ Views.settings = async function (mount) {
     UI.toast(T('settings.csvSaved'), 'success');
   };
 
-  mount.querySelector('#exportAll').onclick = async () => {
-    try {
-      const json = JSON.stringify(await buildBackup(), null, 2);
-      downloadJson(json, 'sporttactic-backup-' + new Date().toISOString().slice(0, 10) + '.json');
-      UI.toast(T('settings.exported'), 'success');
-    } catch (e) { UI.toast(T('settings.exportFailed'), 'error'); }
-  };
+  mount.querySelector('#exportAll').onclick = () => exportDialog();
+  const unlockBtn = mount.querySelector('#unlockBtn');
+  if (unlockBtn) unlockBtn.onclick = () => unlockDialog();
 
   // ---- Automatic backup ----
   async function autoState() {
@@ -452,10 +584,10 @@ Views.settings = async function (mount) {
         const dump = JSON.parse(r.result);
         await restoreBackup(dump);
         await Store.loadAll();
-        UI.toast(T('settings.imported'), 'success');
+        UI.toast(dump && dump.guard ? T('lock.imported') : T('settings.imported'), 'success');
         // Restored preferences (menu, theme, folds) are read once at start-up,
         // so a reload is the only way to actually apply them.
-        if (dump && dump.prefs) setTimeout(() => location.reload(), 900);
+        if (dump && (dump.prefs || dump.guard)) setTimeout(() => location.reload(), 900);
         else App.render();
       } catch { UI.toast(T('settings.invalidBackup'), 'error'); }
     };
@@ -464,6 +596,8 @@ Views.settings = async function (mount) {
   mount.querySelector('#emailAll').onclick = () => shareDialog();
   mount.querySelector('#wipe').onclick = () => UI.confirm(T('settings.resetConfirm'), async () => {
     for (const s of DB.STORES) await DB.clear(s);
+    // Wiping everything also hands a read-only device back to its owner.
+    Store.setLock(null);
     await Store.loadAll(); await Store.seedIfEmpty(); UI.toast(T('settings.resetDone'), 'success'); App.render();
   });
 };

@@ -167,6 +167,7 @@ Views.tactics = function (mount) {
     </div>
     <div class="board-wrap" id="boardWrap">
       <button class="btn sm" id="zenExit">✕ ${T('tactics.boardOnlyExit')}</button>
+      <button class="btn sm" id="fsExit">✕ ${T('tactics.exitFullscreen')}</button>
       <div class="tool-panel card">
         <h3>${T('tactics.sport')}</h3>
         <div class="tool-group sport-group" id="sports">
@@ -238,6 +239,13 @@ Views.tactics = function (mount) {
               <button class="btn sm primary" id="recFramesBtn">● ${T('tactics.recFrames')}</button>
               <button class="btn sm" id="saveAnim">＋ ${T('tactics.saveAnim')}</button>
             </div>
+            <div id="framesToolsWrap">
+              <h4 class="anim-head">${T('tactics.tools')}</h4>
+              <div class="tool-group" id="framesTools"></div>
+              <div class="tool-group prop-colors" id="framesColors">
+                ${BOARD_COLORS.map(c => `<div class="tool-btn" data-color="${c}" style="background:${c}"></div>`).join('')}
+              </div>
+            </div>
             <h4 class="anim-head">${T('tactics.savedAnims')} <span class="tag" id="animCount">0</span></h4>
             <select class="anim-select" id="animList" size="6" aria-label="${T('tactics.savedAnims')}"></select>
             <div class="tool-group anim-acts">
@@ -247,6 +255,7 @@ Views.tactics = function (mount) {
               <button class="btn sm" id="animVideo" disabled title="${T('tactics.animPlayVideo')}">▶</button>
               <button class="btn sm danger" id="animDel" disabled title="${T('common.delete')}">✕</button>
             </div>
+            <button class="btn sm" id="animPlayAll" title="${T('tactics.animPlayAllHint')}">▶▶ ${T('tactics.animPlayAll')}</button>
             <div><span id="recDot" class="rec-dot hidden">REC <span id="recTime">0:00</span> · <span id="frameCount">0</span> ${T('tactics.framesCaptured')}</span></div>
             <div id="recExport" class="rec-export hidden"></div>
             <div id="clipWrap">
@@ -1063,10 +1072,13 @@ Views.tactics = function (mount) {
       if (dist(p, press.start) > MOVE_TOL) {
         press.moved = true;
         if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
-        if (press.grab) {
+        // Holding puts a player in focus, so the drag that follows moves THAT
+        // player — not the ball or a prop that happens to lie on top of them.
+        const target = (press.long && press.o) || press.grab;
+        if (target) {
           if (press.o) selectedId = press.o.id;
           if (!press.hist) { pushHistory(); press.hist = true; }
-          drag = press.grab;
+          drag = target;
           if (autoRec) { autoRec.last = null; autoRec.sampled = false; }
         } else if (press.shape) {
           if (!press.hist) { pushHistory(); press.hist = true; }
@@ -1222,8 +1234,16 @@ Views.tactics = function (mount) {
       draw(); renderTimeline();
     };
     // Keep the active frame visible when the grid overflows (e.g. many auto-frames).
+    // Scroll the grid by hand — scrollIntoView() would also scroll #boardSide, so
+    // picking a saved animation dragged the whole side column down every time.
+    const grid = tl.querySelector('.tl-grid');
     const activeChip = tl.querySelector('.frame-chip.active');
-    if (activeChip && activeChip.scrollIntoView) activeChip.scrollIntoView({ block: 'nearest' });
+    if (grid && activeChip && grid.scrollHeight > grid.clientHeight + 1) {
+      const g = grid.getBoundingClientRect();
+      const c = activeChip.getBoundingClientRect();
+      if (c.top < g.top) grid.scrollTop += c.top - g.top;
+      else if (c.bottom > g.bottom) grid.scrollTop += c.bottom - g.bottom;
+    }
   }
 
   // Animation — whistle resets & replays on every start
@@ -1398,27 +1418,65 @@ Views.tactics = function (mount) {
   // iPadOS Safari has no Fullscreen API for regular elements, so when the call
   // is unavailable we simply pin .board-wrap over the viewport with CSS.
   let fauxFs = false;
+  let wantFs = false;                               // set only by the coach's own toggle
   function fsElement() { return document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || null; }
   function fsActive() { return !!fsElement() || fauxFs; }
-  function toggleFullscreen() {
+  function enterFullscreen() {
+    wantFs = true;
     const el = mount.querySelector('#boardWrap');
-    const req = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen;
-    if (!fsActive()) {
-      if (req) { Promise.resolve(req.call(el)).catch(() => { fauxFs = true; onFsChange(); }); return; }
-      fauxFs = true; onFsChange(); return;
-    }
-    if (fsElement()) (document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen || function () {}).call(document);
-    else { fauxFs = false; onFsChange(); }
+    const req = el && (el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen);
+    if (req) { Promise.resolve(req.call(el)).catch(() => { fauxFs = true; onFsChange(); }); return; }
+    fauxFs = true; onFsChange();
   }
+  function exitFullscreen() {
+    wantFs = false; fauxFs = false;
+    if (fsElement()) (document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen || function () {}).call(document);
+    else onFsChange();
+  }
+  function toggleFullscreen() { if (fsActive()) exitFullscreen(); else enterFullscreen(); }
   function onFsChange() {
     const wrap = mount.querySelector('#boardWrap');
     const btn = mount.querySelector('#fullscreenBtn');
     if (fsElement()) fauxFs = false;
+    // A stray gesture — a drag on a panel that turns into a page scroll, a swipe
+    // from the screen edge, Escape — drops the browser out of its own fullscreen.
+    // Stay pinned with CSS instead: the board is only left through its ✕ button.
+    else if (wantFs) fauxFs = true;
     const on = fsActive();
     if (wrap) wrap.classList.toggle('fs', on);
     document.body.classList.toggle('board-fs', on || zen);
     if (btn) btn.textContent = on ? '⛶ ' + T('tactics.exitFullscreen') : '⛶ ' + T('tactics.fullscreen');
     fitCanvas();
+  }
+
+  // While the board is pinned a touch drag must stay inside whichever panel it
+  // started in — once it reaches the page it becomes a native scroll, and that
+  // is what tips the board out of fullscreen.
+  let panelTouchY = 0;
+  function scrollableUnder(node, dy) {
+    const wrap = mount.querySelector('#boardWrap');
+    if (!wrap) return null;
+    for (let el = node; el && el.nodeType === 1 && el !== wrap.parentElement; el = el.parentElement) {
+      const oy = getComputedStyle(el).overflowY;
+      if (oy !== 'auto' && oy !== 'scroll') continue;
+      const room = el.scrollHeight - el.clientHeight;
+      if (room < 2) continue;
+      if (dy < 0 ? el.scrollTop < room - 1 : el.scrollTop > 0) return el;
+    }
+    return null;
+  }
+  function onPanelTouchStart(e) { if (e.touches && e.touches.length === 1) panelTouchY = e.touches[0].clientY; }
+  function onPanelTouchMove(e) {
+    if (!fsActive() || !e.cancelable || !e.touches || e.touches.length !== 1) return;
+    const y = e.touches[0].clientY;
+    const dy = y - panelTouchY;
+    panelTouchY = y;
+    if (!scrollableUnder(e.target, dy)) e.preventDefault();
+  }
+  const boardWrapEl = mount.querySelector('#boardWrap');
+  if (boardWrapEl) {
+    boardWrapEl.addEventListener('touchstart', onPanelTouchStart, { passive: true });
+    boardWrapEl.addEventListener('touchmove', onPanelTouchMove, { passive: false });
   }
 
   // Board only: the court and the players, nothing else. It pins itself with CSS
@@ -1502,18 +1560,20 @@ Views.tactics = function (mount) {
     return ALL_TOOLS.slice(); // team sports: all tools
   }
   function renderTools() {
-    const cont = mount.querySelector('#tools');
-    if (!cont) return;
+    const conts = [...mount.querySelectorAll('#tools, #framesTools')];
+    if (!conts.length) return;
     const allowed = toolIdsFor(sportId);
     if (tool !== 'prop' && !allowed.includes(tool)) { tool = 'select'; aim = null; }
-    cont.innerHTML = ALL_TOOLS.filter(t => allowed.includes(t))
+    const html = ALL_TOOLS.filter(t => allowed.includes(t))
       .map(t => `<div class="tool-btn ${t === tool ? 'active' : ''}" data-tool="${t}" title="${UI.esc(T('toolTip.' + t))}">${UI.esc(T('tool.' + t))}</div>`).join('');
-    cont.querySelectorAll('[data-tool]').forEach(b => b.onclick = () => {
-      tool = b.dataset.tool; pendingProp = null; aim = null; cueCharge = null;
-      if (chargeTimer) { clearInterval(chargeTimer); chargeTimer = null; }
-      cont.querySelectorAll('[data-tool]').forEach(x => x.classList.toggle('active', x === b));
-      mount.querySelectorAll('#props [data-prop]').forEach(x => x.classList.remove('active'));
-      draw();
+    conts.forEach(cont => {
+      cont.innerHTML = html;
+      cont.querySelectorAll('[data-tool]').forEach(b => b.onclick = () => {
+        pendingProp = null; cueCharge = null;
+        if (chargeTimer) { clearInterval(chargeTimer); chargeTimer = null; }
+        setTool(b.dataset.tool);            // keeps both palettes in step
+        draw();
+      });
     });
     const hint = mount.querySelector('#toolHint');
     if (hint) hint.textContent = isCueSport() ? T('tactics.hintCue') : (sportId === 'darts' ? T('tactics.hintDarts') : T('tactics.hint'));
@@ -1521,7 +1581,7 @@ Views.tactics = function (mount) {
   // Switch tools from code and keep the palette highlight in step.
   function setTool(t) {
     tool = t; aim = null; pendingProp = null;
-    mount.querySelectorAll('#tools [data-tool]').forEach(x => x.classList.toggle('active', x.dataset.tool === t));
+    mount.querySelectorAll('[data-tool]').forEach(x => x.classList.toggle('active', x.dataset.tool === t));
     mount.querySelectorAll('#props [data-prop]').forEach(x => x.classList.remove('active'));
   }
   // Sport-category based training props (cones, ladders, mini-goals…). Selecting
@@ -1543,7 +1603,7 @@ Views.tactics = function (mount) {
     }).join('');
     cont.querySelectorAll('[data-prop]').forEach(b => b.onclick = () => {
       tool = 'prop'; pendingProp = b.dataset.prop; aim = null;
-      mount.querySelectorAll('#tools [data-tool]').forEach(x => x.classList.remove('active'));
+      mount.querySelectorAll('[data-tool]').forEach(x => x.classList.remove('active'));
       cont.querySelectorAll('[data-prop]').forEach(x => x.classList.toggle('active', x === b));
       draw();
     });
@@ -1563,6 +1623,7 @@ Views.tactics = function (mount) {
   mount.querySelectorAll('[data-sport]').forEach(b => b.onclick = () => {
     sportId = b.dataset.sport;
     if (window.App && App.setSport) App.setSport(sportId, true);
+    stopPlayAll();
     stopAnimation();
     current = loadOrNew();
     courtMode = current.courtMode || 'full';
@@ -1579,8 +1640,7 @@ Views.tactics = function (mount) {
   });
   mount.querySelectorAll('[data-color]').forEach(b => b.onclick = () => {
     color = b.dataset.color;
-    mount.querySelectorAll('[data-color]').forEach(x => x.style.outline = '');
-    b.style.outline = '2px solid var(--primary)';
+    mount.querySelectorAll('[data-color]').forEach(x => x.style.outline = x.dataset.color === color ? '2px solid var(--primary)' : '');
   });
   // Training props carry their own colour, so gear can be tinted without
   // changing the colour the drawing tools use.
@@ -1614,7 +1674,7 @@ Views.tactics = function (mount) {
     try { localStorage.setItem('tacticsCourtSize', String(courtScale)); } catch (e) { }
     fitCanvas();
   };
-  mount.querySelector('#playAnim').onclick = () => playAnimation();
+  mount.querySelector('#playAnim').onclick = () => { stopPlayAll(); playAnimation(); };
   mount.querySelector('#clearShapes').onclick = () => { pushHistory(); frame().shapes = []; draw(); if (autoRec) captureAutoFrame(); };
   const addNameBtn = mount.querySelector('#addNameBtn');
   if (addNameBtn) addNameBtn.onclick = () => { if (naming) commitName(); else startNaming(); };
@@ -1718,6 +1778,7 @@ Views.tactics = function (mount) {
     UI.toast(T('tactics.resetDone'), 'success');
   });
   mount.querySelector('#fullscreenBtn').onclick = toggleFullscreen;
+  mount.querySelector('#fsExit').onclick = () => exitFullscreen();
   mount.querySelector('#zenBtn').onclick = () => setZen(!zen);
   mount.querySelector('#zenExit').onclick = () => setZen(false);
   mount.querySelector('#savePlay').onclick = async () => {
@@ -1766,15 +1827,55 @@ Views.tactics = function (mount) {
     mount.querySelector('#animDel').disabled = !id;
     mount.querySelector('#animShare').disabled = !id;
     mount.querySelector('#animVideo').disabled = !(opt && opt.dataset.vid);
+    const all = mount.querySelector('#animPlayAll');
+    if (all) all.disabled = !userSystems().length;
+    updatePlayAllBtn();
+  }
+  // Play the saved animations one after another: load one, run it to the end,
+  // then move on to the next entry in the list.
+  let playQueue = null;
+  let queueTimer = null;
+  function updatePlayAllBtn() {
+    const b = mount.querySelector('#animPlayAll');
+    if (!b) return;
+    b.textContent = playQueue ? '■ ' + T('tactics.stop') : '▶▶ ' + T('tactics.animPlayAll');
+    b.classList.toggle('danger', !!playQueue);
+  }
+  function stopPlayAll() {
+    playQueue = null;
+    if (queueTimer) { clearTimeout(queueTimer); queueTimer = null; }
+    updatePlayAllBtn();
+  }
+  function playAllAnims() {
+    if (playQueue) { stopPlayAll(); stopAnimation(); return; }
+    const mine = userSystems();
+    if (!mine.length) return;
+    const box = mount.querySelector('#animList');
+    const sel = box && (box.selectedOptions[0] || {}).value;
+    const from = Math.max(0, mine.findIndex(s => s.id === sel));   // start where the coach is looking
+    playQueue = mine.slice(from).map(s => s.id);
+    updatePlayAllBtn();
+    runQueue();
+  }
+  function runQueue() {
+    if (!playQueue || !playQueue.length) { stopPlayAll(); return; }
+    const id = playQueue.shift();
+    const box = mount.querySelector('#animList');
+    if (box) { box.value = id; syncAnimActions(); }
+    loadSystem(id, false);
+    // stopAnimation() fires this on a manual stop too, so every stop path clears
+    // the queue first and the run only continues while it is still armed.
+    playAnimation(() => { if (playQueue) queueTimer = setTimeout(runQueue, 500); });
   }
   function bindAnimActions() {
     const box = mount.querySelector('#animList');
     if (!box) return;
     const sel = () => (box.selectedOptions[0] || {}).value || '';
     // Picking an entry loads its frames into the strip below; Load/dbl-click plays it.
-    box.onchange = () => { syncAnimActions(); if (sel()) loadSystem(sel(), false); };
-    box.ondblclick = () => { if (sel()) loadSystem(sel()); };
-    mount.querySelector('#animLoad').onclick = () => { if (sel()) loadSystem(sel()); };
+    box.onchange = () => { stopPlayAll(); syncAnimActions(); if (sel()) loadSystem(sel(), false); };
+    box.ondblclick = () => { if (sel()) { stopPlayAll(); loadSystem(sel()); } };
+    mount.querySelector('#animLoad').onclick = () => { if (sel()) { stopPlayAll(); loadSystem(sel()); } };
+    mount.querySelector('#animPlayAll').onclick = playAllAnims;
     mount.querySelector('#animEdit').onclick = () => { if (sel()) editSystem(sel()); };
     mount.querySelector('#animVideo').onclick = () => { if (sel()) playSystemVideo(sel()); };
     mount.querySelector('#animShare').onclick = () => { if (sel()) shareSystem(sel()); };
@@ -2034,6 +2135,7 @@ Views.tactics = function (mount) {
   return () => {
     if (animTimer) clearInterval(animTimer);
     if (animStep) clearInterval(animStep);
+    if (queueTimer) clearTimeout(queueTimer);
     if (physTimer) clearInterval(physTimer);
     if (chargeTimer) clearInterval(chargeTimer);
     if (holdTimer) clearTimeout(holdTimer);
@@ -2044,6 +2146,7 @@ Views.tactics = function (mount) {
     document.removeEventListener('fullscreenchange', onFsChange);
     document.removeEventListener('webkitfullscreenchange', onFsChange);
     // Leaving the view while pinned would strand the page with overflow hidden.
+    wantFs = false; fauxFs = false;
     document.body.classList.remove('board-fs');
     if (fsElement()) (document.exitFullscreen || document.webkitExitFullscreen || function () {}).call(document);
     window.removeEventListener('resize', roResize);

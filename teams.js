@@ -42,10 +42,12 @@ Views.teams = function (mount) {
           <button class="btn sm danger" data-del="${p.id}" title="${T('common.delete')}">${UI.icon('trash', 14)}</button>
           ${p.status === 'injured' && p.injuryNote ? `<div class="injury-note">${UI.esc(p.injuryNote)}</div>` : ''}
         </td>
-        <td style="text-align:right;white-space:nowrap">
-          <button class="btn sm" data-mail="${p.id}">✉ ${T('mail.mail')}</button>
-          <button class="btn sm" data-chat="${p.id}">💬 ${T('teams.chat')}</button>
-          <button class="btn sm" data-edit="${p.id}">${T('common.edit')}</button>
+        <td style="text-align:right">
+          <div class="row-acts">
+            <button class="btn sm" data-mail="${p.id}">✉ ${T('mail.mail')}</button>
+            <button class="btn sm" data-chat="${p.id}">💬 ${T('teams.chat')}</button>
+            <button class="btn sm" data-edit="${p.id}">${T('common.edit')}</button>
+          </div>
         </td>
       </tr>`;
 
@@ -127,7 +129,10 @@ Views.teams = function (mount) {
           <p><button type="button" class="inline-edit" id="editTeam" title="${T('teams.editTeam')}">${UI.esc(team ? team.name : T('teams.noTeam'))}${team && team.division ? ' · ' + UI.esc(team.division) : ''}<span class="pen">✎</span></button></p>
         </div>
       </div>
-      ${UI.acc('teamPickers', T('teams.teams'), teamBar, { sub: teamList.length + ' · ' + SPORTS.name(sportId, I18N.getLang()) })}
+      ${UI.acc('teamPickers', T('teams.teams'), teamBar, {
+      sub: teamList.length + ' · ' + SPORTS.name(sportId, I18N.getLang()),
+      actions: UI.shareBar('team', { exportLabel: T('teams.exportTeam'), importLabel: T('teams.importTeam') })
+    })}
       ${UI.acc('squad', T('teams.squad'), squadTable, {
       sub: T('teams.squadHint') + ': ' + SPORTS.name(sportId, I18N.getLang()),
       actions: squadActions
@@ -136,6 +141,9 @@ Views.teams = function (mount) {
       actions: `<button class="btn sm primary" id="addStaff">+ ${T('teams.addStaff')}</button>`
     })}`;
     UI.bindAcc(mount);
+    // A team file carries its own squad, staff, club and season, so it lands as
+    // that team rather than being folded into the one on screen.
+    UI.bindShare(mount, 'team', () => { App.populateTeamPicker(); render(); }, { scoped: true });
     bind(team, players);
   }
 
