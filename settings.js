@@ -509,6 +509,14 @@ function wizCopy(label, value, note) {
 function wizOpen(label, url) {
   return `<a class="btn primary wiz-open" href="${UI.esc(url)}" target="_blank" rel="noopener">${UI.esc(label)} \u2197</a>`;
 }
+// Troubleshooting kept folded away, so the step itself stays four lines long.
+function wizHelp(title, lines) {
+  return `<details class="wiz-help"><summary>${UI.esc(title)}</summary>
+    <ul>${lines.map(l => `<li>${UI.esc(l)}</li>`).join('')}</ul></details>`;
+}
+// The scope the app asks for. Google shows it on the consent screen and wants
+// it listed under Data Access before an app can be published.
+const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
 // Where the app normally lives, offered when the copy this is running from has
 // no address Google can use.
 const HOME_ORIGIN = 'https://sporttactic.net';
@@ -570,6 +578,8 @@ function googleWizard(onDone) {
   // What goes into Google's origin list: this address when it can be used, or
   // the one the coach says the team will actually open the app on.
   let pubOrigin = originUsable() ? origin : HOME_ORIGIN;
+  // Google asks for the same address three times; it is typed once here.
+  let ownerMail = '';
 
   const idOk = () => !!Drive.normClientId(clientId);
   const keyOk = () => !apiKey || API_KEY_RE.test(apiKey.trim());
@@ -640,13 +650,24 @@ function googleWizard(onDone) {
     () => `<h3 class="wiz-h">${UI.esc(T('gw.s3Title'))}</h3>
       <p>${UI.esc(T('gw.s3Intro'))}</p>
       ${wizOpen(T('gw.s3Open'), GOOGLE_PAGES.authPlatform)}
+      <label class="field"><span>${UI.esc(T('gw.yourMail'))}</span>
+        <input id="wiz_mail" type="email" spellcheck="false" autocomplete="off" placeholder="coach@klub.dk" value="${UI.esc(ownerMail)}">
+        <span class="hint">${UI.esc(T('gw.yourMailHint'))}</span></label>
       <ol class="wiz-list">
         <li>${UI.esc(T('gw.s3A'))}</li>
         <li>${UI.esc(T('gw.s3B'))}</li>
         <li>${UI.esc(T('gw.s3C'))}</li>
         <li>${UI.esc(T('gw.s3D'))}</li>
       </ol>
+      ${wizCopy(T('gw.fAppName'), 'SportTactic')}
+      <div class="wiz-copy">
+        <span class="wiz-copy-label">${UI.esc(T('gw.fSupportMail'))}</span>
+        <code class="wiz-copy-val" id="wiz_mail_out">${UI.esc(ownerMail || '\u2014')}</code>
+        <button type="button" class="btn sm" data-copy-from="#wiz_mail_out">${UI.esc(T('cloud.copy'))}</button>
+        <span class="hint wiz-copy-note">${UI.esc(T('gw.fSupportMailNote'))}</span>
+      </div>
       <p class="hint">${UI.esc(T('gw.s3Old'))}</p>
+      ${wizHelp(T('gw.s3HelpT'), [T('gw.s3H1'), T('gw.s3H2'), T('gw.s3H3'), T('gw.s3H4')])}
       <h4 class="wiz-sub">${UI.esc(T('gw.s3UsersTitle'))}</h4>
       <p>${UI.esc(T('gw.s3UsersIntro'))}</p>
       ${wizOpen(T('gw.s3OpenUsers'), GOOGLE_PAGES.audience)}
@@ -664,29 +685,67 @@ function googleWizard(onDone) {
       <p>${UI.esc(T('gw.s4Intro'))}</p>
       ${wizOpen(T('gw.s4Open'), GOOGLE_PAGES.clients)}
       <ol class="wiz-list"><li>${UI.esc(T('gw.s4A'))}</li><li>${UI.esc(T('gw.s4B'))}</li></ol>
+      ${wizCopy(T('gw.fClientName'), 'SportTactic web')}
       ${originBlock()}
       <label class="field"><span>${UI.esc(T('cloud.clientId'))}</span>
         <input id="wiz_id" spellcheck="false" autocomplete="off" placeholder="1234567890-abc.apps.googleusercontent.com" value="${UI.esc(clientId)}">
-        <span class="hint" id="wiz_id_state"></span></label>`,
+        <span class="hint" id="wiz_id_state"></span></label>
+      ${wizHelp(T('gw.s4HelpT'), [T('gw.s4H1'), T('gw.s4H2'), T('gw.s4H3'), T('gw.s4H4')])}`,
 
     // 5 — the optional api key
     () => `<h3 class="wiz-h">${UI.esc(T('gw.s5Title'))}</h3>
       <p>${UI.esc(T('gw.s5Intro'))}</p>
       ${wizOpen(T('gw.s5Open'), GOOGLE_PAGES.credentials)}
-      <ul class="wiz-list"><li>${UI.esc(T('gw.s5A'))}</li><li>${UI.esc(T('gw.s5B'))}</li></ul>
+      <ol class="wiz-list"><li>${UI.esc(T('gw.s5A'))}</li><li>${UI.esc(T('gw.s5B'))}</li></ol>
       <label class="field"><span>${UI.esc(T('cloud.apiKey'))}</span>
         <input id="wiz_key" spellcheck="false" autocomplete="off" placeholder="AIza…" value="${UI.esc(apiKey)}">
         <span class="hint" id="wiz_key_state"></span></label>
-      <p class="hint">${UI.esc(T('gw.s5Tail'))}</p>`,
+      <p class="hint">${UI.esc(T('gw.s5Tail'))}</p>
+      ${wizHelp(T('gw.s5HelpT'), [T('gw.s5H1'), T('gw.s5H2'), T('gw.s5H3')])}`,
 
     // 6 — prove it works
     () => `<h3 class="wiz-h">${UI.esc(T('gw.s6Title'))}</h3>
       <p>${UI.esc(T('gw.s6Intro'))}</p>
       <button type="button" class="btn primary" id="wizTest">${UI.esc(T('gw.s6Test'))}</button>
-      <div id="wizResult" class="wiz-result"></div>`
+      <div id="wizResult" class="wiz-result"></div>
+      <h4 class="wiz-sub">${UI.esc(T('gw.sumTitle'))}</h4>
+      <p class="hint">${UI.esc(T('gw.sumHint'))}</p>
+      <div class="wiz-copy">
+        <span class="wiz-copy-label">${UI.esc(T('gw.sumLabel'))}</span>
+        <code class="wiz-copy-val wiz-sum" id="wiz_sum">${UI.esc(checklist())}</code>
+        <button type="button" class="btn sm" data-copy-from="#wiz_sum">${UI.esc(T('gw.sumCopy'))}</button>
+      </div>
+      ${wizHelp(T('gw.s6HelpT'), [T('gw.s6H1'), T('gw.s6H2'), T('gw.s6H3'), T('gw.s6H4')])}`
   ];
 
+  // Everything the setup needs on one clipboard — handy when somebody else in
+  // the club does the Google half.
+  function checklist() {
+    return [
+      T('gw.fProject') + ': SportTactic',
+      T('gw.fApi') + ': Google Drive API',
+      T('gw.fAppName') + ': SportTactic',
+      T('gw.fSupportMail') + ': ' + (ownerMail || '?'),
+      T('gw.fAudience') + ': External',
+      T('gw.fTestUsers') + ': ' + (users.join(', ') || '?'),
+      T('gw.fClientType') + ': Web application',
+      T('gw.fOrigin') + ': ' + (pubOrigin || '?'),
+      T('gw.fRedirect') + ': ' + T('gw.fRedirectNone'),
+      T('gw.fScope') + ': ' + DRIVE_SCOPE
+    ].join('\n');
+  }
+
   function wire(m, host) {
+    const mail = host.querySelector('#wiz_mail');
+    if (mail) {
+      const out = host.querySelector('#wiz_mail_out');
+      const check = () => {
+        ownerMail = Access.normEmail(mail.value);
+        out.textContent = (ownerMail && ownerMail.indexOf('@') > 0) ? ownerMail : '\u2014';
+      };
+      mail.oninput = check;
+      check();
+    }
     const org = host.querySelector('#wiz_origin');
     if (org) {
       const st = host.querySelector('#wiz_origin_state');
@@ -773,6 +832,12 @@ function googleWizard(onDone) {
     onOpen: async (m, close) => {
       clientId = await Drive.getClientId();
       apiKey = TeamCloud.cfg().apiKey;
+      ownerMail = await Store.getSetting('ownerEmail', '');
+      // Falling back to the first coach or admin already on the access list.
+      if (!ownerMail) {
+        const staffMember = Access.members().find(x => Access.isStaff(x.role));
+        ownerMail = (staffMember && staffMember.email) || '';
+      }
       // Copy buttons work the same on every screen, so they are handled once.
       m.addEventListener('click', async e => {
         const b = e.target.closest('[data-copy],[data-copy-from]');
@@ -787,6 +852,7 @@ function googleWizard(onDone) {
         // Nothing is lost by closing half-way: what was typed is kept.
         if (clientId.trim()) await Drive.setClientId(clientId);
         if (apiKey.trim()) await TeamCloud.setCfg({ apiKey: apiKey.trim() });
+        if (ownerMail) await Store.setSetting('ownerEmail', ownerMail);
         close();
         if (onDone) onDone();
       };
@@ -795,12 +861,117 @@ function googleWizard(onDone) {
         if (step < LAST) { step++; body(m); return; }
         if (clientId.trim()) await Drive.setClientId(clientId);
         if (apiKey.trim()) await TeamCloud.setCfg({ apiKey: apiKey.trim() });
+        if (ownerMail) await Store.setSetting('ownerEmail', ownerMail);
         try { localStorage.removeItem(WIZ_STEP_KEY); } catch (e) { /* private mode */ }
         close();
         if (tested) UI.toast(T('cloud.connected'), 'success');
         if (onDone) onDone();
       };
       body(m);
+    }
+  });
+}
+
+// ---- What the team code shares ------------------------------------------
+// Three questions per block of data — shared at all, may they change it, may
+// they delete from it — plus how the handful of personal fields are treated on
+// the way out.
+function sharePolicyDialog(onDone) {
+  const pol = Privacy.policy();
+  const count = g => g.stores.reduce((n, s) => n + (Store.all(s) || []).length, 0);
+
+  const groupRow = g => {
+    const r = pol.groups[g.id];
+    const n = count(g);
+    return `<div class="pol-row" data-grp="${g.id}">
+      <span class="pol-name">${UI.esc(T('pol.g' + g.id))}
+        <span class="share-n">${n} ${UI.esc(T('settings.shareRecords'))}</span></span>
+      <span class="pol-opts">
+        <label class="pol-chk"><input type="checkbox" data-p="share" ${r.share ? 'checked' : ''}> ${UI.esc(T('pol.share'))}</label>
+        <label class="pol-chk"><input type="checkbox" data-p="edit" ${r.edit ? 'checked' : ''} ${r.share ? '' : 'disabled'}> ${UI.esc(T('pol.edit'))}</label>
+        <label class="pol-chk"><input type="checkbox" data-p="del" ${r.del ? 'checked' : ''} ${r.share && r.edit ? '' : 'disabled'}> ${UI.esc(T('pol.del'))}</label>
+      </span>
+    </div>`;
+  };
+  // A live example, so "partial" or "fake" is something you can see rather than
+  // a word you have to trust.
+  const sample = (f, mode) => {
+    const demo = { email: 'anna.nielsen@klub.dk', phone: '+45 20 30 40 50', lastName: 'Nielsen', injuryNote: 'Knee, back in 3 weeks', height: 182, weight: 78, notes: 'Shoulder rehab' }[f.id];
+    const v = Privacy.redactValue(demo, f.kind, mode, 7);
+    return v === undefined ? T('pol.gone') : String(v);
+  };
+  const fieldRow = f => {
+    const mode = pol.fields[f.id];
+    return `<div class="pol-row" data-fld="${f.id}">
+      <span class="pol-name">${UI.esc(T('pol.f' + f.id))}
+        <span class="share-n">${UI.esc(f.stores.map(s => T('pol.g' + (Privacy.groupOf(s) || {}).id)).filter((v, i, a) => a.indexOf(v) === i).join(', '))}</span></span>
+      <span class="pol-opts">
+        <select data-mode>${Privacy.MODES.map(m => `<option value="${m}" ${m === mode ? 'selected' : ''}>${UI.esc(T('pol.m' + m))}</option>`).join('')}</select>
+        <code class="pol-sample">${UI.esc(sample(f, mode))}</code>
+      </span>
+    </div>`;
+  };
+
+  UI.modal({
+    title: T('pol.title'),
+    width: 720,
+    body: `<p>${UI.esc(T('pol.intro'))}</p>
+      <div class="callout-warn">${UI.esc(T('pol.warn'))}</div>
+      <h4 class="pol-h">${UI.esc(T('pol.blocks'))}</h4>
+      <p class="hint">${UI.esc(T('pol.blocksHint'))}</p>
+      ${Privacy.GROUPS.map(groupRow).join('')}
+      <h4 class="pol-h">${UI.esc(T('pol.personal'))}</h4>
+      <p class="hint">${UI.esc(T('pol.personalHint'))}</p>
+      ${Privacy.FIELDS.map(fieldRow).join('')}
+      <p class="hint">${UI.esc(T('pol.never'))}</p>
+      <p class="hint" id="polSum"></p>`,
+    footer: `<button class="btn ghost" data-close2>${T('common.cancel')}</button>
+      <button class="btn" data-reset>${UI.esc(T('pol.reset'))}</button>
+      <button class="btn primary" data-go>${T('common.save')}</button>`,
+    onOpen: (m, close) => {
+      const sum = () => {
+        const s = Privacy.summary(pol);
+        m.querySelector('#polSum').textContent = T('pol.summary')
+          .replace('{0}', s.blocks).replace('{1}', s.totalBlocks)
+          .replace('{2}', s.records).replace('{3}', s.hidden);
+      };
+      m.querySelectorAll('[data-grp]').forEach(row => {
+        const g = row.dataset.grp;
+        row.querySelectorAll('input[data-p]').forEach(box => box.onchange = () => {
+          pol.groups[g][box.dataset.p] = box.checked;
+          // Edit needs sharing; delete needs edit.
+          if (!pol.groups[g].share) { pol.groups[g].edit = false; pol.groups[g].del = false; }
+          if (!pol.groups[g].edit) pol.groups[g].del = false;
+          row.querySelector('[data-p="edit"]').checked = pol.groups[g].edit;
+          row.querySelector('[data-p="edit"]').disabled = !pol.groups[g].share;
+          row.querySelector('[data-p="del"]').checked = pol.groups[g].del;
+          row.querySelector('[data-p="del"]').disabled = !pol.groups[g].edit;
+          sum();
+        });
+      });
+      m.querySelectorAll('[data-fld]').forEach(row => {
+        const f = Privacy.FIELDS.find(x => x.id === row.dataset.fld);
+        const sel = row.querySelector('[data-mode]');
+        sel.onchange = () => {
+          pol.fields[f.id] = sel.value;
+          row.querySelector('.pol-sample').textContent = sample(f, sel.value);
+          sum();
+        };
+      });
+      sum();
+      m.querySelector('[data-close2]').onclick = close;
+      m.querySelector('[data-reset]').onclick = async () => {
+        await Privacy.reset();
+        close();
+        UI.toast(T('pol.savedMsg'), 'success');
+        sharePolicyDialog(onDone);
+      };
+      m.querySelector('[data-go]').onclick = async () => {
+        await Privacy.save(pol);
+        close();
+        UI.toast(T('pol.savedMsg'), 'success');
+        if (onDone) onDone();
+      };
     }
   });
 }
@@ -847,12 +1018,17 @@ function cloudCreateDialog(onDone) {
 function cloudCodeDialog() {
   const code = TeamCloud.makeCode();
   const c = TeamCloud.cfg();
+  const s = Privacy.summary();
   UI.modal({
     title: T('cloud.codeTitle'),
     width: 620,
     body: `<p>${UI.esc(T('cloud.codeIntro'))}</p>
       <label class="field"><span>${UI.esc(T('cloud.code'))}</span>
         <textarea id="cd_code" rows="3" readonly spellcheck="false">${UI.esc(code)}</textarea></label>
+      <p><span class="tag">${UI.esc(T('pol.summary')
+        .replace('{0}', s.blocks).replace('{1}', s.totalBlocks)
+        .replace('{2}', s.records).replace('{3}', s.hidden))}</span>
+        <button type="button" class="btn sm" id="cd_pol">${UI.esc(T('pol.btn'))}</button></p>
       ${c.apiKey ? '' : `<p class="hint mail-note">${UI.esc(T('cloud.codeNoKey'))}</p>`}
       <p class="hint">${UI.esc(T('cloud.codeHint'))}</p>`,
     footer: `<button class="btn" data-open>${UI.esc(T('cloud.openDrive'))}</button>
@@ -862,6 +1038,7 @@ function cloudCodeDialog() {
     onOpen: (m, close) => {
       const ta = m.querySelector('#cd_code');
       m.querySelector('[data-close2]').onclick = close;
+      m.querySelector('#cd_pol').onclick = () => { close(); sharePolicyDialog(); };
       m.querySelector('[data-copy]').onclick = async () => {
         ta.select();
         try { await navigator.clipboard.writeText(code); } catch (e) { document.execCommand('copy'); }
@@ -1094,6 +1271,7 @@ Views.settings = async function (mount) {
       <div class="row" style="flex:0;margin-top:10px;flex-wrap:wrap">
         ${maySetup ? `<button class="btn primary" id="clCreate">${T('cloud.createBtn')}</button>` : ''}
         <button class="btn" id="clJoin">${T('cloud.joinBtn')}</button>
+        ${maySetup ? `<button class="btn" id="clPolicy2">${T('pol.btn')}</button>` : ''}
         <button class="btn" id="clGuide">${T('cloud.showMeHow')}</button>
       </div>`;
 
@@ -1108,6 +1286,7 @@ Views.settings = async function (mount) {
         <button class="btn" id="clPull">${T('cloud.pullAll')}</button>
         ${mayWrite ? `<button class="btn" id="clPush">${T('cloud.pushAll')}</button>` : ''}
         <button class="btn" id="clCode">${T('cloud.showCode')}</button>
+        ${maySetup ? `<button class="btn" id="clPolicy">${T('pol.btn')}</button>` : ''}
         ${mayWrite && c.owner ? `<button class="btn" id="clInvite">${T('cloud.inviteBtn')}</button>` : ''}
         <button class="btn danger" id="clForget">${T('cloud.disconnect')}</button>
       </div>
@@ -1207,6 +1386,8 @@ Views.settings = async function (mount) {
     });
     on('#clJoin', () => cloudJoinDialog(() => { refreshCloud(); refreshAccess(); App.render(); }));
     on('#clCode', cloudCodeDialog);
+    on('#clPolicy', () => sharePolicyDialog(refreshCloud));
+    on('#clPolicy2', () => sharePolicyDialog(refreshCloud));
     on('#clInvite', () => cloudInviteDialog(refreshAccess));
     on('#clSync', () => busyRun('#clSync', () => TeamCloud.sync(), () => T('cloud.synced')));
     on('#clPull', () => UI.confirm(T('cloud.pullAsk'), () =>

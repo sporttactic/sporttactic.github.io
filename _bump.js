@@ -1,5 +1,5 @@
 const fs = require('fs');
-const bump = ['ui.js', 'i18n.js', 'settings.js', 'app.js', 'access.js', 'cloud.js', 'drive.js', 'video.js'];
+const bump = ['ui.js', 'i18n.js', 'settings.js', 'app.js', 'access.js', 'privacy.js', 'cloud.js', 'drive.js', 'video.js'];
 for (const f of ['index.html', 'sw.js']) {
   let s = fs.readFileSync(f, 'utf8'), log = [];
   for (const k of bump) s = s.replace(new RegExp('(' + k.replace('.', '\\.') + '\\?v=)(\\d+)', 'g'), (m, p, n) => { log.push(k + ':' + (+n + 1)); return p + (+n + 1); });

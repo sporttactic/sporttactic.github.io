@@ -22,6 +22,12 @@ Views.teams = function (mount) {
     return `<span class="pos-badge role-${b.role}" style="--pos:${b.color}" title="${UI.esc(tt('pos', pos || ''))}">${UI.esc(b.ab)}</span>`;
   };
 
+  // Animations a coach filed under this squad on the tactical board.
+  function teamAnimations(team) {
+    if (!team) return [];
+    return Store.all('tactics').filter(t => t.kind === 'system' && t.teamId === team.id && (t.sport || 'handball') === sportId);
+  }
+
   function render() {
     const team = Store.activeTeam();
     const teamList = Store.teams();
@@ -97,10 +103,12 @@ Views.teams = function (mount) {
         </span>
       </div>`).join('') || `<p style="color:var(--muted)">${T('common.noData')}</p>`;
 
+    const teamAnims = teamAnimations(team);
     const squadActions = editing
       ? `<button class="btn ghost" id="cancelSquad">${T('common.cancel')}</button>
          <button class="btn primary" id="saveSquad">${T('teams.saveSquad')}</button>`
       : `<button class="btn sm" id="mailSquad">✉ ${T('mail.title')}</button>
+         <button class="btn sm" id="squadAnims">▶ ${T('teams.anims')} <span class="tag">${teamAnims.length}</span></button>
          <button class="btn sm" id="chatSquad">💬 ${T('chat.squad')}</button>
          <button class="btn sm" id="editSquad">✎ ${T('teams.editSquad')}</button>
          <button class="btn primary" id="addPlayer">+ ${T('teams.addPlayer')}</button>`;
@@ -180,6 +188,7 @@ Views.teams = function (mount) {
       q('#mailSquad').onclick = () => MAIL.compose({
         players, title: T('mail.title') + ' — ' + T('teams.squad')
       });
+      q('#squadAnims').onclick = () => animListDialog(team, teamAnimations(team));
       q('#chatSquad').onclick = () => App.go('messenger', { from: 'teams' });
       mount.querySelectorAll('[data-mail]').forEach(b => b.onclick = () => {
         const p = Store.find('players', b.dataset.mail);
@@ -242,6 +251,47 @@ Views.teams = function (mount) {
     if (n) UI.toast(T('teams.squadSaved') + ' (' + n + ')', 'success');
     editing = false;
     render();
+  }
+
+  // The animations a coach filed under this squad on the tactical board.
+  function animListDialog(team, anims) {    const row = a => `<div class="acc-person">
+      <span class="acc-person-main">
+        <b>${UI.esc(a.name || T('tactics.animTitle'))}</b>
+        <span class="tag">${(a.frames || []).length} ${UI.esc(T('tactics.frameList'))}</span>
+        ${(a.clips || []).length ? `<span class="tag green">▶ ${(a.clips || []).length}</span>` : ''}
+      </span>
+      <span class="bm-acts">
+        <button class="btn sm primary" data-anim-open="${UI.esc(a.id)}">${T('common.go')}</button>
+        <button class="btn sm danger" data-anim-rm="${UI.esc(a.id)}">${T('teams.animRemove')}</button>
+      </span>
+    </div>`;
+    UI.modal({
+      title: T('teams.anims') + (team ? ' — ' + team.name : ''),
+      width: 620,
+      body: `<p>${UI.esc(T('teams.animsIntro'))}</p>
+        <div class="acc-people">${anims.length ? anims.map(row).join('') : `<p class="hint">${UI.esc(T('teams.animsNone'))}</p>`}</div>`,
+      footer: `<button class="btn" data-board>${UI.esc(T('teams.animsBoard'))}</button>
+        <button class="btn primary" data-close2>${T('common.close')}</button>`,
+      onOpen: (m, close) => {
+        m.querySelector('[data-close2]').onclick = close;
+        m.querySelector('[data-board]').onclick = () => { close(); App.go('tactics'); };
+        m.querySelectorAll('[data-anim-open]').forEach(b => b.onclick = () => {
+          close();
+          App.go('tactics', { animId: b.dataset.animOpen });
+        });
+        m.querySelectorAll('[data-anim-rm]').forEach(b => b.onclick = () => {
+          const a = Store.find('tactics', b.dataset.animRm);
+          if (!a) return;
+          // Only the link to the squad goes; the animation itself stays in the library.
+          UI.confirm(T('teams.animRemoveAsk').replace('{0}', a.name || ''), async () => {
+            await Store.save('tactics', Object.assign({}, a, { teamId: '' }));
+            close();
+            UI.toast(T('teams.animRemoved'), 'success');
+            render();
+          });
+        });
+      }
+    });
   }
 
   function form(team, p = {}) {

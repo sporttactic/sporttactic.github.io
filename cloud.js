@@ -109,9 +109,16 @@ const TeamCloud = (() => {
   }
 
   // ---- The document ------------------------------------------------------
+  // What actually leaves the device: only the blocks the policy shares, with
+  // the personal fields treated the way the coach chose. The policy travels
+  // with it so the other side knows what it may change.
   async function snapshot() {
+    const pol = Privacy.policy();
     const data = {};
-    for (const s of syncStores()) data[s] = await Store.pack(await DB.getAll(s));
+    for (const s of syncStores()) {
+      if (!Privacy.mayShare(pol, s)) continue;
+      data[s] = await Store.pack(Privacy.redactRows(s, await DB.getAll(s), pol));
+    }
     const shared = (await DB.getAll('settings')).filter(r => SHARED_SETTINGS.indexOf(r.id) >= 0);
     if (shared.length) data.settings = await Store.pack(shared);
     return {
@@ -119,6 +126,8 @@ const TeamCloud = (() => {
       updatedAt: Date.now(),
       team: cfg().teamName || (Store.activeTeam() ? Store.activeTeam().name : ''),
       by: Access.role(),
+      policy: pol,
+      protected: Privacy.protectedPaths(pol),
       data
     };
   }
@@ -164,11 +173,32 @@ const TeamCloud = (() => {
   async function applyDoc(doc, mode) {
     if (!isTeamDb(doc)) throw new Error('bad-file');
     const replace = mode === 'replace';
+    // A masked phone number must never land on top of the real one, so every
+    // field the sender redacted is kept from the local copy instead.
+    const guarded = {};
+    (Array.isArray(doc.protected) ? doc.protected : []).forEach(p => {
+      const i = String(p).indexOf('.');
+      if (i < 1) return;
+      const s = p.slice(0, i);
+      (guarded[s] || (guarded[s] = [])).push(p.slice(i + 1));
+    });
     let n = 0;
     for (const s of syncStores()) {
       if (!Array.isArray(doc.data[s])) continue;
       const theirs = Store.unpack(doc.data[s]).filter(r => r && typeof r.id === 'string');
-      const rows = replace ? theirs : mergeRows(await DB.getAll(s), theirs);
+      const mine = await DB.getAll(s);
+      const keep = guarded[s] || [];
+      if (keep.length) {
+        const byId = new Map(mine.map(r => [r.id, r]));
+        theirs.forEach(r => {
+          const local = byId.get(r.id);
+          if (!local) return;
+          keep.forEach(f => {
+            if (local[f] === undefined) delete r[f]; else r[f] = local[f];
+          });
+        });
+      }
+      const rows = replace ? theirs : mergeRows(mine, theirs);
       if (replace) await DB.clear(s);
       if (rows.length) await DB.bulkPut(s, rows);
       n += theirs.length;
@@ -200,19 +230,31 @@ const TeamCloud = (() => {
     busy = true;
     try {
       let doc = await snapshot();
-      if (mode !== 'replace') {
+      let remote = null;
+      try { remote = await readRemote(); } catch (e) { remote = null; }
+      const owner = cfg().owner;
+      // The owner's policy is the one that counts, so a member sends back the
+      // copy they found and only touches the blocks it lets them touch.
+      if (!owner && isTeamDb(remote)) {
+        const pol = (remote.policy && typeof remote.policy === 'object') ? remote.policy : Privacy.defaults();
+        doc.policy = pol;
+        doc.protected = Array.isArray(remote.protected) ? remote.protected : doc.protected;
+        for (const s of syncStores()) {
+          const theirs = Array.isArray(remote.data[s]) ? remote.data[s] : null;
+          if (!Privacy.mayEdit(pol, s)) { if (theirs) doc.data[s] = theirs; else delete doc.data[s]; continue; }
+          // Without delete rights a removal here must not remove it for everyone.
+          if (!Privacy.mayDelete(pol, s) && theirs) doc.data[s] = mergeRows(theirs, doc.data[s] || []);
+        }
+      } else if (mode !== 'replace' && isTeamDb(remote)) {
         // Merge on top of whatever is up there, so two coaches saving at the
         // same time do not wipe each other's work.
-        let remote = null;
-        try { remote = await readRemote(); } catch (e) { remote = null; }
-        if (isTeamDb(remote)) {
-          for (const s of syncStores()) {
-            if (!Array.isArray(remote.data[s])) continue;
-            doc.data[s] = mergeRows(remote.data[s], doc.data[s] || []);
-          }
-          if (Array.isArray(remote.data.settings) && !Array.isArray(doc.data.settings)) {
-            doc.data.settings = remote.data.settings;
-          }
+        for (const s of syncStores()) {
+          if (!Array.isArray(remote.data[s])) continue;
+          if (!doc.data[s]) { doc.data[s] = remote.data[s]; continue; }
+          doc.data[s] = mergeRows(remote.data[s], doc.data[s]);
+        }
+        if (Array.isArray(remote.data.settings) && !Array.isArray(doc.data.settings)) {
+          doc.data.settings = remote.data.settings;
         }
       }
       await writeRemote(doc);

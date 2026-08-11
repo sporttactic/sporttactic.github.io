@@ -1,7 +1,7 @@
 /* Tactical Board view — interactive canvas with objects, drawing, frames,
    animation, ball shooting + magnet, whistle sound, and video recording. */
 window.Views = window.Views || {};
-Views.tactics = function (mount) {
+Views.tactics = function (mount, params) {
   document.body.classList.remove('board-fs');   // clear a stale CSS-fullscreen lock
   const BOARD_COLORS = ['#ffd400', '#ff3b30', '#34c759', '#0a84ff', '#ffffff', '#0b1220'];
   // CrossFit and bodybuilding have no court, so the board is not offered for them.
@@ -117,8 +117,18 @@ Views.tactics = function (mount) {
   function loadOrNew() {
     // Saved animations live in the same store but must never become the working board.
     const saved = Store.all('tactics').find(t => (t.sport || 'handball') === sportId && t.kind !== 'system');
-    if (saved) { return JSON.parse(JSON.stringify(saved)); }
+    if (saved) { const c = JSON.parse(JSON.stringify(saved)); c.frames = normFrames(c.frames); return c; }
     return { id: null, name: 'New Play', sport: sportId, frames: [defaultFrame()] };
+  }
+  // A frame from another coach's device, an old export or a hand-edited file may
+  // be missing a list the board takes for granted.
+  function normFrames(frames) {
+    const list = Array.isArray(frames) ? frames : [];
+    const out = list.filter(f => f && typeof f === 'object').map(f => ({
+      objects: Array.isArray(f.objects) ? f.objects : [],
+      shapes: Array.isArray(f.shapes) ? f.shapes : []
+    }));
+    return out.length ? out : [defaultFrame()];
   }
   function defaultFrame() {
     return { objects: sport().formation(), shapes: [] };
@@ -256,6 +266,7 @@ Views.tactics = function (mount) {
               <button class="btn sm danger" id="animDel" disabled title="${T('common.delete')}">✕</button>
             </div>
             <button class="btn sm" id="animPlayAll" title="${T('tactics.animPlayAllHint')}">▶▶ ${T('tactics.animPlayAll')}</button>
+            <button class="btn sm" id="animToTeam" title="${T('tactics.animToTeamHint')}">👥 ${T('tactics.animToTeam')}</button>
             <div><span id="recDot" class="rec-dot hidden">REC <span id="recTime">0:00</span> · <span id="frameCount">0</span> ${T('tactics.framesCaptured')}</span></div>
             <div id="recExport" class="rec-export hidden"></div>
             <div id="clipWrap">
@@ -1876,6 +1887,7 @@ Views.tactics = function (mount) {
     box.ondblclick = () => { if (sel()) { stopPlayAll(); loadSystem(sel()); } };
     mount.querySelector('#animLoad').onclick = () => { if (sel()) { stopPlayAll(); loadSystem(sel()); } };
     mount.querySelector('#animPlayAll').onclick = playAllAnims;
+    mount.querySelector('#animToTeam').onclick = saveAllToTeam;
     mount.querySelector('#animEdit').onclick = () => { if (sel()) editSystem(sel()); };
     mount.querySelector('#animVideo').onclick = () => { if (sel()) playSystemVideo(sel()); };
     mount.querySelector('#animShare').onclick = () => { if (sel()) shareSystem(sel()); };
@@ -1978,11 +1990,41 @@ Views.tactics = function (mount) {
     if (!s || !s.frames || !s.frames.length) return;
     stopAnimation();
     pushHistory();
-    current.frames = JSON.parse(JSON.stringify(s.frames));
+    current.frames = normFrames(JSON.parse(JSON.stringify(s.frames)));
     frameIdx = 0; selectedId = null; aim = null;
     draw(); renderTimeline();
     UI.toast(T('play.loaded') + ': ' + s.name, 'success');
     if (play !== false) playAnimation();
+  }
+
+  // Hand every saved animation to one squad, so the coaches working with that
+  // team find them under Teams & Players instead of hunting the whole library.
+  function saveAllToTeam() {
+    const teams = Store.teams();
+    const mine = userSystems();
+    if (!teams.length) return UI.toast(T('tactics.animNoTeam'), 'error');
+    if (!mine.length) return UI.toast(T('tactics.noSavedAnims'), 'error');
+    const active = Store.activeTeamId();
+    UI.modal({
+      title: T('tactics.animToTeam'),
+      width: 520,
+      body: `<p>${UI.esc(T('tactics.animToTeamIntro').replace('{0}', mine.length))}</p>
+        <label class="field"><span>${UI.esc(T('teams.activeTeam'))}</span>
+          <select id="anim_team">${teams.map(t => `<option value="${UI.esc(t.id)}" ${t.id === active ? 'selected' : ''}>${UI.esc(t.name)}</option>`).join('')}</select></label>
+        <p class="hint">${UI.esc(T('tactics.animToTeamHint'))}</p>`,
+      footer: `<button class="btn ghost" data-close2>${T('common.cancel')}</button>
+        <button class="btn primary" data-save>${T('common.save')}</button>`,
+      onOpen: (m, close) => {
+        m.querySelector('[data-close2]').onclick = close;
+        m.querySelector('[data-save]').onclick = async () => {
+          const teamId = m.querySelector('#anim_team').value;
+          for (const s of mine) await Store.save('tactics', Object.assign({}, s, { teamId }));
+          close();
+          UI.toast(T('tactics.animToTeamDone').replace('{0}', mine.length), 'success');
+          renderAnimList();
+        };
+      }
+    });
   }
   // Store the current frame sequence under a title so it can be replayed later.
   // Recording the clip means playing the animation through once first, so the
@@ -2132,6 +2174,12 @@ Views.tactics = function (mount) {
   updateSpeedButtons();
   fitCanvas();
   draw(); renderTimeline();
+  // Opened from the squad's animation list: land straight on that one.
+  if (params && params.animId) {
+    const box = mount.querySelector('#animList');
+    if (box) { box.value = params.animId; syncAnimActions(); }
+    loadSystem(params.animId, false);
+  }
   return () => {
     if (animTimer) clearInterval(animTimer);
     if (animStep) clearInterval(animStep);

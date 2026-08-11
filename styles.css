@@ -1045,6 +1045,23 @@ td.col-num .cell, td.col-h .cell, td.col-w .cell { max-width: 92px; }
 .wiz-result { margin-top: 12px; }
 .wiz-result:empty { display: none; }
 .wiz-result p { margin: 4px 0 0; color: var(--text); }
+.wiz-sum { white-space: pre-wrap; max-height: 150px; overflow: auto; }
+.wiz-help { margin: 12px 0 0; border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; }
+.wiz-help summary { cursor: pointer; font-size: 13px; color: var(--muted); }
+.wiz-help ul { margin: 8px 0 2px; padding-left: 20px; }
+.wiz-help li { margin-bottom: 6px; font-size: 13px; line-height: 1.5; }
+
+/* ---- What the team code shares ---- */
+.pol-h { margin: 18px 0 4px; padding-top: 14px; border-top: 1px solid var(--border); font-size: 14px; }
+.pol-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between;
+  padding: 8px 10px; margin-bottom: 6px; border: 1px solid var(--border); border-radius: 8px; }
+.pol-name { display: flex; flex-direction: column; gap: 2px; min-width: 150px; flex: 1 1 200px; }
+.pol-opts { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.pol-chk { display: inline-flex; gap: 5px; align-items: center; font-size: 13px; white-space: nowrap; }
+.pol-opts select { min-width: 120px; }
+.pol-sample { font-size: 12px; color: var(--muted); min-width: 130px; word-break: break-all; }
+.callout-warn { margin: 10px 0; padding: 9px 12px; border-radius: 8px; font-size: 13px;
+  border: 1px solid var(--danger, #ff3b30); background: rgba(255, 59, 48, .08); }
 
 /* Fullscreen: the tools move to a column on the left of the picture. */
 .video-panel.fs .v-stage { flex-direction: row; align-items: flex-start; gap: 14px; max-width: 1240px; margin: 0 auto; width: 100%; }
