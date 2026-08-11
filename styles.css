@@ -1013,6 +1013,8 @@ td.col-num .cell, td.col-h .cell, td.col-w .cell { max-width: 92px; }
 .swatch.on { border-color: var(--text); }
 
 /* ---- Shared team database & access list (settings.js) ---- */
+.set-sub { margin: 20px 0 2px; padding-top: 14px; border-top: 1px solid var(--border); font-size: 14px; }
+.acc-body > .set-sub:first-of-type { margin-top: 14px; }
 .cloud-facts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .acc-people { display: flex; flex-direction: column; gap: 6px; }
 .acc-person { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between;

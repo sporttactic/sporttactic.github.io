@@ -1129,6 +1129,42 @@ function cloudInviteDialog(onDone) {
 }
 
 // ---- People & access ----------------------------------------------------
+// Everyone on the access list still has to be a Google test user before they
+// can sign in at all, and that list lives in the Cloud Console rather than in
+// the app. This hands over the addresses and the page they go on.
+function googleUsersDialog() {
+  const users = wizTestUsers();
+  const joined = users.join(', ');
+  UI.modal({
+    title: T('access.googleTitle'),
+    width: 620,
+    body: `<p>${UI.esc(T('access.googleIntro'))}</p>
+      <ol class="wiz-list">
+        <li>${UI.esc(T('access.googleS1'))}</li>
+        <li>${UI.esc(T('access.googleS2'))}</li>
+        <li>${UI.esc(T('access.googleS3'))}</li>
+      </ol>
+      ${users.length
+        ? `<div class="wiz-copy wiz-users">
+             <span class="wiz-copy-label">${UI.esc(T('gw.s3Users').replace('{0}', users.length))}</span>
+             <code class="wiz-copy-val">${UI.esc(joined)}</code>
+             <button type="button" class="btn sm" id="gu_copy">${UI.esc(T('gw.s3CopyUsers'))}</button>
+           </div>`
+        : `<p class="hint">${UI.esc(T('gw.s3NoUsers'))}</p>`}
+      <p class="hint">${UI.esc(T('access.googleTail'))}</p>`,
+    footer: `<a class="btn primary" href="${GOOGLE_PAGES.audience}" target="_blank" rel="noopener">${UI.esc(T('access.googleOpen'))} \u2197</a>
+      <button class="btn ghost" data-close2>${T('common.close')}</button>`,
+    onOpen: (m, close) => {
+      m.querySelector('[data-close2]').onclick = close;
+      const copy = m.querySelector('#gu_copy');
+      if (copy) copy.onclick = async () => {
+        const ok = await copyText(joined);
+        UI.toast(ok ? T('cloud.copied') : T('gw.copyFailed'), ok ? 'success' : 'error');
+      };
+    }
+  });
+}
+
 function accessEditDialog(existing, onDone) {
   const m0 = existing || { name: '', email: '', role: 'Player', note: '' };
   const sugg = Access.suggestions().filter(s => !existing);
@@ -1192,17 +1228,11 @@ Views.settings = async function (mount) {
       <p style="color:var(--muted);font-size:12px">${T('settings.roleHint')}</p>`)}
     <div id="cloudCardHost">${cloudCard()}</div>
     <div id="accessCardHost">${staff ? accessCard() : ''}</div>
-    ${UI.acc('setData', T('settings.dataSync'), `
+    ${UI.acc('setData', T('settings.dataCard'), `
       <p style="color:var(--muted);font-size:13px">${T('settings.dataHint')}</p>
-      <div class="row" style="flex:0;margin-top:10px;flex-wrap:wrap">
-        <button class="btn" id="exportAll">${T('settings.exportBackup')}</button>
-        <label class="btn" style="cursor:pointer">${T('settings.importBackup')}<input id="importAll" type="file" accept="application/json" hidden></label>
-        <button class="btn" id="csvSquad">${T('settings.csvSquad')}</button>
-        <button class="btn" id="emailAll">${T('settings.sendCoach')}</button>
-        <button class="btn danger" id="wipe">${T('settings.resetData')}</button>
-      </div>`)}
-    ${UI.acc('setAuto', T('settings.autoCard'), `
-      <p style="color:var(--muted);font-size:13px">${T('settings.autoHint')}</p>
+
+      <h4 class="set-sub">${T('settings.autoCard')}</h4>
+      <p class="hint">${T('settings.autoHint')}</p>
       <div class="row" style="flex:0;margin-top:8px;flex-wrap:wrap;align-items:flex-end">
         <label class="field" style="max-width:220px"><span>${T('settings.autoEvery')}</span>
           <select id="autoMin">${AUTOBK.MINUTES.map(m => `<option value="${m}" ${m === AUTOBK.minutes() ? 'selected' : ''}>${everyLabel(m)}</option>`).join('')}</select></label>
@@ -1211,7 +1241,22 @@ Views.settings = async function (mount) {
         <button class="btn primary" id="autoNow">${T('settings.autoNow')}</button>
       </div>
       <p><span class="tag" id="autoState"></span></p>
-      <p class="hint">${AUTOBK.supported() ? T('settings.autoFileHint') : T('settings.autoDlHint')}</p>`)}
+      <p class="hint">${AUTOBK.supported() ? T('settings.autoFileHint') : T('settings.autoDlHint')}</p>
+
+      <h4 class="set-sub">${T('settings.byHand')}</h4>
+      <p class="hint">${T('settings.byHandHint')}</p>
+      <div class="row" style="flex:0;margin-top:8px;flex-wrap:wrap">
+        <button class="btn" id="exportAll">${T('settings.exportBackup')}</button>
+        <label class="btn" style="cursor:pointer">${T('settings.importBackup')}<input id="importAll" type="file" accept="application/json" hidden></label>
+        <button class="btn" id="csvSquad">${T('settings.csvSquad')}</button>
+        <button class="btn" id="emailAll">${T('settings.sendCoach')}</button>
+      </div>
+
+      <h4 class="set-sub">${T('settings.dangerZone')}</h4>
+      <p class="hint">${T('settings.dangerHint')}</p>
+      <div class="row" style="flex:0;margin-top:8px">
+        <button class="btn danger" id="wipe">${T('settings.resetData')}</button>
+      </div>`)}
     ${UI.acc('setMail', T('settings.mailCard'), `
       <p style="color:var(--muted);font-size:13px">${T('settings.mailHint')}</p>
       <p><span class="tag" id="mailSrvState">${UI.esc(MAIL.serverLabel())}</span></p>
@@ -1326,6 +1371,7 @@ Views.settings = async function (mount) {
       <div class="row" style="flex:0;margin-top:10px;flex-wrap:wrap">
         <button class="btn primary" id="accAdd">${T('access.addTitle')}</button>
         <button class="btn" id="accImport">${T('access.fromSquad')}</button>
+        <button class="btn" id="accGoogle">${T('access.googleBtn')}</button>
         ${TeamCloud.isLinked() ? `<button class="btn" id="accInvite">${T('cloud.inviteBtn')}</button>` : ''}
       </div>
       <p class="hint">${T('access.hint')}</p>`);
@@ -1405,6 +1451,7 @@ Views.settings = async function (mount) {
   function bindAccess() {
     on('#accAdd', () => accessEditDialog(null, refreshAccess));
     on('#accInvite', () => cloudInviteDialog(refreshAccess));
+    on('#accGoogle', googleUsersDialog);
     on('#accImport', () => {
       const known = new Set(Access.members().map(m => m.email));
       const add = Access.suggestions().filter(s => !known.has(s.email));
