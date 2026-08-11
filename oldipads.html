@@ -110,6 +110,52 @@
     .card { border: 1px solid #999; background: #fff; color: #000; page-break-inside: avoid; }
     .tbl th, .tbl td { border-bottom: 1px solid #ccc; color: #000; }
   }
+
+  /* ---- Light theme ----
+     Old Safari has no CSS custom properties, so the palette is overridden
+     rule by rule instead of swapped through variables. */
+  body.light { background: #f1f5f9; color: #0f172a; }
+  body.light .head, body.light .tabs, body.light .card { background: #fff; border-bottom-color: #cbd5e1; }
+  body.light .card { border: 1px solid #cbd5e1; }
+  body.light .bar { border-bottom-color: #cbd5e1; }
+  body.light .head p, body.light .hint, body.light .empty,
+  body.light .kpi span, body.light .fl, body.light #snap p { color: #475569; }
+  body.light .bar .lbl, body.light .tbl th { color: #64748b; }
+  body.light .b, body.light .tab, body.light .tag { background: #e2e8f0; color: #0f172a; border-color: #cbd5e1; }
+  body.light .b.on, body.light .tab.on { background: #0a84ff; border-color: #0a84ff; color: #fff; }
+  body.light .b.red { border-color: #dc2626; color: #b91c1c; }
+  body.light .b.red.on { background: #ff3b30; border-color: #ff3b30; color: #fff; }
+  body.light .card h3, body.light #frameInfo { color: #334155; }
+  body.light .tbl th, body.light .tbl td { border-bottom-color: #e2e8f0; }
+  body.light .f input, body.light .f select, body.light .f textarea { background: #fff; color: #0f172a; border-color: #cbd5e1; }
+  body.light .kpi div { background: #f8fafc; border-color: #e2e8f0; }
+  body.light .tag.g { border-color: #16a34a; color: #15803d; }
+  body.light .tag.r { border-color: #dc2626; color: #b91c1c; }
+  body.light .tag.a { border-color: #b45309; color: #b45309; }
+  body.light canvas { background: #e2e8f0; border-color: #cbd5e1; }
+  body.light .head a.full { color: #1d4ed8; border-color: #cbd5e1; }
+  body.light #snap img { border-color: #cbd5e1; }
+
+  /* ---- Full-screen board ----
+     An old iPad has no Fullscreen API, so the board view is simply pinned over
+     the viewport. The tool bars stay in the flow, which is the point: the
+     drawing tools have to remain reachable. */
+  body.bfs .head, body.bfs .tabs { display: none; }
+  body.bfs .view { display: none; }
+  body.bfs #v-board {
+    display: block; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    z-index: 900; overflow-y: auto; -webkit-overflow-scrolling: touch;
+    background: #0f172a; padding-bottom: 24px;
+  }
+  body.light.bfs #v-board { background: #f1f5f9; }
+  body.bfs #wrap { padding-top: 4px; }
+  body.bfs canvas { max-width: 100%; }
+  @media (min-width: 820px) and (orientation: landscape) {
+    /* Landscape iPad: bars on the left, board filling what is left. */
+    body.bfs #v-board .bar { float: left; clear: left; width: 220px; border-bottom: 0; }
+    body.bfs #v-board #wrap { margin-left: 226px; padding-top: 8px; }
+    body.light.bfs #v-board .bar { border-bottom: 0; }
+  }
 </style>
 
 <script>
@@ -137,6 +183,11 @@ var CL = (function () {
     'tool.arrow': 'Arrow', 'tool.free': 'Draw', 'tool.erase': 'Erase',
     'sport.handball': 'Handball', 'sport.soccer': 'Soccer', 'sport.basketball': 'Basketball',
     'sport.volleyball': 'Volleyball', 'sport.generic': 'Generic',
+    'sport.baseball': 'Baseball', 'sport.rugby': 'Rugby', 'sport.football': 'Am. Football',
+    'sport.badminton': 'Badminton', 'sport.tennis': 'Tennis', 'sport.snooker': 'Snooker',
+    'sport.pool': '8-Ball', 'sport.darts': 'Darts', 'sport.icehockey': 'Ice Hockey',
+    'sport.floorball': 'Floorball',
+    'b.full': 'Full screen', 'b.exitFull': 'Exit full screen',
     'prop.cone': 'Cone', 'prop.disc': 'Disc', 'prop.pole': 'Pole', 'prop.hurdle': 'Hurdle', 'prop.ladder': 'Ladder',
     'prop.ring': 'Ring', 'prop.minigoal': 'Mini goal', 'prop.dummy': 'Dummy', 'prop.ball': 'Med. ball', 'prop.target': 'Target',
 
@@ -234,6 +285,11 @@ var CL = (function () {
     'tool.arrow': 'Pil', 'tool.free': 'Tegn', 'tool.erase': 'Slet',
     'sport.handball': 'H\u00e5ndbold', 'sport.soccer': 'Fodbold', 'sport.basketball': 'Basketball',
     'sport.volleyball': 'Volleyball', 'sport.generic': 'Generel',
+    'sport.baseball': 'Baseball', 'sport.rugby': 'Rugby', 'sport.football': 'Am. fodbold',
+    'sport.badminton': 'Badminton', 'sport.tennis': 'Tennis', 'sport.snooker': 'Snooker',
+    'sport.pool': '8-ball', 'sport.darts': 'Dart', 'sport.icehockey': 'Ishockey',
+    'sport.floorball': 'Floorball',
+    'b.full': 'Fuld sk\u00e6rm', 'b.exitFull': 'Luk fuld sk\u00e6rm',
     'prop.cone': 'Kegle', 'prop.disc': 'Tallerken', 'prop.pole': 'Stang', 'prop.hurdle': 'H\u00e6k', 'prop.ladder': 'Stige',
     'prop.ring': 'Ring', 'prop.minigoal': 'Minim\u00e5l', 'prop.dummy': 'Dummy', 'prop.ball': 'Medicinbold', 'prop.target': 'M\u00e5lskive',
 
@@ -349,6 +405,45 @@ var CL = (function () {
   return { t: t, map: map, set: set, fill: fill, lang: function () { return lang; } };
 })();
 var T = CL.t;
+
+/*
+  Appearance for the classic build: light/dark and the full-screen board.
+  Both are plain body classes, because an iPad of this age has neither CSS
+  variables nor the Fullscreen API. The board redraws on a theme change so the
+  canvas court follows along.
+*/
+var SKIN = (function () {
+  var theme = 'dark', boardFs = false;
+  try { theme = localStorage.getItem('stx_classic_theme') === 'light' ? 'light' : 'dark'; } catch (e) {}
+  function sync() {
+    var c = [];
+    if (theme === 'light') c.push('light');
+    if (boardFs) c.push('bfs');
+    if (document.body) document.body.className = c.join(' ');
+    var b = document.getElementById('themeBtn');
+    if (b) b.innerHTML = theme === 'light' ? '\u263D' : '\u2600';
+  }
+  function toggleTheme() {
+    theme = theme === 'light' ? 'dark' : 'light';
+    try { localStorage.setItem('stx_classic_theme', theme); } catch (e) {}
+    sync();
+    if (window.STXBoard && STXBoard.redraw) STXBoard.redraw();
+  }
+  function setBoardFs(on) {
+    boardFs = !!on;
+    sync();
+    window.scrollTo(0, 0);
+    if (window.STXBoard && STXBoard.redraw) STXBoard.redraw();
+  }
+  return {
+    theme: function () { return theme; },
+    light: function () { return theme === 'light'; },
+    toggleTheme: toggleTheme,
+    boardFs: function () { return boardFs; },
+    setBoardFs: setBoardFs,
+    sync: sync
+  };
+})();
 </script>
 
   <!-- Global site tag (gtag.js) - Google Analytics -->
@@ -371,6 +466,7 @@ var T = CL.t;
     </div>
     <div class="langbar">
       <span class="tab" data-lang="en">EN</span><span class="tab" data-lang="da">DA</span>
+      <span class="tab" id="themeBtn" title="Light / Dark">&#9728;</span>
       <a class="full" href="index.html?full=1" data-t="app.full">Full version &rsaquo;</a>
     </div>
   </div>
@@ -579,10 +675,172 @@ var T = CL.t;
   }
 
   function courtGeneric() {
-    ctx.fillStyle = '#1e293b'; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = (window.SKIN && SKIN.light()) ? '#cbd5e1' : '#1e293b';
+    ctx.fillRect(0, 0, W, H);
     border(); centerLine();
     ctx.strokeStyle = '#e5e7eb'; ctx.lineWidth = 2;
     circle(W / 2, H / 2, 56);
+  }
+
+  // Every court is drawn top-to-bottom on the same 700x560 canvas, so the same
+  // percentage coordinates work whichever sport is picked.
+  function courtBaseball() {
+    ctx.fillStyle = '#2f8f4e'; ctx.fillRect(0, 0, W, H);
+    border();
+    var hx = W / 2, hy = H - 70, side = 210;
+    ctx.fillStyle = '#b07a45';
+    ctx.beginPath();
+    ctx.moveTo(hx, hy); ctx.lineTo(hx + side, hy - side);
+    ctx.lineTo(hx, hy - side * 2); ctx.lineTo(hx - side, hy - side); ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = '#f8fafc'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.beginPath(); ctx.arc(hx, hy - side, 26, 0, Math.PI * 2, false); ctx.fillStyle = '#b07a45'; ctx.fill(); ctx.stroke();
+    ctx.strokeStyle = '#f8fafc'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(hx, hy); ctx.lineTo(hx + side + 90, hy - side - 90);
+    ctx.moveTo(hx, hy); ctx.lineTo(hx - side - 90, hy - side - 90); ctx.stroke();
+  }
+
+  function courtRugby() {
+    ctx.fillStyle = '#2f8f4e'; ctx.fillRect(0, 0, W, H);
+    border();
+    ctx.strokeStyle = '#e5e7eb'; ctx.lineWidth = 2;
+    var ys = [58, 130, H / 2, H - 130, H - 58], i;
+    ctx.beginPath();
+    for (i = 0; i < ys.length; i++) { ctx.moveTo(8, ys[i]); ctx.lineTo(W - 8, ys[i]); }
+    ctx.stroke();
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(W / 2 - 28, 8); ctx.lineTo(W / 2 - 28, 40);
+    ctx.moveTo(W / 2 + 28, 8); ctx.lineTo(W / 2 + 28, 40);
+    ctx.moveTo(W / 2 - 28, 24); ctx.lineTo(W / 2 + 28, 24);
+    ctx.moveTo(W / 2 - 28, H - 8); ctx.lineTo(W / 2 - 28, H - 40);
+    ctx.moveTo(W / 2 + 28, H - 8); ctx.lineTo(W / 2 + 28, H - 40);
+    ctx.moveTo(W / 2 - 28, H - 24); ctx.lineTo(W / 2 + 28, H - 24);
+    ctx.stroke();
+  }
+
+  function courtFootball() {
+    ctx.fillStyle = '#2f7d47'; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = '#276b3d';
+    ctx.fillRect(8, 8, W - 16, 62); ctx.fillRect(8, H - 70, W - 16, 62);
+    border();
+    ctx.strokeStyle = '#e5e7eb'; ctx.lineWidth = 1.5;
+    var step = (H - 140) / 10, i;
+    ctx.beginPath();
+    for (i = 0; i <= 10; i++) { var y = 70 + step * i; ctx.moveTo(8, y); ctx.lineTo(W - 8, y); }
+    ctx.stroke();
+    ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(8, H / 2); ctx.lineTo(W - 8, H / 2); ctx.stroke();
+  }
+
+  function courtBadminton() {
+    ctx.fillStyle = '#1f6f5c'; ctx.fillRect(0, 0, W, H);
+    border();
+    ctx.strokeStyle = '#f8fafc'; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.moveTo(8, H / 2); ctx.lineTo(W - 8, H / 2); ctx.stroke();
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(8, H / 2 - 74); ctx.lineTo(W - 8, H / 2 - 74);
+    ctx.moveTo(8, H / 2 + 74); ctx.lineTo(W - 8, H / 2 + 74);
+    ctx.moveTo(8, 84); ctx.lineTo(W - 8, 84);
+    ctx.moveTo(8, H - 84); ctx.lineTo(W - 8, H - 84);
+    ctx.moveTo(W / 2, 8); ctx.lineTo(W / 2, H / 2 - 74);
+    ctx.moveTo(W / 2, H / 2 + 74); ctx.lineTo(W / 2, H - 8);
+    ctx.moveTo(60, 8); ctx.lineTo(60, H - 8);
+    ctx.moveTo(W - 60, 8); ctx.lineTo(W - 60, H - 8);
+    ctx.stroke();
+  }
+
+  function courtTennis() {
+    ctx.fillStyle = '#2a6ca8'; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = '#3f8fd0'; ctx.fillRect(58, 8, W - 116, H - 16);
+    border();
+    ctx.strokeStyle = '#f8fafc'; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.moveTo(8, H / 2); ctx.lineTo(W - 8, H / 2); ctx.stroke();
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(58, 8); ctx.lineTo(58, H - 8);
+    ctx.moveTo(W - 58, 8); ctx.lineTo(W - 58, H - 8);
+    ctx.moveTo(58, H / 2 - 110); ctx.lineTo(W - 58, H / 2 - 110);
+    ctx.moveTo(58, H / 2 + 110); ctx.lineTo(W - 58, H / 2 + 110);
+    ctx.moveTo(W / 2, H / 2 - 110); ctx.lineTo(W / 2, H / 2 + 110);
+    ctx.stroke();
+  }
+
+  // One table renderer for both cue sports — only the cloth and the rack differ.
+  function cueTable(cloth) {
+    ctx.fillStyle = '#5b3a1e'; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = cloth; ctx.fillRect(26, 26, W - 52, H - 52);
+    ctx.fillStyle = '#0b1220';
+    var px = [26, W / 2, W - 26], py = [26, H / 2, H - 26], i, j;
+    for (i = 0; i < px.length; i++) for (j = 0; j < py.length; j++) {
+      if (i === 1 && j === 1) continue;
+      ctx.beginPath(); ctx.arc(px[i], py[j], 15, 0, Math.PI * 2, false); ctx.fill();
+    }
+  }
+  function courtSnooker() {
+    cueTable('#127a4a');
+    ctx.strokeStyle = '#f8fafc'; ctx.lineWidth = 2;
+    var baulk = H - 140;
+    ctx.beginPath(); ctx.moveTo(26, baulk); ctx.lineTo(W - 26, baulk); ctx.stroke();
+    ctx.beginPath(); ctx.arc(W / 2, baulk, 68, 0, Math.PI, false); ctx.stroke();
+  }
+  function courtPool() {
+    cueTable('#12609a');
+    ctx.strokeStyle = 'rgba(255,255,255,.5)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(26, H - 130); ctx.lineTo(W - 26, H - 130); ctx.stroke();
+  }
+
+  function courtDarts() {
+    ctx.fillStyle = '#0b1220'; ctx.fillRect(0, 0, W, H);
+    var cx = W / 2, cy = H / 2, R = 240, i;
+    for (i = 0; i < 20; i++) {
+      var a0 = (i * 18 - 99) * Math.PI / 180, a1 = a0 + 18 * Math.PI / 180;
+      ctx.fillStyle = i % 2 ? '#f5f0e1' : '#12100e';
+      ctx.beginPath(); ctx.moveTo(cx, cy); ctx.arc(cx, cy, R, a0, a1, false); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = i % 2 ? '#c81026' : '#0e7a3c';
+      ctx.beginPath(); ctx.arc(cx, cy, R, a0, a1, false); ctx.arc(cx, cy, R * 0.92, a1, a0, true); ctx.closePath(); ctx.fill();
+      ctx.beginPath(); ctx.arc(cx, cy, R * 0.63, a0, a1, false); ctx.arc(cx, cy, R * 0.57, a1, a0, true); ctx.closePath(); ctx.fill();
+    }
+    ctx.fillStyle = '#0e7a3c';
+    ctx.beginPath(); ctx.arc(cx, cy, 26, 0, Math.PI * 2, false); ctx.fill();
+    ctx.fillStyle = '#c81026';
+    ctx.beginPath(); ctx.arc(cx, cy, 11, 0, Math.PI * 2, false); ctx.fill();
+  }
+
+  function courtIcehockey() {
+    ctx.fillStyle = '#e8f1fa'; ctx.fillRect(0, 0, W, H);
+    ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 2;
+    ctx.strokeRect(8, 8, W - 16, H - 16);
+    ctx.strokeStyle = '#2563eb'; ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.moveTo(8, 170); ctx.lineTo(W - 8, 170);
+    ctx.moveTo(8, H - 170); ctx.lineTo(W - 8, H - 170); ctx.stroke();
+    ctx.strokeStyle = '#dc2626'; ctx.lineWidth = 5;
+    ctx.beginPath(); ctx.moveTo(8, H / 2); ctx.lineTo(W - 8, H / 2); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(8, 62); ctx.lineTo(W - 8, 62);
+    ctx.moveTo(8, H - 62); ctx.lineTo(W - 8, H - 62); ctx.lineWidth = 3; ctx.stroke();
+    ctx.strokeStyle = '#dc2626'; ctx.lineWidth = 2;
+    circle(W / 2, H / 2, 56);
+    var fx = [W / 2 - 170, W / 2 + 170], fy = [116, H - 116], i, j;
+    for (i = 0; i < fx.length; i++) for (j = 0; j < fy.length; j++) circle(fx[i], fy[j], 44);
+    ctx.strokeStyle = '#dc2626'; ctx.lineWidth = 3;
+    ctx.strokeRect(W / 2 - 34, 46, 68, 16);
+    ctx.strokeRect(W / 2 - 34, H - 62, 68, 16);
+  }
+
+  function courtFloorball() {
+    ctx.fillStyle = '#b98b53'; ctx.fillRect(0, 0, W, H);
+    ctx.strokeStyle = '#f8fafc'; ctx.lineWidth = 3;
+    ctx.strokeRect(14, 14, W - 28, H - 28);
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(14, H / 2); ctx.lineTo(W - 14, H / 2); ctx.stroke();
+    circle(W / 2, H / 2, 44);
+    ctx.strokeRect(W / 2 - 100, 14, 200, 96);
+    ctx.strokeRect(W / 2 - 100, H - 110, 200, 96);
+    ctx.strokeStyle = '#dc2626'; ctx.lineWidth = 4;
+    ctx.strokeRect(W / 2 - 32, 20, 64, 14);
+    ctx.strokeRect(W / 2 - 32, H - 34, 64, 14);
   }
 
   // ---------- sport definitions ----------
@@ -658,9 +916,130 @@ var T = CL.t;
         o.push(mk('ball', 'ball', '', '', 50, 50));
         return o;
       }
+    },
+    baseball: {
+      name: 'Baseball', court: courtBaseball, props: ['cone', 'disc', 'dummy', 'target'],
+      formation: function () {
+        var o = [];
+        o.push(mk('p', 'player', 'def', 1, 50, 63));
+        o.push(mk('c', 'player', 'def', 2, 50, 90));
+        o = o.concat(line('def', 300, [72, 62, 38, 28], null, 55));
+        o = o.concat(line('def', 400, [24, 50, 76], null, 26));
+        o.push(mk('bat', 'player', 'atk', 1, 44, 88));
+        o.push(mk('ball', 'ball', '', '', 50, 66));
+        return o;
+      }
+    },
+    rugby: {
+      name: 'Rugby', court: courtRugby, props: ['cone', 'pole', 'dummy', 'ladder'],
+      formation: function () {
+        var o = [];
+        o = o.concat(line('atk', 100, [30, 42, 58, 70], null, 70));
+        o = o.concat(line('atk', 200, [22, 50, 78], null, 82));
+        o = o.concat(line('def', 300, [30, 42, 58, 70], null, 30));
+        o = o.concat(line('def', 400, [22, 50, 78], null, 18));
+        o.push(mk('ball', 'ball', '', '', 50, 50));
+        return o;
+      }
+    },
+    football: {
+      name: 'American Football', court: courtFootball, props: ['cone', 'disc', 'dummy', 'ladder'],
+      formation: function () {
+        var o = [];
+        o = o.concat(line('atk', 100, [32, 41, 50, 59, 68], null, 60));
+        o.push(mk('qb', 'player', 'atk', 6, 50, 70));
+        o.push(mk('rb', 'player', 'atk', 7, 50, 78));
+        o = o.concat(line('def', 200, [36, 45, 55, 64], null, 40));
+        o = o.concat(line('def', 300, [30, 50, 70], null, 30));
+        o.push(mk('ball', 'ball', '', '', 50, 55));
+        return o;
+      }
+    },
+    badminton: {
+      name: 'Badminton', court: courtBadminton, props: ['cone', 'ring', 'target', 'disc'],
+      formation: function () {
+        var o = [];
+        o.push(mk('a1', 'player', 'atk', 1, 36, 72)); o.push(mk('a2', 'player', 'atk', 2, 64, 84));
+        o.push(mk('d1', 'player', 'def', 1, 64, 28)); o.push(mk('d2', 'player', 'def', 2, 36, 16));
+        o.push(mk('ball', 'ball', '', '', 50, 44));
+        return o;
+      }
+    },
+    tennis: {
+      name: 'Tennis', court: courtTennis, props: ['cone', 'ring', 'target', 'disc'],
+      formation: function () {
+        var o = [];
+        o.push(mk('a1', 'player', 'atk', 1, 50, 86)); o.push(mk('a2', 'player', 'atk', 2, 30, 66));
+        o.push(mk('d1', 'player', 'def', 1, 50, 14)); o.push(mk('d2', 'player', 'def', 2, 70, 34));
+        o.push(mk('ball', 'ball', '', '', 50, 44));
+        return o;
+      }
+    },
+    snooker: {
+      name: 'Snooker', court: courtSnooker, props: ['target', 'ring', 'disc'],
+      formation: function () {
+        var o = [], i;
+        var reds = [[50, 34], [47, 29], [53, 29], [44, 24], [50, 24], [56, 24]];
+        for (i = 0; i < reds.length; i++) o.push(mk('r' + i, 'player', 'def', i + 1, reds[i][0], reds[i][1]));
+        o.push(mk('cue', 'ball', '', '', 42, 78));
+        o.push(mk('blk', 'player', 'atk', 1, 50, 14));
+        return o;
+      }
+    },
+    pool: {
+      name: '8-Ball Pool', court: courtPool, props: ['target', 'ring', 'disc'],
+      formation: function () {
+        var o = [], i, n = 1;
+        var rows = [[[50, 26]], [[46, 32], [54, 32]], [[42, 38], [50, 38], [58, 38]]];
+        for (i = 0; i < rows.length; i++) {
+          var r = rows[i], j;
+          for (j = 0; j < r.length; j++) o.push(mk('b' + (n), 'player', n === 5 ? 'def' : 'atk', n++, r[j][0], r[j][1]));
+        }
+        o.push(mk('cue', 'ball', '', '', 50, 80));
+        return o;
+      }
+    },
+    darts: {
+      name: 'Darts', court: courtDarts, props: ['target', 'ring'],
+      formation: function () {
+        var o = [];
+        o.push(mk('d1', 'player', 'atk', 1, 50, 50));
+        o.push(mk('d2', 'player', 'atk', 2, 57, 41));
+        o.push(mk('d3', 'player', 'def', 3, 43, 59));
+        return o;
+      }
+    },
+    icehockey: {
+      name: 'Ice Hockey', court: courtIcehockey, props: ['cone', 'disc', 'minigoal', 'dummy'],
+      formation: function () {
+        var o = [];
+        o.push(mk('gkA', 'gk', 'atk', 1, 50, 92));
+        o = o.concat(line('atk', 100, [30, 50, 70], null, 62));
+        o = o.concat(line('atk', 200, [36, 64], null, 78));
+        o.push(mk('gkB', 'gk', 'def', 1, 50, 8));
+        o = o.concat(line('def', 300, [30, 50, 70], null, 38));
+        o = o.concat(line('def', 400, [36, 64], null, 22));
+        o.push(mk('ball', 'ball', '', '', 50, 50));
+        return o;
+      }
+    },
+    floorball: {
+      name: 'Floor Hockey', court: courtFloorball, props: ['cone', 'disc', 'minigoal', 'dummy'],
+      formation: function () {
+        var o = [];
+        o.push(mk('gkA', 'gk', 'atk', 1, 50, 90));
+        o = o.concat(line('atk', 100, [30, 50, 70], null, 64));
+        o = o.concat(line('atk', 200, [40, 60], null, 78));
+        o.push(mk('gkB', 'gk', 'def', 1, 50, 10));
+        o = o.concat(line('def', 300, [30, 50, 70], null, 36));
+        o = o.concat(line('def', 400, [40, 60], null, 22));
+        o.push(mk('ball', 'ball', '', '', 50, 50));
+        return o;
+      }
     }
   };
-  var SPORT_ORDER = ['handball', 'soccer', 'basketball', 'volleyball', 'generic'];
+  var SPORT_ORDER = ['handball', 'soccer', 'basketball', 'volleyball', 'baseball', 'rugby',
+    'football', 'badminton', 'tennis', 'snooker', 'pool', 'darts', 'icehockey', 'floorball', 'generic'];
 
   function propName(id) { return T('prop.' + id); }
   function sportName(id) { return T('sport.' + id); }
@@ -1133,9 +1512,17 @@ var T = CL.t;
       frame().objects = []; selectedId = null; draw(); persist();
     };
     var snap = btn(T('b.snapshot')); snap.onclick = function () { snapshot(); };
+    var full = btn('\u26F6 ' + T('b.full'));
+    full.onclick = function () {
+      var on = !SKIN.boardFs();
+      SKIN.setBoardFs(on);
+      full.innerHTML = '\u26F6 ' + T(on ? 'b.exitFull' : 'b.full');
+      full.className = 'b' + (on ? ' on' : '');
+    };
     fileRow.appendChild(reset);
     fileRow.appendChild(clear);
     fileRow.appendChild(snap);
+    fileRow.appendChild(full);
   }
 
   function snapshot() {
@@ -1161,6 +1548,8 @@ var T = CL.t;
   updatePropRow();
   updateFrameInfo();
   draw();
+  // The theme switch repaints the court, which is drawn rather than styled.
+  window.STXBoard = { redraw: draw };
 })();
 </script>
 
@@ -1883,6 +2272,9 @@ var T = CL.t;
   load();
   ensureTeam();
   CL.fill();
+  SKIN.sync();
+  var tb = document.getElementById('themeBtn');
+  if (tb) tb.onclick = function () { SKIN.toggleTheme(); };
   // Landing here again clears the "always use the full version" override, so a
   // device that cannot run the modern app can never get stuck on it.
   try { localStorage.removeItem('stx_force_full'); } catch (e) {}

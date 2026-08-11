@@ -1031,8 +1031,7 @@ function cloudCodeDialog() {
         <button type="button" class="btn sm" id="cd_pol">${UI.esc(T('pol.btn'))}</button></p>
       ${c.apiKey ? '' : `<p class="hint mail-note">${UI.esc(T('cloud.codeNoKey'))}</p>`}
       <p class="hint">${UI.esc(T('cloud.codeHint'))}</p>`,
-    footer: `<button class="btn" data-open>${UI.esc(T('cloud.openDrive'))}</button>
-      <button class="btn" data-mail>${UI.esc(T('cloud.mailCode'))}</button>
+    footer: `<button class="btn" data-mail>${UI.esc(T('cloud.mailCode'))}</button>
       <button class="btn primary" data-copy>${UI.esc(T('cloud.copy'))}</button>
       <button class="btn ghost" data-close2>${T('common.close')}</button>`,
     onOpen: (m, close) => {
@@ -1044,7 +1043,6 @@ function cloudCodeDialog() {
         try { await navigator.clipboard.writeText(code); } catch (e) { document.execCommand('copy'); }
         UI.toast(T('cloud.copied'), 'success');
       };
-      m.querySelector('[data-open]').onclick = () => window.open(Drive.fileLink(c.fileId), '_blank', 'noopener');
       m.querySelector('[data-mail]').onclick = () => {
         const body = T('cloud.mailBody').replace('{0}', c.teamName || '').replace('{1}', code).replace('{2}', location.origin + location.pathname);
         location.href = 'mailto:?subject=' + encodeURIComponent(T('cloud.mailSubject')) + '&body=' + encodeURIComponent(body);
