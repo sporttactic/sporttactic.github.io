@@ -56,7 +56,7 @@ Views.messenger = function (mount, params) {
     const EN = {
       title: 'Secure Messenger', subtitle: 'Peer-to-peer, end-to-end encrypted — no server, no account.',
       back: 'Team Sync', unsupported: 'This browser cannot run the secure messenger (Web Crypto / WebRTC unavailable). Use a modern browser over HTTPS.',
-      you: 'Your identity', displayName: 'Display name', yourName: 'Your name', save: 'Save', fingerprint: 'Your safety fingerprint',
+      you: 'Your identity', displayName: 'Display name', yourName: 'Your name', namePh: 'Coach / Player', save: 'Save', fingerprint: 'Your safety fingerprint',
       yourLink: 'Your contact link', copy: 'Copy', copied: 'Copied to clipboard', share: 'Share this link so others can add you. It only contains your public key.',
       contacts: 'Contacts', addContact: 'Add contact', pasteLink: 'Paste a contact link…', add: 'Add', noContacts: 'No contacts yet. Share your link or paste someone else’s.',
       added: 'Contact added', invalidLink: 'That is not a valid contact link', selfLink: 'That link is your own identity',
@@ -101,7 +101,7 @@ Views.messenger = function (mount, params) {
     const DA = {
       title: 'Sikre Beskeder', subtitle: 'Peer-to-peer, end-to-end krypteret — ingen server, ingen konto.',
       back: 'Holdsynk', unsupported: 'Denne browser kan ikke køre den sikre messenger (Web Crypto / WebRTC mangler). Brug en moderne browser over HTTPS.',
-      you: 'Din identitet', displayName: 'Vist navn', yourName: 'Dit navn', save: 'Gem', fingerprint: 'Dit sikkerheds-fingeraftryk',
+      you: 'Din identitet', displayName: 'Vist navn', yourName: 'Dit navn', namePh: 'Træner / Spiller', save: 'Gem', fingerprint: 'Dit sikkerheds-fingeraftryk',
       yourLink: 'Dit kontakt-link', copy: 'Kopiér', copied: 'Kopieret', share: 'Del dette link, så andre kan tilføje dig. Det indeholder kun din offentlige nøgle.',
       contacts: 'Kontakter', addContact: 'Tilføj kontakt', pasteLink: 'Indsæt et kontakt-link…', add: 'Tilføj', noContacts: 'Ingen kontakter endnu. Del dit link eller indsæt en andens.',
       added: 'Kontakt tilføjet', invalidLink: 'Det er ikke et gyldigt kontakt-link', selfLink: 'Det link er din egen identitet',
@@ -335,7 +335,7 @@ Views.messenger = function (mount, params) {
             <h3>⚡ ${tx('quickConnect')}</h3>
             <p class="hint" style="margin:2px 0 8px">${tx('quickConnectDesc')}</p>
             <label class="field" style="margin:2px 0 8px"><span>${tx('yourName')}</span>
-              <input id="qcName" type="text" maxlength="32" value="${esc(identity.name)}" placeholder="Coach / Player" autocomplete="off">
+              <input id="qcName" type="text" maxlength="32" value="${esc(identity.name)}" placeholder="${esc(tx('namePh'))}" autocomplete="off">
             </label>
             <div class="row" style="flex:0;gap:6px;align-items:stretch">
               <input id="qcKey" type="text" placeholder="${tx('keyPlaceholder')}" autocomplete="off" spellcheck="false" style="flex:1;min-width:0">
@@ -381,10 +381,17 @@ Views.messenger = function (mount, params) {
     if (typeof Store === 'undefined') return [];
     const team = Store.activeTeam();
     const mine = (rows, f) => (team ? rows.filter(r => r.teamId === team.id) : rows).map(f);
-    const staff = mine(Store.all('coaches'), c => ({ store: 'coaches', id: c.id, name: c.name || '', role: c.role || '', key: c.chatKey || '' }));
+    // Roles and positions are stored in English; the label is only for display.
+    const label = (prefix, v) => {
+      if (!v) return '';
+      const k = prefix + '.' + v;
+      const t = (typeof T === 'function') ? T(k) : k;
+      return t === k ? v : t;
+    };
+    const staff = mine(Store.all('coaches'), c => ({ store: 'coaches', id: c.id, name: c.name || '', role: label('coachRole', c.role), key: c.chatKey || '' }));
     const players = mine(Store.players(), p => ({
       store: 'players', id: p.id, name: ((p.firstName || '') + ' ' + (p.lastName || '')).trim(),
-      role: p.position || '', key: p.chatKey || ''
+      role: label('pos', p.position), key: p.chatKey || ''
     }));
     return { staff: staff.filter(m => m.name), players: players.filter(m => m.name) };
   }

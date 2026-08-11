@@ -202,16 +202,16 @@ const App = (() => {
     if (!q) { box.classList.add('hidden'); return; }
     const results = [];
     const add = (cat, label, route, params) => results.push({ cat, label, route, params });
-    Store.players().forEach(p => { if ((p.firstName + ' ' + p.lastName).toLowerCase().includes(q)) add('Player', `#${p.number} ${p.firstName} ${p.lastName}`, 'teams'); });
-    Store.matches().forEach(m => { if (m.opponent.toLowerCase().includes(q)) add('Match', `${m.opponent} · ${UI.fmtDate(m.date)}`, 'matches'); });
-    Store.all('exercises').forEach(e => { if (e.title.toLowerCase().includes(q) || (e.tags || []).join(' ').toLowerCase().includes(q)) add('Exercise', e.title, 'training'); });
-    Store.scoped('training').forEach(t => { if (t.title.toLowerCase().includes(q)) add('Training', t.title, 'training'); });
-    Store.scoped('opponents').forEach(o => { if (o.name.toLowerCase().includes(q)) add('Opponent', o.name, 'opponents'); });
-    Store.all('tactics').forEach(t => { if ((t.name || '').toLowerCase().includes(q)) add('Tactic', t.name, 'tactics'); });
+    Store.players().forEach(p => { if ((p.firstName + ' ' + p.lastName).toLowerCase().includes(q)) add(T('search.player'), `#${p.number} ${p.firstName} ${p.lastName}`, 'teams'); });
+    Store.matches().forEach(m => { if (m.opponent.toLowerCase().includes(q)) add(T('search.match'), `${m.opponent} · ${UI.fmtDate(m.date)}`, 'matches'); });
+    Store.all('exercises').forEach(e => { if (e.title.toLowerCase().includes(q) || (e.tags || []).join(' ').toLowerCase().includes(q)) add(T('search.exercise'), e.title, 'training'); });
+    Store.scoped('training').forEach(t => { if (t.title.toLowerCase().includes(q)) add(T('search.training'), t.title, 'training'); });
+    Store.scoped('opponents').forEach(o => { if (o.name.toLowerCase().includes(q)) add(T('search.opponent'), o.name, 'opponents'); });
+    Store.all('tactics').forEach(t => { if ((t.name || '').toLowerCase().includes(q)) add(T('search.tactic'), t.name, 'tactics'); });
 
     box.innerHTML = results.length ? results.slice(0, 12).map((r, i) =>
-      `<div class="sr-item" data-i="${i}"><div class="sr-cat">${r.cat}</div>${UI.esc(r.label)}</div>`).join('')
-      : '<div class="sr-item">No results</div>';
+      `<div class="sr-item" data-i="${i}"><div class="sr-cat">${UI.esc(r.cat)}</div>${UI.esc(r.label)}</div>`).join('')
+      : `<div class="sr-item">${UI.esc(T('search.none'))}</div>`;
     box.classList.remove('hidden');
     box.querySelectorAll('[data-i]').forEach(el => el.onclick = () => {
       const r = results[+el.dataset.i]; box.classList.add('hidden');
