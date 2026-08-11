@@ -59,6 +59,17 @@ Views.video = function (mount) {
   const DRAW_COLORS = ['#ffd400', '#ff3b30', '#34c759', '#0a84ff', '#ffffff', '#101010'];
   let dTool = 'arrow';
   let dColor = DRAW_COLORS[0];
+  // Drawing used to depend on a bookmark already being picked, which meant the
+  // overlay never accepted a click on a fresh video and the tools looked broken.
+  // It is an explicit mode now, and it makes the bookmark it needs.
+  let drawMode = false;
+
+  // The picture used to fill the whole column, which pushed the bookmarks and
+  // the tools off the screen. Three sizes, remembered between visits.
+  const VIDEO_SIZES = ['s', 'm', 'l'];
+  const SIZE_KEY = 'stx_video_size';
+  let vSize = 'm';
+  try { const s = localStorage.getItem(SIZE_KEY); if (VIDEO_SIZES.indexOf(s) >= 0) vSize = s; } catch (e) { /* private mode */ }
 
   function drawShapes(cx, w, h, bm) {
     const list = (bm && bm.shapes) || [];
@@ -130,13 +141,20 @@ Views.video = function (mount) {
     <div class="video-panel" id="videoPanel">
       <div class="video-head">
         <h3 style="margin:0">${T('video.title')}</h3>
-        <button class="btn sm" id="videoFs" title="${T('video.fullscreen')}">⛶ ${T('video.fullscreen')}</button>
+        <span class="tool-group">
+          <label class="field vsize"><span>${T('video.size')}</span>
+            <select id="vSize">${VIDEO_SIZES.map(s => `<option value="${s}" ${s === vSize ? 'selected' : ''}>${T('video.size' + s)}</option>`).join('')}</select></label>
+          <button class="btn sm" id="videoFs" title="${T('video.fullscreen')}">⛶ ${T('video.fullscreen')}</button>
+        </span>
       </div>
       <div class="v-stage" id="vStage">
-        <div id="mediaWrap">
-          <video id="player" controls style="width:100%;border-radius:10px;background:#000"></video>
+        <div id="mediaWrap" class="size-${vSize}">
+          <video id="player" class="v-media" controls></video>
         </div>
         <div class="draw-bar" id="drawBar">
+          <span class="tool-group">
+            <button class="btn sm" id="drawMode">✎ ${T('video.drawMode')}</button>
+          </span>
           <span class="tool-group">
             ${DRAW_TOOLS.map(t => `<button class="btn sm" data-dtool="${t}">${T('video.d' + t)}</button>`).join('')}
           </span>
@@ -148,12 +166,17 @@ Views.video = function (mount) {
         </div>
       </div>
       <p class="hint" id="drawHint"></p>
-      <div class="row" style="margin-top:10px;flex:0" id="localControls">
+      <div class="row" style="margin-top:10px;flex:0;flex-wrap:wrap" id="localControls">
         <button class="btn sm local-only" data-seek="-5">« 5s</button>
         <button class="btn sm local-only" data-rate="0.5">0.5×</button>
         <button class="btn sm local-only" data-rate="1">1×</button>
         <button class="btn sm local-only" data-rate="2">2×</button>
         <button class="btn sm local-only" data-seek="5">5s »</button>
+        <span class="tool-group mark-group">
+          <button class="btn sm local-only" id="markIn">⌘ ${T('video.markIn')}</button>
+          <button class="btn sm local-only" id="markOut">⌙ ${T('video.markOut')}</button>
+          <span class="tag" id="markState"></span>
+        </span>
         <button class="btn sm primary" id="bm">★ ${T('video.bookmark')}</button>
       </div>
       <div class="bm-section">
@@ -193,7 +216,7 @@ Views.video = function (mount) {
   function hasLocalVideo() { return !!(v && v.src && v.isConnected); }
 
   function showLocalVideo() {
-    wrap.innerHTML = `<video id="player" controls style="width:100%;border-radius:10px;background:#000"></video>`;
+    wrap.innerHTML = `<video id="player" class="v-media" controls></video>`;
     v = mount.querySelector('#player');
     showPlaybackBtns(true);
     bindLocalControls();
@@ -202,7 +225,10 @@ Views.video = function (mount) {
   function showEmbed(src) {
     wrap.innerHTML = `<div class="embed-frame"><iframe src="${UI.esc(src)}" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen frameborder="0"></iframe></div>`;
     v = null;
+    overlay = null; octx = null;
+    if (sizeWatch) { sizeWatch.disconnect(); sizeWatch = null; }
     showPlaybackBtns(false);
+    setDrawMode(false);
   }
 
   mount.querySelector('#loadStream').onclick = () => {
@@ -214,19 +240,44 @@ Views.video = function (mount) {
   mount.querySelector('#streamUrl').addEventListener('keydown', e => { if (e.key === 'Enter') mount.querySelector('#loadStream').click(); });
 
   mount.querySelector('#vfile').onchange = e => {
-    const f = e.target.files[0]; if (f) { showLocalVideo(); v.src = URL.createObjectURL(f); UI.toast(T('video.streaming')); }
+    const f = e.target.files[0];
+    if (!f) return;
+    showLocalVideo();
+    v.src = URL.createObjectURL(f);
+    // Only now is there something to draw on, so the tools are re-armed here
+    // rather than inside showLocalVideo, which runs one line too early.
+    setDrawMode(drawMode);
+    UI.toast(T('video.streaming'));
   };
 
   function bindLocalControls() {
     mount.querySelectorAll('[data-seek]').forEach(b => b.onclick = () => { if (v) v.currentTime += +b.dataset.seek; });
     mount.querySelectorAll('[data-rate]').forEach(b => b.onclick = () => { if (v) v.playbackRate = +b.dataset.rate; });
-    mount.querySelector('#bm').onclick = createBookmark;
+    mount.querySelector('#bm').onclick = () => createBookmark();
+    mount.querySelector('#markIn').onclick = () => {
+      if (!hasLocalVideo()) return UI.toast(T('video.needLocal'), 'error');
+      inPoint = v.currentTime || 0;
+      if (outPoint != null && outPoint <= inPoint) outPoint = null;
+      renderMarks();
+      UI.toast(T('video.markedIn') + ' ' + UI.fmtClock(Math.floor(inPoint)));
+    };
+    mount.querySelector('#markOut').onclick = () => {
+      if (!hasLocalVideo()) return UI.toast(T('video.needLocal'), 'error');
+      outPoint = v.currentTime || 0;
+      if (inPoint == null || inPoint >= outPoint) inPoint = Math.max(0, outPoint - clipLenSec);
+      renderMarks();
+      // Both ends are known now, so the dialog opens with the passage already
+      // filled in and only the name is left to type.
+      createBookmark();
+    };
+    renderMarks();
   }
 
   // ---- The drawing overlay -----------------------------------------------
-  // It sits exactly over the picture, and everything drawn on it belongs to the
-  // bookmark picked with Go — which is also the clip it gets burnt into.
-  let overlay = null, octx = null, drawing = null;
+  // It sits exactly over the picture. Drawing is a mode you switch on; the
+  // shapes belong to a bookmark, and if none is picked the first stroke makes
+  // one at the playhead so the tools work on a video you just opened.
+  let overlay = null, octx = null, drawing = null, sizeWatch = null;
 
   function mountOverlay() {
     overlay = document.createElement('canvas');
@@ -242,19 +293,29 @@ Views.video = function (mount) {
     if (v) {
       v.addEventListener('loadedmetadata', sizeOverlay);
       v.addEventListener('seeked', renderOverlay);
+      v.addEventListener('timeupdate', onRangeTick);
+      // The element resizes with the size picker, the accordion and fullscreen;
+      // without this the overlay stays where the picture used to be.
+      if (window.ResizeObserver) {
+        if (sizeWatch) sizeWatch.disconnect();
+        sizeWatch = new ResizeObserver(() => sizeOverlay());
+        sizeWatch.observe(v);
+      }
     }
     sizeOverlay();
   }
 
-  // The picture is letterboxed inside the element, so the overlay is pinned to
-  // the picture itself rather than to the box around it.
+  // The picture is letterboxed inside the element, and the element is centred
+  // inside the wrapper, so the overlay is pinned with both offsets rather than
+  // to the top-left of the box around it.
   function videoBox() {
     if (!v) return null;
     const r = v.getBoundingClientRect();
+    const wr = wrap.getBoundingClientRect();
     const vw = v.videoWidth || 16, vh = v.videoHeight || 9;
     const scale = Math.min(r.width / vw, r.height / vh) || 0;
     const w = vw * scale, h = vh * scale;
-    return { left: (r.width - w) / 2, top: (r.height - h) / 2, w, h };
+    return { left: (r.left - wr.left) + (r.width - w) / 2, top: (r.top - wr.top) + (r.height - h) / 2, w, h };
   }
   function sizeOverlay() {
     if (!overlay || !v) return;
@@ -270,32 +331,71 @@ Views.video = function (mount) {
     renderOverlay();
   }
   function renderOverlay() {
+    const bm = drawTarget();
+    // The hint is updated even when there is no canvas, so switching to a stream
+    // replaces “drawing is on” with the reason it no longer is.
+    const hint = mount.querySelector('#drawHint');
+    if (hint) {
+      hint.textContent = !hasLocalVideo() ? T('video.drawNeedLocal')
+        : !drawMode ? T('video.drawOff')
+          : bm ? T('video.drawOn') + ' ' + fmtRange(bm) + ' ' + (bm.tag || '')
+            : T('video.drawNew');
+    }
     if (!overlay || !octx) return;
     octx.setTransform(1, 0, 0, 1, 0, 0);
     octx.clearRect(0, 0, overlay.width, overlay.height);
-    const bm = drawTarget();
     if (bm) drawShapes(octx, overlay.width, overlay.height, bm);
     if (drawing) drawShapes(octx, overlay.width, overlay.height, { shapes: [drawing] });
-    if (overlay) overlay.classList.toggle('armed', !!bm);
-    const hint = mount.querySelector('#drawHint');
-    if (hint) {
-      hint.textContent = bm
-        ? T('video.drawOn') + ' ' + UI.fmtClock(Math.floor(bm.t)) + ' ' + (bm.tag || '')
-        : T('video.drawPick');
-    }
+    // Armed is what makes the canvas accept a pointer at all, so it follows the
+    // mode and not whether a bookmark happens to be selected.
+    overlay.classList.toggle('armed', drawMode && hasLocalVideo());
   }
   const drawTarget = () => (selectedBm && bookmarks.indexOf(selectedBm) >= 0) ? selectedBm : null;
+
+  function setDrawMode(on) {
+    drawMode = !!on && hasLocalVideo();
+    const btn = mount.querySelector('#drawMode');
+    if (btn) {
+      btn.classList.toggle('primary', drawMode);
+      btn.disabled = !hasLocalVideo();
+    }
+    const bar = mount.querySelector('#drawBar');
+    if (bar) bar.classList.toggle('drawing', drawMode);
+    renderOverlay();
+  }
+  // Drawing has to land on a bookmark, because that is what the export burns
+  // in. Rather than refusing the stroke, the one that finishes it creates the
+  // bookmark it needs. selectedBm is set before the save is awaited, so two
+  // quick strokes share one bookmark instead of making two.
+  async function ensureDrawTarget() {
+    let bm = drawTarget();
+    if (bm) return bm;
+    const t = hasLocalVideo() ? (v.currentTime || 0) : 0;
+    bm = { t, t2: Math.min(t + clipLenSec, (v && v.duration) || t + clipLenSec), tag: T('video.tagDefault'), comment: '', shapes: [] };
+    bookmarks.push(bm);
+    bookmarks.sort((a, b) => a.t - b.t);
+    selectedBm = bm;
+    await saveBookmarks();
+    renderBm();
+    return bm;
+  }
 
   function pt(e) {
     const r = overlay.getBoundingClientRect();
     return [Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)),
       Math.min(1, Math.max(0, (e.clientY - r.top) / r.height))];
   }
+  // Stays synchronous: awaiting here would let a fast pointerup arrive before
+  // `drawing` exists, and the stroke would be dropped. The bookmark is created
+  // by whatever finishes the shape instead.
   function onDrawDown(e) {
-    if (!drawTarget()) { UI.toast(T('video.drawPick'), 'error'); return; }
+    if (!hasLocalVideo()) { UI.toast(T('video.drawNeedLocal'), 'error'); return; }
     e.preventDefault();
+    // Pausing first: a shape drawn over a moving picture never lands where the
+    // coach meant it to.
+    if (v && !v.paused) v.pause();
     if (dTool === 'text') { askDrawText(pt(e)); return; }
-    overlay.setPointerCapture(e.pointerId);
+    try { overlay.setPointerCapture(e.pointerId); } catch (err) { /* pointer already gone */ }
     drawing = { k: dTool, c: dColor, p: [pt(e), pt(e)] };
     renderOverlay();
   }
@@ -313,7 +413,7 @@ Views.video = function (mount) {
         const save = async () => {
           const txt = inp.value.trim();
           if (!txt) return close();
-          const bm = drawTarget();
+          const bm = await ensureDrawTarget();
           if (bm) {
             bm.shapes = (bm.shapes || []).concat([{ k: 'text', c: dColor, txt, p: [at] }]);
             await saveBookmarks();
@@ -337,12 +437,12 @@ Views.video = function (mount) {
   }
   async function onDrawUp() {
     if (!drawing) return;
-    const bm = drawTarget();
     const shape = drawing;
     drawing = null;
     const moved = shape.p.length > 2 ||
       Math.hypot(shape.p[1][0] - shape.p[0][0], shape.p[1][1] - shape.p[0][1]) > 0.01;
-    if (bm && moved) {
+    if (moved) {
+      const bm = await ensureDrawTarget();
       bm.shapes = (bm.shapes || []).concat([shape]);
       await saveBookmarks();
       renderBm();
@@ -356,8 +456,10 @@ Views.video = function (mount) {
       bar.querySelectorAll('[data-dtool]').forEach(b => b.classList.toggle('primary', b.dataset.dtool === dTool));
       bar.querySelectorAll('[data-dcolor]').forEach(b => b.classList.toggle('on', b.dataset.dcolor === dColor));
     };
-    bar.querySelectorAll('[data-dtool]').forEach(b => b.onclick = () => { dTool = b.dataset.dtool; sync(); });
+    // Picking a tool is also how most people expect to start drawing.
+    bar.querySelectorAll('[data-dtool]').forEach(b => b.onclick = () => { dTool = b.dataset.dtool; sync(); setDrawMode(true); });
     bar.querySelectorAll('[data-dcolor]').forEach(b => b.onclick = () => { dColor = b.dataset.dcolor; sync(); });
+    mount.querySelector('#drawMode').onclick = () => setDrawMode(!drawMode);
     mount.querySelector('#drawUndo').onclick = async () => {
       const bm = drawTarget();
       if (!bm || !(bm.shapes || []).length) return;
@@ -384,18 +486,61 @@ Views.video = function (mount) {
     return parts[0] || 0;
   }
 
-  // Create a bookmark with a tag + comment. Auto-saved immediately on confirm.
-  // The timestamp is editable so streams (whose time we cannot read from the
+  // ---- Start / end points -------------------------------------------------
+  // A bookmark marks a passage, not an instant: t is where the clip starts and
+  // t2 where it ends. Older bookmarks have no t2 and still work — they fall
+  // back to the fixed window around t that the app always used.
+  let inPoint = null, outPoint = null;
+  let playUntil = null;
+
+  const bmStart = b => Math.max(0, +b.t || 0);
+  function bmEnd(b) {
+    const s = bmStart(b);
+    const e = +b.t2;
+    return (e > s) ? e : s + clipLenSec;
+  }
+  const bmLen = b => Math.max(0.5, bmEnd(b) - bmStart(b));
+  function fmtRange(b) {
+    const s = UI.fmtClock(Math.floor(bmStart(b)));
+    return (+b.t2 > bmStart(b)) ? s + ' – ' + UI.fmtClock(Math.round(bmEnd(b))) : s;
+  }
+  function renderMarks() {
+    const tag = mount.querySelector('#markState');
+    if (!tag) return;
+    const has = inPoint != null || outPoint != null;
+    tag.classList.toggle('green', has);
+    tag.textContent = has
+      ? T('video.markRange')
+        .replace('{0}', inPoint == null ? '—' : UI.fmtClock(Math.floor(inPoint)))
+        .replace('{1}', outPoint == null ? '—' : UI.fmtClock(Math.round(outPoint)))
+      : T('video.markNone');
+  }
+  // Playing a bookmark stops at its end instead of running on into the next
+  // phase of the match.
+  function onRangeTick() {
+    if (playUntil == null || !v) return;
+    if (v.currentTime >= playUntil - 0.05) { playUntil = null; try { v.pause(); } catch (e) { /* already gone */ } }
+  }
+
+  // Create a bookmark over a passage of play. Auto-saved immediately on confirm.
+  // Both timestamps are editable so streams (whose time we cannot read from the
   // cross-origin iframe) can be tagged too.
-  function createBookmark() {
-    const t = hasLocalVideo() ? (v.currentTime || 0) : 0;
+  function createBookmark(seed) {
+    const now = hasLocalVideo() ? (v.currentTime || 0) : 0;
+    const start = seed && seed.t != null ? seed.t : (inPoint != null ? inPoint : now);
+    const end = seed && seed.t2 != null ? seed.t2 : (outPoint != null ? outPoint : 0);
+    const editing = seed && seed.bm;
     if (v && !v.paused) v.pause();
     UI.modal({
-      title: T('video.addBookmark'),
+      title: editing ? T('video.editBookmark') : T('video.addBookmark'),
       body: `
-        <label class="field"><span>${T('video.time')}</span><input id="bm_time" value="${UI.fmtClock(Math.floor(t))}" placeholder="mm:ss"></label>
-        <label class="field"><span>${T('video.tag')}</span><input id="bm_tag" value="${UI.esc(T('video.tagDefault'))}" placeholder="${T('video.tag')}"></label>
-        <label class="field"><span>${T('video.comment')}</span><textarea id="bm_comment" rows="3" placeholder="${T('video.commentPh')}"></textarea></label>`,
+        <div class="row" style="flex:0;gap:10px">
+          <label class="field"><span>${T('video.start')}</span><input id="bm_time" value="${UI.fmtClock(Math.floor(start))}" placeholder="mm:ss"></label>
+          <label class="field"><span>${T('video.end')}</span><input id="bm_end" value="${end > start ? UI.fmtClock(Math.round(end)) : ''}" placeholder="mm:ss"></label>
+        </div>
+        <p class="hint">${UI.esc(T('video.endHint').replace('{0}', clipLenSec))}</p>
+        <label class="field"><span>${T('video.tag')}</span><input id="bm_tag" value="${UI.esc(editing ? (seed.bm.tag || '') : T('video.tagDefault'))}" placeholder="${T('video.tag')}"></label>
+        <label class="field"><span>${T('video.comment')}</span><textarea id="bm_comment" rows="3" placeholder="${T('video.commentPh')}">${UI.esc(editing ? (seed.bm.comment || '') : '')}</textarea></label>`,
       footer: `<button class="btn ghost" data-close2>${T('common.cancel')}</button><button class="btn primary" data-save>${T('common.save')}</button>`,
       onOpen: (m, close) => {
         const tagEl = m.querySelector('#bm_tag');
@@ -403,10 +548,21 @@ Views.video = function (mount) {
         m.querySelector('[data-close2]').onclick = close;
         m.querySelector('[data-save]').onclick = async () => {
           const at = Math.max(0, parseClock(m.querySelector('#bm_time').value));
+          const endRaw = m.querySelector('#bm_end').value.trim();
+          const to = endRaw ? Math.max(0, parseClock(endRaw)) : 0;
+          if (endRaw && to <= at) return UI.toast(T('video.endBeforeStart'), 'error');
           const tag = (m.querySelector('#bm_tag').value || '').trim() || 'Bookmark';
           const comment = (m.querySelector('#bm_comment').value || '').trim();
-          bookmarks.push({ t: at, tag, comment });
+          if (editing) {
+            Object.assign(seed.bm, { t: at, t2: to, tag, comment });
+          } else {
+            const bm = { t: at, t2: to, tag, comment };
+            bookmarks.push(bm);
+            selectedBm = bm;
+          }
           bookmarks.sort((a, b) => a.t - b.t);
+          inPoint = outPoint = null;
+          renderMarks();
           await saveBookmarks();               // auto-save immediately
           close();
           UI.toast(T('video.bmSaved'), 'success');
@@ -437,8 +593,16 @@ Views.video = function (mount) {
   document.addEventListener('fullscreenchange', onVideoFsChange);
   const vfsBtn = mount.querySelector('#videoFs');
   if (vfsBtn) vfsBtn.onclick = toggleVideoFullscreen;
+  const sizeSel = mount.querySelector('#vSize');
+  if (sizeSel) sizeSel.onchange = () => {
+    vSize = sizeSel.value;
+    try { localStorage.setItem(SIZE_KEY, vSize); } catch (e) { /* private mode */ }
+    VIDEO_SIZES.forEach(s => wrap.classList.toggle('size-' + s, s === vSize));
+    setTimeout(sizeOverlay, 60);
+  };
   bindLocalControls();
   mountOverlay();
+  setDrawMode(false);
 
   loadBookmarks();
 
@@ -498,7 +662,7 @@ Views.video = function (mount) {
     cx.fillRect(pad, y0, Math.max(3, Math.round(w * 0.004)), boxH);
     cx.textBaseline = 'top';
     cx.font = 'bold ' + head + 'px Arial, Helvetica, sans-serif';
-    cx.fillText(UI.fmtClock(Math.floor(bm.t || 0)) + '   ' + (bm.tag || ''), pad * 2, y0 + pad);
+    cx.fillText(fmtRange(bm) + '   ' + (bm.tag || ''), pad * 2, y0 + pad);
     cx.font = body + 'px Arial, Helvetica, sans-serif';
     lines.forEach((ln, i) => cx.fillText(ln, pad * 2, y0 + pad + head + Math.round(pad * 0.6) + i * lead));
     cx.restore();
@@ -607,6 +771,8 @@ Views.video = function (mount) {
   async function exportClipSequences(ext, only) {
     if (!v || !v.src || !v.duration || isNaN(v.duration)) { UI.toast(T('video.needLocal'), 'error'); return; }
     if (!window.MediaRecorder || !(v.captureStream || v.mozCaptureStream)) { UI.toast(T('video.needLocal'), 'error'); return; }
+    // A range left armed by Play would pause the recorder mid-clip.
+    playUntil = null;
     const list = (only && bookmarks.indexOf(only) >= 0) ? [only] : bookmarks;
     if (!list.length) { UI.toast(T('video.noBm'), 'error'); return; }
     const formats = pickFormats().filter(f => f.ext === ext);
@@ -617,8 +783,11 @@ Views.video = function (mount) {
     let ok = 0;
     for (let i = 0; i < list.length; i++) {
       const b = list[i];
-      const start = Math.max(0, b.t - clipLenSec / 2);
-      const end = Math.min(v.duration, Math.max(b.t + clipLenSec / 2, start + 1));
+      // A bookmark with an end point exports exactly that passage; one without
+      // keeps the old fixed window centred on its timestamp.
+      const hasRange = +b.t2 > bmStart(b);
+      const start = hasRange ? Math.max(0, bmStart(b)) : Math.max(0, b.t - clipLenSec / 2);
+      const end = Math.min(v.duration, Math.max(hasRange ? bmEnd(b) : b.t + clipLenSec / 2, start + 1));
       try {
         const outs = await recordSegment(start, end, formats, b);
         const safe = String(b.tag).replace(/[^\w\-]+/g, '_').slice(0, 40) || 'clip';
@@ -641,7 +810,7 @@ Views.video = function (mount) {
     const s = mount.querySelector('#bmScope');
     if (!s) return;
     if (selectedBm && bookmarks.indexOf(selectedBm) >= 0) {
-      s.innerHTML = `${T('video.expOne')} <b>${UI.fmtClock(Math.floor(selectedBm.t))} ${UI.esc(selectedBm.tag)}</b> `
+      s.innerHTML = `${T('video.expOne')} <b>${UI.esc(fmtRange(selectedBm))} ${UI.esc(selectedBm.tag)}</b> `
         + `<button class="btn sm" id="bmScopeAll">${T('video.expAllBtn')}</button>`;
       const all = s.querySelector('#bmScopeAll');
       if (all) all.onclick = () => { selectedBm = null; renderBm(); };
@@ -655,9 +824,11 @@ Views.video = function (mount) {
     l.innerHTML = bookmarks.length ? bookmarks.map((b, i) =>
       `<div class="bm-item${b === selectedBm ? ' sel' : ''}">
         <div class="bm-main">
-          <span><span class="tag blue">${UI.fmtClock(Math.floor(b.t))}</span> ${UI.esc(b.tag)}${(b.shapes || []).length ? ` <span class="tag green">✎ ${(b.shapes || []).length}</span>` : ''}</span>
+          <span><span class="tag blue">${UI.esc(fmtRange(b))}</span> <span class="tag">${Math.round(bmLen(b))}s</span> ${UI.esc(b.tag)}${(b.shapes || []).length ? ` <span class="tag green">✎ ${(b.shapes || []).length}</span>` : ''}</span>
           <span class="bm-acts">
             <button class="btn sm" data-go="${i}">${T('common.go')}</button>
+            <button class="btn sm" data-play="${i}">▶ ${T('video.playRange')}</button>
+            <button class="btn sm" data-edit="${i}">${T('common.edit')}</button>
             <button class="btn sm primary" data-webm="${i}">${T('video.exportWebm')}</button>
             <button class="btn sm primary" data-mp4="${i}"${mp4Ok ? '' : ` disabled title="${UI.esc(T('video.noMp4'))}"`}>${T('video.exportMp4')}</button>
             <button class="btn sm danger" data-rm="${i}">${T('common.remove')}</button>
@@ -669,9 +840,32 @@ Views.video = function (mount) {
       if (!hasLocalVideo()) { UI.toast(T('video.needLocal'), 'error'); return; }
       const bm = bookmarks[+b.dataset.go];
       selectedBm = bm;
-      v.currentTime = bm.t; v.play();
+      playUntil = null;
+      v.currentTime = bmStart(bm);
+      v.pause();
       renderBm();
       renderOverlay();
+    });
+    l.querySelectorAll('[data-play]').forEach(b => b.onclick = () => {
+      if (!hasLocalVideo()) { UI.toast(T('video.needLocal'), 'error'); return; }
+      const bm = bookmarks[+b.dataset.play];
+      selectedBm = bm;
+      const from = bmStart(bm), to = bmEnd(bm);
+      // Armed only once the seek has landed: a timeupdate from the old position
+      // would otherwise stop the clip before it started.
+      playUntil = null;
+      const go = () => {
+        playUntil = to;
+        const p = v.play();
+        if (p && p.catch) p.catch(() => {});
+      };
+      if (Math.abs(v.currentTime - from) < 0.15) go();
+      else { v.addEventListener('seeked', go, { once: true }); v.currentTime = from; }
+      renderBm();
+    });
+    l.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => {
+      const bm = bookmarks[+b.dataset.edit];
+      createBookmark({ bm, t: bmStart(bm), t2: +bm.t2 || 0 });
     });
     l.querySelectorAll('[data-webm]').forEach(b => b.onclick = () => {
       selectedBm = bookmarks[+b.dataset.webm]; renderBm();
@@ -697,5 +891,6 @@ Views.video = function (mount) {
   return () => {
     document.removeEventListener('fullscreenchange', onVideoFsChange);
     window.removeEventListener('resize', onVResize);
+    if (sizeWatch) { sizeWatch.disconnect(); sizeWatch = null; }
   };
 };

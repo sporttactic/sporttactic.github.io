@@ -992,15 +992,64 @@ td.col-num .cell, td.col-h .cell, td.col-w .cell { max-width: 92px; }
 /* ---- Video telestration (video.js) ---- */
 #mediaWrap { position: relative; }
 .v-stage { display: flex; flex-direction: column; gap: 10px; }
+/* The picture used to fill the whole column and push the bookmarks off screen.
+   The size picker in the panel header switches between these three. */
+.v-media { display: block; width: 100%; margin: 0 auto; border-radius: 10px; background: #000; object-fit: contain; }
+#mediaWrap.size-s .v-media, #mediaWrap.size-s .embed-frame { max-width: 520px; }
+#mediaWrap.size-m .v-media, #mediaWrap.size-m .embed-frame { max-width: 760px; }
+#mediaWrap.size-l .v-media, #mediaWrap.size-l .embed-frame { max-width: 100%; }
+#mediaWrap.size-s .v-media { max-height: 34vh; }
+#mediaWrap.size-m .v-media { max-height: 46vh; }
+#mediaWrap.size-l .v-media { max-height: 66vh; }
+#mediaWrap .embed-frame { margin: 0 auto; }
+.video-head .vsize { max-width: 130px; margin: 0; }
+.mark-group { display: inline-flex; gap: 6px; align-items: center; }
 .draw-layer { position: absolute; left: 0; top: 0; pointer-events: none; touch-action: none; border-radius: 10px; }
 .draw-layer.armed { pointer-events: auto; cursor: crosshair; box-shadow: inset 0 0 0 2px var(--accent); }
 .draw-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 10px; }
+.draw-bar.drawing { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 10px; }
 .draw-colors { display: flex; gap: 6px; }
 .swatch { width: 26px; height: 26px; border-radius: 6px; border: 2px solid var(--border); background: var(--sw); cursor: pointer; padding: 0; }
 .swatch.on { border-color: var(--text); }
 
+/* ---- Shared team database & access list (settings.js) ---- */
+.cloud-facts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.acc-people { display: flex; flex-direction: column; gap: 6px; }
+.acc-person { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between;
+  padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; }
+.acc-person-main { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; min-width: 0; }
+
+/* ---- Google setup wizard ---- */
+.wiz-top { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+.wiz-bar { display: flex; gap: 5px; flex: 1; }
+.wiz-dot { flex: 1; height: 5px; border-radius: 3px; background: var(--border); transition: background .2s; }
+.wiz-dot.done { background: var(--accent); opacity: .55; }
+.wiz-dot.on { background: var(--accent); }
+.wiz-h { margin: 0 0 8px; font-size: 17px; }
+.wiz-sub { margin: 18px 0 6px; padding-top: 14px; border-top: 1px solid var(--border); font-size: 14px; }
+.wiz-list { margin: 8px 0; padding-left: 20px; }
+.wiz-list li { margin-bottom: 6px; line-height: 1.5; }
+.wiz-open { display: inline-flex; align-items: center; gap: 6px; margin: 4px 0 12px; text-decoration: none; }
+/* The value to paste into Google: always visible, always one click to copy. */
+.wiz-copy { display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  padding: 10px; margin: 10px 0; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2, rgba(127,127,127,.08)); }
+.wiz-copy-label { font-size: 12px; color: var(--muted); flex: 1 0 100%; }
+.wiz-copy-val { flex: 1 1 200px; min-width: 0; font-size: 13px; word-break: break-all; }
+.wiz-copy-note { flex: 1 0 100%; margin: 0; }
+.wiz-users .wiz-copy-val { max-height: 76px; overflow: auto; }
+.wiz-good { color: var(--ok, #34c759); }
+.wiz-bad { color: var(--danger, #ff3b30); }
+.wiz-warn { margin: 10px 0; padding: 10px 12px; border-radius: 8px;
+  border: 1px solid var(--danger, #ff3b30); background: rgba(255, 59, 48, .08); }
+.wiz-warn p { margin: 4px 0 0; }
+.wiz-result { margin-top: 12px; }
+.wiz-result:empty { display: none; }
+.wiz-result p { margin: 4px 0 0; color: var(--text); }
+
 /* Fullscreen: the tools move to a column on the left of the picture. */
 .video-panel.fs .v-stage { flex-direction: row; align-items: flex-start; gap: 14px; max-width: 1240px; margin: 0 auto; width: 100%; }
+/* The size picker only governs the normal layout; fullscreen uses the room it has. */
+.video-panel.fs #mediaWrap .v-media { max-width: 100%; }
 .video-panel.fs .v-stage .draw-bar { order: -1; flex: 0 0 136px; flex-direction: column; align-items: stretch; margin-top: 0; }
 .video-panel.fs .v-stage .draw-bar .tool-group { display: flex; flex-direction: column; gap: 6px; }
 .video-panel.fs .v-stage .draw-colors { flex-wrap: wrap; justify-content: center; }

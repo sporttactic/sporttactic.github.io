@@ -302,6 +302,7 @@ const App = (() => {
     Store.onChange(refreshLockBadge);
     startAutosave();
     if (window.AUTOBK) AUTOBK.start();   // unattended backups, if the coach turned them on
+    if (window.TeamCloud) TeamCloud.start();   // shared team database, if one is linked
     go('dashboard');
   }
 

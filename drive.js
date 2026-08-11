@@ -196,6 +196,41 @@ const Drive = (() => {
     });
   }
 
+  // "Anyone with the link may view". This is what lets a player read the shared
+  // team database without a Google account and without the app asking them for
+  // one — the file id alone is the ticket, so it must only ever hold squad data
+  // the coach is happy to hand out.
+  async function shareAnyone(fileId, role) {
+    return api('drive/v3/files/' + fileId + '/permissions', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'anyone', role: role || 'reader' })
+    });
+  }
+  async function unshareAnyone(fileId) {
+    const r = await api('drive/v3/files/' + fileId + '/permissions?fields=' + encodeURIComponent('permissions(id,type)'));
+    const anyone = ((r && r.permissions) || []).filter(p => p.type === 'anyone');
+    for (const p of anyone) {
+      await api('drive/v3/files/' + fileId + '/permissions/' + p.id, { method: 'DELETE' });
+    }
+    return anyone.length;
+  }
+  async function listPermissions(fileId) {
+    const r = await api('drive/v3/files/' + fileId + '/permissions?fields=' +
+      encodeURIComponent('permissions(id,type,role,emailAddress)'));
+    return (r && r.permissions) || [];
+  }
+  function fileLink(fileId) { return 'https://drive.google.com/file/d/' + fileId + '/view'; }
+
+  // Read a file that is shared with "anyone with the link" using nothing but an
+  // API key — no OAuth, so a player can pull the squad on a device that has
+  // never seen a Google sign-in screen.
+  async function publicDownload(fileId, apiKey) {
+    const res = await fetch('https://www.googleapis.com/drive/v3/files/' + encodeURIComponent(fileId) +
+      '?alt=media&key=' + encodeURIComponent(apiKey));
+    if (!res.ok) throw new Error('Drive ' + res.status);
+    return res.json();
+  }
+
   // ---- Backup / restore (private appDataFolder) ----
   function buildDump() {
     const dump = {};
@@ -374,7 +409,10 @@ const Drive = (() => {
     backupNow, restoreNow, lastBackupAt, uploadBackup, downloadBackup,
     ensureTeamFolder, getTeamFolderId, setTeamFolderId, shareWith,
     channelName, ensureChannel, readChannel, updateChannel,
-    setupTeam, coachSend, coachReadAll, findMyChannels, playerSend, playerPushTraining
+    setupTeam, coachSend, coachReadAll, findMyChannels, playerSend, playerPushTraining,
+    // Low-level helpers, used by cloud.js for the shared team database.
+    ensureFolder, findFile, uploadJson, downloadJson, listFiles,
+    shareAnyone, unshareAnyone, listPermissions, fileLink, publicDownload
   };
 })();
 window.Drive = Drive;

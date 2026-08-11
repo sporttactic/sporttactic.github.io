@@ -442,8 +442,569 @@ function everyLabel(m) {
     : T('settings.autoMin').replace('{0}', m);
 }
 
+// ---- Shared team database on Google Drive -------------------------------
+// One JSON file in one person's Drive is the team's database. Everybody else
+// points at that file with a short code. Everything below exists to keep that
+// true without asking a coach to understand OAuth, folders or permissions.
+
+function fmtWhen(ts) {
+  if (!ts) return T('cloud.never');
+  return UI.fmtDate(ts) + ' ' + new Date(ts).toTimeString().slice(0, 5);
+}
+
+// The three or four sentences that get somebody with a phone and no patience
+// from nothing to a working shared database.
+function cloudGuide() {
+  guideDialog(T('cloud.guideTitle'), UI.esc(T('cloud.guideIntro')), [
+    UI.esc(T('cloud.guide1')), UI.esc(T('cloud.guide2')), UI.esc(T('cloud.guide3')),
+    UI.esc(T('cloud.guide4')), UI.esc(T('cloud.guide5'))
+  ], `<p class="hint">${UI.esc(T('cloud.guideTail'))}</p>`);
+}
+
+// ---- The Google setup wizard --------------------------------------------
+// Connecting Google is the one genuinely technical part of the whole feature.
+// Instead of a page of instructions it is one short screen per step: the exact
+// value to paste sits behind a Copy button, the Google page it belongs on is
+// one click away, and the last step proves the setup works before the coach
+// walks away thinking it does.
+const GOOGLE_PAGES = {
+  project: 'https://console.cloud.google.com/projectcreate',
+  driveApi: 'https://console.cloud.google.com/apis/library/drive.googleapis.com',
+  // Google replaced the old "OAuth consent screen" page with the Auth Platform,
+  // where the External choice now lives inside Get started and the test users
+  // sit on their own Audience page.
+  authPlatform: 'https://console.cloud.google.com/auth/overview',
+  audience: 'https://console.cloud.google.com/auth/audience',
+  clients: 'https://console.cloud.google.com/auth/clients',
+  credentials: 'https://console.cloud.google.com/apis/credentials'
+};
+const WIZ_STEP_KEY = 'stx_gwiz_step';
+const API_KEY_RE = /^AIza[0-9A-Za-z_\-]{10,}$/;
+
+async function copyText(txt) {
+  try { await navigator.clipboard.writeText(txt); return true; }
+  catch (e) {
+    // Safari and any page without clipboard permission still need to work.
+    const ta = document.createElement('textarea');
+    ta.value = txt;
+    ta.setAttribute('readonly', '');
+    ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0';
+    document.body.appendChild(ta);
+    ta.select();
+    let ok = false;
+    try { ok = document.execCommand('copy'); } catch (e2) { ok = false; }
+    ta.remove();
+    return ok;
+  }
+}
+// A value the coach must paste into Google, with the button that grabs it.
+function wizCopy(label, value, note) {
+  return `<div class="wiz-copy">
+    <span class="wiz-copy-label">${UI.esc(label)}</span>
+    <code class="wiz-copy-val">${UI.esc(value)}</code>
+    <button type="button" class="btn sm" data-copy="${UI.esc(value)}">${UI.esc(T('cloud.copy'))}</button>
+    ${note ? `<span class="hint wiz-copy-note">${UI.esc(note)}</span>` : ''}
+  </div>`;
+}
+function wizOpen(label, url) {
+  return `<a class="btn primary wiz-open" href="${UI.esc(url)}" target="_blank" rel="noopener">${UI.esc(label)} \u2197</a>`;
+}
+// Where the app normally lives, offered when the copy this is running from has
+// no address Google can use.
+const HOME_ORIGIN = 'https://sporttactic.net';
+// Google accepts https anywhere, and http only on localhost. A page opened from
+// disk reports "file://" or "null", which is not an origin at all.
+function originUsable() {
+  if (location.protocol === 'https:') return true;
+  return location.protocol === 'http:' && (location.hostname === 'localhost' || location.hostname === '127.0.0.1');
+}
+// Trailing slash, a path or a stray space are the three things Google rejects.
+function cleanOrigin(v) {
+  const s = String(v == null ? '' : v).trim();
+  if (!/^https?:\/\/[^\s/]+/i.test(s)) return '';
+  try { return new URL(s).origin; } catch (e) { return ''; }
+}
+// Every address that should go in as a Test user, taken from the access list
+// and the squad so nobody has to be remembered or retyped.
+function wizTestUsers() {
+  const seen = new Set();
+  const out = [];
+  const add = e => {
+    const v = Access.normEmail(e);
+    if (v && v.indexOf('@') > 0 && !seen.has(v)) { seen.add(v); out.push(v); }
+  };
+  Access.members().forEach(m => add(m.email));
+  Access.suggestions().forEach(s => add(s.email));
+  return out;
+}
+// Things that make the whole setup impossible, said before Google is opened
+// rather than after it answers with a blank error page.
+function wizBlockers() {
+  const out = [];
+  const p = location.protocol;
+  if (p !== 'http:' && p !== 'https:') out.push(T('gw.blockFile'));
+  else if (p === 'http:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') out.push(T('gw.blockHttp'));
+  return out;
+}
+// Turns whatever went wrong into the one thing the coach should go and fix.
+function wizExplain(err) {
+  const s = String((err && err.message) || err || '');
+  if (/accessNotConfigured|has not been used|SERVICE_DISABLED|403/.test(s)) return T('gw.failApiOff');
+  if (/redirect_uri_mismatch|origin|idpiframe/i.test(s)) return T('gw.failOrigin').replace('{0}', location.origin);
+  if (/access_denied|denied/i.test(s)) return T('gw.failTestUser');
+  if (/popup/i.test(s)) return T('gw.failPopup');
+  if (/client id|client_id/i.test(s)) return T('gw.failClientId');
+  if (/Failed to fetch|NetworkError|offline/i.test(s)) return T('gw.failOffline');
+  return s.slice(0, 200);
+}
+
+function googleWizard(onDone) {
+  const LAST = 6;
+  let step = 0;
+  try { step = Math.min(LAST, Math.max(0, parseInt(localStorage.getItem(WIZ_STEP_KEY), 10) || 0)); } catch (e) { step = 0; }
+  let clientId = '', apiKey = '', tested = false;
+
+  const origin = location.origin;
+  const users = wizTestUsers();
+  const blockers = wizBlockers();
+  // What goes into Google's origin list: this address when it can be used, or
+  // the one the coach says the team will actually open the app on.
+  let pubOrigin = originUsable() ? origin : HOME_ORIGIN;
+
+  const idOk = () => !!Drive.normClientId(clientId);
+  const keyOk = () => !apiKey || API_KEY_RE.test(apiKey.trim());
+
+  function body(m) {
+    const host = m.querySelector('#wizBody');
+    const bar = m.querySelector('#wizBar');
+    bar.innerHTML = Array.from({ length: LAST + 1 }, (_, i) =>
+      `<span class="wiz-dot${i === step ? ' on' : ''}${i < step ? ' done' : ''}"></span>`).join('');
+    m.querySelector('#wizStepNo').textContent = T('gw.stepOf').replace('{0}', step + 1).replace('{1}', LAST + 1);
+    host.innerHTML = SCREENS[step]();
+    wire(m, host);
+    const back = m.querySelector('[data-back]');
+    const next = m.querySelector('[data-next]');
+    back.disabled = step === 0;
+    next.textContent = step === LAST ? T('common.close') : T('gw.next');
+    next.disabled = (step === 4 && !idOk()) || (step === 5 && !keyOk());
+    try { localStorage.setItem(WIZ_STEP_KEY, String(step)); } catch (e) { /* private mode */ }
+  }
+
+  // An app opened from disk, or served over plain http, has no address Google
+  // can accept — so instead of offering that to paste it asks where the team
+  // will really open it.
+  function originBlock() {
+    if (originUsable()) return wizCopy(T('gw.s4Origin'), origin, T('gw.s4OriginNote'));
+    const why = location.protocol === 'http:' ? T('gw.s4NoOriginHttp') : T('gw.s4NoOriginFile');
+    return `<div class="wiz-warn">
+        <b>${UI.esc(T('gw.s4NoOrigin'))}</b>
+        <p>${UI.esc(why)}</p>
+      </div>
+      <label class="field"><span>${UI.esc(T('gw.s4Where'))}</span>
+        <input id="wiz_origin" spellcheck="false" autocomplete="off" placeholder="${UI.esc(HOME_ORIGIN)}" value="${UI.esc(pubOrigin)}">
+        <span class="hint" id="wiz_origin_state"></span></label>
+      <div class="wiz-copy">
+        <span class="wiz-copy-label">${UI.esc(T('gw.s4Origin'))}</span>
+        <code class="wiz-copy-val" id="wiz_origin_out">${UI.esc(pubOrigin)}</code>
+        <button type="button" class="btn sm" data-copy-from="#wiz_origin_out">${UI.esc(T('cloud.copy'))}</button>
+      </div>`;
+  }
+
+  const SCREENS = [    // 0 — what this is and whether it can work here at all
+    () => `<h3 class="wiz-h">${UI.esc(T('gw.s0Title'))}</h3>
+      <p>${UI.esc(T('gw.s0Intro'))}</p>
+      <ul class="wiz-list">
+        <li>${UI.esc(T('gw.s0Need1'))}</li>
+        <li>${UI.esc(T('gw.s0Need2'))}</li>
+        <li>${UI.esc(T('gw.s0Need3'))}</li>
+      </ul>
+      ${blockers.length
+        ? `<p class="wiz-bad">${blockers.map(UI.esc).join('<br>')}</p>`
+        : `<p class="wiz-good">${UI.esc(T('gw.s0Ready'))}</p>`}
+      <p class="hint">${UI.esc(T('gw.s0Tail'))}</p>`,
+
+    // 1 — the project
+    () => `<h3 class="wiz-h">${UI.esc(T('gw.s1Title'))}</h3>
+      <p>${UI.esc(T('gw.s1Intro'))}</p>
+      ${wizOpen(T('gw.s1Open'), GOOGLE_PAGES.project)}
+      ${wizCopy(T('gw.s1Name'), 'SportTactic', T('gw.s1NameNote'))}
+      <p class="hint">${UI.esc(T('gw.s1Tail'))}</p>`,
+
+    // 2 — switch the Drive API on
+    () => `<h3 class="wiz-h">${UI.esc(T('gw.s2Title'))}</h3>
+      <p>${UI.esc(T('gw.s2Intro'))}</p>
+      ${wizOpen(T('gw.s2Open'), GOOGLE_PAGES.driveApi)}
+      <p class="hint">${UI.esc(T('gw.s2Tail'))}</p>`,
+
+    // 3 — the Auth Platform, then the test users, pre-collected
+    () => `<h3 class="wiz-h">${UI.esc(T('gw.s3Title'))}</h3>
+      <p>${UI.esc(T('gw.s3Intro'))}</p>
+      ${wizOpen(T('gw.s3Open'), GOOGLE_PAGES.authPlatform)}
+      <ol class="wiz-list">
+        <li>${UI.esc(T('gw.s3A'))}</li>
+        <li>${UI.esc(T('gw.s3B'))}</li>
+        <li>${UI.esc(T('gw.s3C'))}</li>
+        <li>${UI.esc(T('gw.s3D'))}</li>
+      </ol>
+      <p class="hint">${UI.esc(T('gw.s3Old'))}</p>
+      <h4 class="wiz-sub">${UI.esc(T('gw.s3UsersTitle'))}</h4>
+      <p>${UI.esc(T('gw.s3UsersIntro'))}</p>
+      ${wizOpen(T('gw.s3OpenUsers'), GOOGLE_PAGES.audience)}
+      ${users.length
+        ? `<div class="wiz-copy wiz-users">
+             <span class="wiz-copy-label">${UI.esc(T('gw.s3Users').replace('{0}', users.length))}</span>
+             <code class="wiz-copy-val">${UI.esc(users.join(', '))}</code>
+             <button type="button" class="btn sm" data-copy="${UI.esc(users.join(', '))}">${UI.esc(T('gw.s3CopyUsers'))}</button>
+           </div>`
+        : `<p class="hint">${UI.esc(T('gw.s3NoUsers'))}</p>`}
+      <p class="hint">${UI.esc(T('gw.s3Tail'))}</p>`,
+
+    // 4 — the client id, with the origin ready to paste
+    () => `<h3 class="wiz-h">${UI.esc(T('gw.s4Title'))}</h3>
+      <p>${UI.esc(T('gw.s4Intro'))}</p>
+      ${wizOpen(T('gw.s4Open'), GOOGLE_PAGES.clients)}
+      <ol class="wiz-list"><li>${UI.esc(T('gw.s4A'))}</li><li>${UI.esc(T('gw.s4B'))}</li></ol>
+      ${originBlock()}
+      <label class="field"><span>${UI.esc(T('cloud.clientId'))}</span>
+        <input id="wiz_id" spellcheck="false" autocomplete="off" placeholder="1234567890-abc.apps.googleusercontent.com" value="${UI.esc(clientId)}">
+        <span class="hint" id="wiz_id_state"></span></label>`,
+
+    // 5 — the optional api key
+    () => `<h3 class="wiz-h">${UI.esc(T('gw.s5Title'))}</h3>
+      <p>${UI.esc(T('gw.s5Intro'))}</p>
+      ${wizOpen(T('gw.s5Open'), GOOGLE_PAGES.credentials)}
+      <ul class="wiz-list"><li>${UI.esc(T('gw.s5A'))}</li><li>${UI.esc(T('gw.s5B'))}</li></ul>
+      <label class="field"><span>${UI.esc(T('cloud.apiKey'))}</span>
+        <input id="wiz_key" spellcheck="false" autocomplete="off" placeholder="AIza…" value="${UI.esc(apiKey)}">
+        <span class="hint" id="wiz_key_state"></span></label>
+      <p class="hint">${UI.esc(T('gw.s5Tail'))}</p>`,
+
+    // 6 — prove it works
+    () => `<h3 class="wiz-h">${UI.esc(T('gw.s6Title'))}</h3>
+      <p>${UI.esc(T('gw.s6Intro'))}</p>
+      <button type="button" class="btn primary" id="wizTest">${UI.esc(T('gw.s6Test'))}</button>
+      <div id="wizResult" class="wiz-result"></div>`
+  ];
+
+  function wire(m, host) {
+    const org = host.querySelector('#wiz_origin');
+    if (org) {
+      const st = host.querySelector('#wiz_origin_state');
+      const out = host.querySelector('#wiz_origin_out');
+      const check = () => {
+        const clean = cleanOrigin(org.value);
+        pubOrigin = clean;
+        out.textContent = clean || '\u2014';
+        st.textContent = !org.value.trim() ? T('gw.s4WhereHint')
+          : clean ? '\u2713 ' + T('gw.looksRight')
+            : T('gw.s4BadOrigin');
+        st.className = 'hint ' + (!org.value.trim() ? '' : clean ? 'wiz-good' : 'wiz-bad');
+      };
+      org.oninput = check;
+      org.onpaste = () => setTimeout(check, 0);
+      check();
+    }
+    const id = host.querySelector('#wiz_id');
+    if (id) {
+      const st = host.querySelector('#wiz_id_state');
+      const check = () => {
+        clientId = id.value;
+        const clean = Drive.normClientId(clientId);
+        st.textContent = !clientId.trim() ? T('cloud.clientIdHint')
+          : clean ? '\u2713 ' + T('gw.looksRight')
+            : T('cloud.badClientId');
+        st.className = 'hint ' + (!clientId.trim() ? '' : clean ? 'wiz-good' : 'wiz-bad');
+        m.querySelector('[data-next]').disabled = !clean;
+      };
+      id.oninput = check;
+      // A whole line copied out of the console still yields the id itself.
+      id.onpaste = () => setTimeout(check, 0);
+      check();
+    }
+    const key = host.querySelector('#wiz_key');
+    if (key) {
+      const st = host.querySelector('#wiz_key_state');
+      const check = () => {
+        apiKey = key.value;
+        const v = apiKey.trim();
+        st.textContent = !v ? T('gw.keyOptional') : API_KEY_RE.test(v) ? '\u2713 ' + T('gw.looksRight') : T('gw.badKey');
+        st.className = 'hint ' + (!v ? '' : API_KEY_RE.test(v) ? 'wiz-good' : 'wiz-bad');
+        m.querySelector('[data-next]').disabled = !!v && !API_KEY_RE.test(v);
+      };
+      key.oninput = check;
+      check();
+    }
+    const test = host.querySelector('#wizTest');
+    if (test) test.onclick = () => runTest(m, host);
+  }
+
+  // Saves what was typed, opens Google, then makes one real Drive call — which
+  // is the only way to catch the API being left switched off.
+  async function runTest(m, host) {
+    const out = host.querySelector('#wizResult');
+    const btn = host.querySelector('#wizTest');
+    btn.disabled = true;
+    out.className = 'wiz-result';
+    out.textContent = T('gw.testing');
+    try {
+      await Drive.setClientId(clientId);
+      await TeamCloud.setCfg({ apiKey: apiKey.trim() });
+      await Drive.connect();
+      await Drive.listFiles("trashed=false and name='__sporttactic_probe__'");
+      tested = true;
+      out.className = 'wiz-result wiz-good';
+      out.innerHTML = `<b>${UI.esc(T('gw.testOk'))}</b><p>${UI.esc(T('gw.testOkTail'))}</p>`;
+      m.querySelector('[data-next]').textContent = T('gw.finish');
+      if (onDone) onDone();
+    } catch (e) {
+      out.className = 'wiz-result wiz-bad';
+      out.innerHTML = `<b>${UI.esc(T('gw.testFail'))}</b><p>${UI.esc(wizExplain(e))}</p>`;
+    } finally { btn.disabled = false; }
+  }
+
+  UI.modal({
+    title: T('gw.title'),
+    width: 680,
+    body: `<div class="wiz-top"><span id="wizBar" class="wiz-bar"></span><span class="hint" id="wizStepNo"></span></div>
+      <div id="wizBody"></div>`,
+    footer: `<button class="btn ghost" data-close2>${T('common.close')}</button>
+      <button class="btn" data-back>${T('gw.back')}</button>
+      <button class="btn primary" data-next>${T('gw.next')}</button>`,
+    onOpen: async (m, close) => {
+      clientId = await Drive.getClientId();
+      apiKey = TeamCloud.cfg().apiKey;
+      // Copy buttons work the same on every screen, so they are handled once.
+      m.addEventListener('click', async e => {
+        const b = e.target.closest('[data-copy],[data-copy-from]');
+        if (!b) return;
+        const src = b.dataset.copyFrom ? m.querySelector(b.dataset.copyFrom) : null;
+        const val = src ? src.textContent : b.dataset.copy;
+        if (!val || val === '\u2014') return UI.toast(T('gw.nothingToCopy'), 'error');
+        const ok = await copyText(val);
+        UI.toast(ok ? T('cloud.copied') : T('gw.copyFailed'), ok ? 'success' : 'error');
+      });
+      m.querySelector('[data-close2]').onclick = async () => {
+        // Nothing is lost by closing half-way: what was typed is kept.
+        if (clientId.trim()) await Drive.setClientId(clientId);
+        if (apiKey.trim()) await TeamCloud.setCfg({ apiKey: apiKey.trim() });
+        close();
+        if (onDone) onDone();
+      };
+      m.querySelector('[data-back]').onclick = () => { if (step > 0) { step--; body(m); } };
+      m.querySelector('[data-next]').onclick = async () => {
+        if (step < LAST) { step++; body(m); return; }
+        if (clientId.trim()) await Drive.setClientId(clientId);
+        if (apiKey.trim()) await TeamCloud.setCfg({ apiKey: apiKey.trim() });
+        try { localStorage.removeItem(WIZ_STEP_KEY); } catch (e) { /* private mode */ }
+        close();
+        if (tested) UI.toast(T('cloud.connected'), 'success');
+        if (onDone) onDone();
+      };
+      body(m);
+    }
+  });
+}
+
+// Owner path: name the team, build the file, hand back the code.
+function cloudCreateDialog(onDone) {
+  const team = Store.activeTeam();
+  UI.modal({
+    title: T('cloud.createTitle'),
+    width: 620,
+    body: `<p>${UI.esc(T('cloud.createIntro'))}</p>
+      <label class="field"><span>${UI.esc(T('cloud.teamName'))}</span>
+        <input id="cl_name" maxlength="60" value="${UI.esc((team && team.name) || TeamCloud.cfg().teamName || '')}"></label>
+      <label class="check-row"><input type="checkbox" id="cl_link" checked>
+        <span>${UI.esc(T('cloud.linkShare'))}<span class="share-n">${UI.esc(T('cloud.linkShareHint'))}</span></span></label>
+      <p class="hint" id="cl_state"></p>`,
+    footer: `<button class="btn ghost" data-close2>${T('common.cancel')}</button>
+      <button class="btn primary" data-go>${UI.esc(T('cloud.createBtn'))}</button>`,
+    onOpen: (m, close) => {
+      const state = m.querySelector('#cl_state');
+      m.querySelector('[data-close2]').onclick = close;
+      const go = m.querySelector('[data-go]');
+      go.onclick = async () => {
+        go.disabled = true;
+        state.textContent = T('cloud.working');
+        try {
+          if (!Drive.isConnected()) await Drive.connect();
+          await TeamCloud.createShared(m.querySelector('#cl_name').value.trim(), {
+            linkShare: m.querySelector('#cl_link').checked
+          });
+          close();
+          UI.toast(T('cloud.created'), 'success');
+          if (onDone) onDone();
+          cloudCodeDialog();
+        } catch (e) {
+          state.textContent = String((e && e.message) || e).slice(0, 220);
+        } finally { go.disabled = false; }
+      };
+    }
+  });
+}
+
+// The screen the coach reads their code off, and the one a member pastes into.
+function cloudCodeDialog() {
+  const code = TeamCloud.makeCode();
+  const c = TeamCloud.cfg();
+  UI.modal({
+    title: T('cloud.codeTitle'),
+    width: 620,
+    body: `<p>${UI.esc(T('cloud.codeIntro'))}</p>
+      <label class="field"><span>${UI.esc(T('cloud.code'))}</span>
+        <textarea id="cd_code" rows="3" readonly spellcheck="false">${UI.esc(code)}</textarea></label>
+      ${c.apiKey ? '' : `<p class="hint mail-note">${UI.esc(T('cloud.codeNoKey'))}</p>`}
+      <p class="hint">${UI.esc(T('cloud.codeHint'))}</p>`,
+    footer: `<button class="btn" data-open>${UI.esc(T('cloud.openDrive'))}</button>
+      <button class="btn" data-mail>${UI.esc(T('cloud.mailCode'))}</button>
+      <button class="btn primary" data-copy>${UI.esc(T('cloud.copy'))}</button>
+      <button class="btn ghost" data-close2>${T('common.close')}</button>`,
+    onOpen: (m, close) => {
+      const ta = m.querySelector('#cd_code');
+      m.querySelector('[data-close2]').onclick = close;
+      m.querySelector('[data-copy]').onclick = async () => {
+        ta.select();
+        try { await navigator.clipboard.writeText(code); } catch (e) { document.execCommand('copy'); }
+        UI.toast(T('cloud.copied'), 'success');
+      };
+      m.querySelector('[data-open]').onclick = () => window.open(Drive.fileLink(c.fileId), '_blank', 'noopener');
+      m.querySelector('[data-mail]').onclick = () => {
+        const body = T('cloud.mailBody').replace('{0}', c.teamName || '').replace('{1}', code).replace('{2}', location.origin + location.pathname);
+        location.href = 'mailto:?subject=' + encodeURIComponent(T('cloud.mailSubject')) + '&body=' + encodeURIComponent(body);
+      };
+    }
+  });
+}
+
+function cloudJoinDialog(onDone) {
+  UI.modal({
+    title: T('cloud.joinTitle'),
+    width: 620,
+    body: `<p>${UI.esc(T('cloud.joinIntro'))}</p>
+      <label class="field"><span>${UI.esc(T('cloud.code'))}</span>
+        <textarea id="jn_code" rows="3" spellcheck="false" placeholder="STX1-…"></textarea>
+        <span class="hint">${UI.esc(T('cloud.joinHint'))}</span></label>
+      <p class="hint" id="jn_state"></p>`,
+    footer: `<button class="btn ghost" data-close2>${T('common.cancel')}</button>
+      <button class="btn primary" data-go>${UI.esc(T('cloud.joinBtn'))}</button>`,
+    onOpen: (m, close) => {
+      const inp = m.querySelector('#jn_code');
+      const state = m.querySelector('#jn_state');
+      inp.focus();
+      m.querySelector('[data-close2]').onclick = close;
+      const go = m.querySelector('[data-go]');
+      go.onclick = async () => {
+        if (!TeamCloud.parseTarget(inp.value)) { state.textContent = T('cloud.badCode'); return; }
+        go.disabled = true;
+        state.textContent = T('cloud.working');
+        try {
+          const n = await TeamCloud.join(inp.value);
+          close();
+          UI.toast(T('cloud.joined').replace('{0}', n), 'success');
+          if (onDone) onDone();
+        } catch (e) {
+          state.textContent = T('cloud.joinFailed') + ' ' + String((e && e.message) || e).slice(0, 180);
+        } finally { go.disabled = false; }
+      };
+    }
+  });
+}
+
+// Sends the Drive invitations. Everyone on the access list is offered; the
+// role they hold there decides whether they may write to the file.
+function cloudInviteDialog(onDone) {
+  const list = Access.members();
+  const row = m => `<label class="check-row share-row">
+    <input type="checkbox" data-inv="${UI.esc(m.id)}" checked>
+    <span>${UI.esc(m.name || m.email)}
+      <span class="tag">${UI.esc(Access.label(m.role))}</span>
+      <span class="tag ${Access.driveRole(m.role) === 'writer' ? 'green' : ''}">${UI.esc(T('cloud.drive' + (Access.driveRole(m.role) === 'writer' ? 'Editor' : 'Viewer')))}</span>
+      <span class="share-n">${UI.esc(m.email)}${m.invitedAt ? ' · ' + UI.esc(T('cloud.invitedAt')) + ' ' + UI.esc(fmtWhen(m.invitedAt)) : ''}</span>
+    </span></label>`;
+  UI.modal({
+    title: T('cloud.inviteTitle'),
+    width: 620,
+    body: `<p>${UI.esc(T('cloud.inviteIntro'))}</p>
+      ${list.length ? list.map(row).join('') : `<p class="hint">${UI.esc(T('access.none'))}</p>`}
+      <p class="hint" id="iv_state"></p>`,
+    footer: `<button class="btn ghost" data-close2>${T('common.close')}</button>
+      <button class="btn primary" data-go ${list.length ? '' : 'disabled'}>${UI.esc(T('cloud.inviteBtn'))}</button>`,
+    onOpen: (m, close) => {
+      const state = m.querySelector('#iv_state');
+      m.querySelector('[data-close2]').onclick = close;
+      const go = m.querySelector('[data-go]');
+      go.onclick = async () => {
+        const picked = list.filter(x => { const b = m.querySelector(`[data-inv="${CSS.escape(x.id)}"]`); return b && b.checked; });
+        if (!picked.length) return;
+        go.disabled = true;
+        state.textContent = T('cloud.working');
+        try {
+          if (!Drive.isConnected()) await Drive.connect();
+          const res = await TeamCloud.inviteMembers(picked);
+          const ok = res.filter(r => r.ok).length;
+          close();
+          UI.toast(T('cloud.invited').replace('{0}', ok).replace('{1}', res.length), ok ? 'success' : 'error');
+          if (onDone) onDone();
+        } catch (e) {
+          state.textContent = String((e && e.message) || e).slice(0, 220);
+        } finally { go.disabled = false; }
+      };
+    }
+  });
+}
+
+// ---- People & access ----------------------------------------------------
+function accessEditDialog(existing, onDone) {
+  const m0 = existing || { name: '', email: '', role: 'Player', note: '' };
+  const sugg = Access.suggestions().filter(s => !existing);
+  UI.modal({
+    title: existing ? T('access.editTitle') : T('access.addTitle'),
+    width: 560,
+    body: `<label class="field"><span>${UI.esc(T('access.name'))}</span>
+        <input id="ac_name" maxlength="60" value="${UI.esc(m0.name)}"></label>
+      <label class="field"><span>${UI.esc(T('access.email'))}</span>
+        <input id="ac_mail" type="email" spellcheck="false" autocomplete="off" value="${UI.esc(m0.email)}"
+          ${existing ? 'readonly' : `list="ac_sugg"`}>
+        <span class="hint">${UI.esc(T('access.emailHint'))}</span></label>
+      ${sugg.length ? `<datalist id="ac_sugg">${sugg.map(s => `<option value="${UI.esc(s.email)}">${UI.esc(s.name)}</option>`).join('')}</datalist>` : ''}
+      <label class="field"><span>${UI.esc(T('access.role'))}</span>
+        <select id="ac_role">${Access.GRANTABLE.map(r => `<option value="${UI.esc(r)}" ${r === m0.role ? 'selected' : ''}>${UI.esc(Access.label(r))}</option>`).join('')}</select>
+        <span class="hint">${UI.esc(T('access.roleHint'))}</span></label>
+      <label class="field"><span>${UI.esc(T('access.note'))}</span>
+        <input id="ac_note" maxlength="80" value="${UI.esc(m0.note || '')}"></label>
+      <p class="hint" id="ac_state"></p>`,
+    footer: `<button class="btn ghost" data-close2>${T('common.cancel')}</button>
+      <button class="btn primary" data-go>${T('common.save')}</button>`,
+    onOpen: (m, close) => {
+      const mail = m.querySelector('#ac_mail');
+      const name = m.querySelector('#ac_name');
+      const state = m.querySelector('#ac_state');
+      (existing ? name : mail).focus();
+      // Picking a known address fills the rest in, so nothing has to be retyped.
+      mail.oninput = () => {
+        const hit = sugg.find(s => s.email === Access.normEmail(mail.value));
+        if (hit && !name.value.trim()) { name.value = hit.name; m.querySelector('#ac_role').value = hit.role; }
+      };
+      m.querySelector('[data-close2]').onclick = close;
+      m.querySelector('[data-go]').onclick = async () => {
+        try {
+          await Access.grant({
+            id: m0.id, addedAt: m0.addedAt, invitedAt: m0.invitedAt,
+            name: name.value, email: mail.value,
+            role: m.querySelector('#ac_role').value, note: m.querySelector('#ac_note').value
+          });
+          close();
+          UI.toast(T('access.saved'), 'success');
+          if (onDone) onDone();
+        } catch (e) { state.textContent = T('access.badEmail'); }
+      };
+    }
+  });
+}
+
 Views.settings = async function (mount) {
   const role = await Store.getSetting('role', 'Coach');
+  const staff = Access.isStaff(role);
 
   mount.innerHTML = `
     <div class="page-head"><div><h1>${T('settings.title')}</h1><p>${T('settings.subtitle')}</p></div></div>
@@ -454,6 +1015,8 @@ Views.settings = async function (mount) {
     ${UI.acc('setRole', T('settings.roleAccess'), `
       <label class="field"><span>${T('settings.activeRole')}</span><select id="s_role">${['Super Admin', 'Club Admin', 'Coach', 'Analyst', 'Player'].map(r => `<option value="${r}" ${r === role ? 'selected' : ''}>${T('role.' + r)}</option>`).join('')}</select></label>
       <p style="color:var(--muted);font-size:12px">${T('settings.roleHint')}</p>`)}
+    <div id="cloudCardHost">${cloudCard()}</div>
+    <div id="accessCardHost">${staff ? accessCard() : ''}</div>
     ${UI.acc('setData', T('settings.dataSync'), `
       <p style="color:var(--muted);font-size:13px">${T('settings.dataHint')}</p>
       <div class="row" style="flex:0;margin-top:10px;flex-wrap:wrap">
@@ -485,6 +1048,7 @@ Views.settings = async function (mount) {
       <p style="font-size:13px;line-height:1.9">
         <span class="tag">1–9</span> ${T('settings.switchModules')} · <span class="tag">/</span> ${T('settings.focusSearch')} · <span class="tag">Esc</span> ${T('settings.closeDialog')}
       </p>`)}
+    ${offlineCard()}
     ${messengerCard()}`;
 
   // The sidebar is a long list and most coaches only live in three or four of
@@ -514,7 +1078,252 @@ Views.settings = async function (mount) {
       <div class="row" style="flex:0;margin-top:8px"><button class="btn primary" id="openMessenger">${T('sync.openMessenger')}</button></div>`);
   }
 
+  // ---- Shared team database ----
+  // Everything the panel shows is derived from three facts: is a file linked,
+  // is this device signed in to Google, and may this role write.
+  function cloudCard() {
+    const c = TeamCloud.cfg();
+    const linked = !!c.fileId;
+    const online = TeamCloud.signedIn();
+    const mayWrite = Access.can('cloud.write', role);
+    const maySetup = Access.can('cloud.setup', role);
+    const state = !linked ? T('cloud.stateOff')
+      : (c.owner ? T('cloud.stateOwner') : T('cloud.stateMember')) + (c.teamName ? ' · ' + c.teamName : '');
+
+    const setup = `
+      <div class="row" style="flex:0;margin-top:10px;flex-wrap:wrap">
+        ${maySetup ? `<button class="btn primary" id="clCreate">${T('cloud.createBtn')}</button>` : ''}
+        <button class="btn" id="clJoin">${T('cloud.joinBtn')}</button>
+        <button class="btn" id="clGuide">${T('cloud.showMeHow')}</button>
+      </div>`;
+
+    const live = `
+      <div class="cloud-facts">
+        <span class="tag">${UI.esc(T('cloud.lastPull'))}: ${UI.esc(fmtWhen(c.lastPullAt))}</span>
+        <span class="tag">${UI.esc(T('cloud.lastPush'))}: ${UI.esc(fmtWhen(c.lastPushAt))}</span>
+        ${c.lastErr ? `<span class="tag warn">${UI.esc(c.lastErr)}</span>` : ''}
+      </div>
+      <div class="row" style="flex:0;margin-top:10px;flex-wrap:wrap">
+        <button class="btn primary" id="clSync">${T('cloud.syncNow')}</button>
+        <button class="btn" id="clPull">${T('cloud.pullAll')}</button>
+        ${mayWrite ? `<button class="btn" id="clPush">${T('cloud.pushAll')}</button>` : ''}
+        <button class="btn" id="clCode">${T('cloud.showCode')}</button>
+        ${mayWrite && c.owner ? `<button class="btn" id="clInvite">${T('cloud.inviteBtn')}</button>` : ''}
+        <button class="btn danger" id="clForget">${T('cloud.disconnect')}</button>
+      </div>
+      <div class="row" style="flex:0;margin-top:10px;flex-wrap:wrap;align-items:flex-end">
+        <label class="field" style="max-width:220px"><span>${T('cloud.autoEvery')}</span>
+          <select id="clAuto">${TeamCloud.AUTO_MINUTES.map(m => `<option value="${m}" ${m === c.autoMin ? 'selected' : ''}>${everyLabel(m)}</option>`).join('')}</select></label>
+      </div>
+      ${mayWrite ? '' : `<p class="hint mail-note">${UI.esc(T('cloud.readOnlyRole'))}</p>`}`;
+
+    return UI.acc('setCloud', T('cloud.title'), `
+      <p style="color:var(--muted);font-size:13px">${T('cloud.desc')}</p>
+      <p><span class="tag ${linked ? 'green' : ''}">${UI.esc(state)}</span>
+         <span class="tag ${online ? 'green' : ''}">${UI.esc(online ? T('cloud.googleOn') : T('cloud.googleOff'))}</span></p>
+      ${linked ? live : setup}
+      <div class="row" style="flex:0;margin-top:10px;flex-wrap:wrap">
+        <button class="btn sm ${online ? '' : 'primary'}" id="clGoogle">${online ? T('cloud.googleBtn') : T('gw.startBtn')}</button>
+        ${linked ? `<button class="btn sm" id="clGuide2">${T('cloud.showMeHow')}</button>` : ''}
+      </div>
+      <p class="hint">${T('cloud.hint')}</p>`);
+  }
+
+  // ---- People & access (admin / coach only) ----
+  function accessCard() {
+    const list = Access.members();
+    const row = m => `<div class="acc-person">
+      <span class="acc-person-main">
+        <b>${UI.esc(m.name || m.email)}</b>
+        <span class="tag ${Access.isStaff(m.role) ? 'green' : ''}">${UI.esc(Access.label(m.role))}</span>
+        <span class="share-n">${UI.esc(m.email)}${m.note ? ' · ' + UI.esc(m.note) : ''}</span>
+      </span>
+      <span class="bm-acts">
+        <button class="btn sm" data-acc-edit="${UI.esc(m.id)}">${T('common.edit')}</button>
+        <button class="btn sm danger" data-acc-rm="${UI.esc(m.id)}">${T('common.remove')}</button>
+      </span>
+    </div>`;
+    return UI.acc('setAccess', T('access.title'), `
+      <p style="color:var(--muted);font-size:13px">${T('access.desc')}</p>
+      <div class="acc-people">${list.length ? list.map(row).join('') : `<p class="hint">${T('access.none')}</p>`}</div>
+      <div class="row" style="flex:0;margin-top:10px;flex-wrap:wrap">
+        <button class="btn primary" id="accAdd">${T('access.addTitle')}</button>
+        <button class="btn" id="accImport">${T('access.fromSquad')}</button>
+        ${TeamCloud.isLinked() ? `<button class="btn" id="accInvite">${T('cloud.inviteBtn')}</button>` : ''}
+      </div>
+      <p class="hint">${T('access.hint')}</p>`);
+  }
+
+  // ---- Offline ----
+  function offlineCard() {
+    return UI.acc('setOffline', T('offline.title'), `
+      <p style="color:var(--muted);font-size:13px">${T('offline.desc')}</p>
+      <p><span class="tag" id="offState">${UI.esc(T('offline.checking'))}</span></p>
+      <div class="row" style="flex:0;margin-top:8px;flex-wrap:wrap">
+        <button class="btn primary" id="offInstall">${T('offline.install')}</button>
+        <button class="btn" id="offCache">${T('offline.download')}</button>
+        <button class="btn" id="offUpdate">${T('offline.update')}</button>
+        <button class="btn" id="offGuide">${T('cloud.showMeHow')}</button>
+      </div>
+      <p class="hint">${T('offline.hint')}</p>`);
+  }
+
   UI.bindAcc(mount);
+
+  // The two cloud panels redraw themselves in place, so a sync does not fold
+  // every other card shut by re-rendering the whole page.
+  function refreshCloud() {
+    const host = mount.querySelector('#cloudCardHost');
+    if (!host) return;
+    host.innerHTML = cloudCard();
+    UI.bindAcc(host);
+    bindCloud();
+  }
+  function refreshAccess() {
+    const host = mount.querySelector('#accessCardHost');
+    if (!host || !staff) return;
+    host.innerHTML = accessCard();
+    UI.bindAcc(host);
+    bindAccess();
+  }
+  const on = (sel, fn) => { const el = mount.querySelector(sel); if (el) el.onclick = fn; };
+  const busyRun = async (sel, fn, okKey) => {
+    const el = mount.querySelector(sel);
+    if (el) el.disabled = true;
+    try { const r = await fn(); UI.toast(typeof okKey === 'function' ? okKey(r) : T(okKey), 'success'); }
+    catch (e) { UI.toast(String((e && e.message) || e).slice(0, 200), 'error'); }
+    finally { if (el) el.disabled = false; refreshCloud(); }
+  };
+
+  function bindCloud() {
+    on('#clGuide', cloudGuide);
+    on('#clGuide2', cloudGuide);
+    on('#clGoogle', () => googleWizard(refreshCloud));
+    on('#clCreate', async () => {
+      // Nothing can be created before Google is connected, so an unconfigured
+      // coach is taken through the setup first instead of into an error.
+      if (!await Drive.isConfigured()) return googleWizard(refreshCloud);
+      cloudCreateDialog(() => { refreshCloud(); refreshAccess(); });
+    });
+    on('#clJoin', () => cloudJoinDialog(() => { refreshCloud(); refreshAccess(); App.render(); }));
+    on('#clCode', cloudCodeDialog);
+    on('#clInvite', () => cloudInviteDialog(refreshAccess));
+    on('#clSync', () => busyRun('#clSync', () => TeamCloud.sync(), () => T('cloud.synced')));
+    on('#clPull', () => UI.confirm(T('cloud.pullAsk'), () =>
+      busyRun('#clPull', () => TeamCloud.pull('replace'), () => T('cloud.pulled'))));
+    on('#clPush', () => UI.confirm(T('cloud.pushAsk'), () =>
+      busyRun('#clPush', () => TeamCloud.push('replace'), () => T('cloud.pushed'))));
+    on('#clForget', () => UI.confirm(T('cloud.disconnectAsk'), async () => {
+      await TeamCloud.forget(); UI.toast(T('cloud.disconnected'), 'success'); refreshCloud();
+    }));
+    const auto = mount.querySelector('#clAuto');
+    if (auto) auto.onchange = async () => {
+      await TeamCloud.setAuto(auto.value);
+      UI.toast(+auto.value ? T('cloud.autoOn').replace('{0}', everyLabel(+auto.value)) : T('cloud.autoOff'), 'success');
+    };
+  }
+
+  function bindAccess() {
+    on('#accAdd', () => accessEditDialog(null, refreshAccess));
+    on('#accInvite', () => cloudInviteDialog(refreshAccess));
+    on('#accImport', () => {
+      const known = new Set(Access.members().map(m => m.email));
+      const add = Access.suggestions().filter(s => !known.has(s.email));
+      if (!add.length) return UI.toast(T('access.nothingToImport'));
+      UI.confirm(T('access.fromSquadAsk').replace('{0}', add.length), async () => {
+        for (const s of add) await Access.grant(s);
+        UI.toast(T('access.imported').replace('{0}', add.length), 'success');
+        refreshAccess();
+      });
+    });
+    mount.querySelectorAll('[data-acc-edit]').forEach(b => b.onclick = () => {
+      const m = Access.members().find(x => x.id === b.dataset.accEdit);
+      if (m) accessEditDialog(m, refreshAccess);
+    });
+    mount.querySelectorAll('[data-acc-rm]').forEach(b => b.onclick = () => {
+      const m = Access.members().find(x => x.id === b.dataset.accRm);
+      if (!m) return;
+      UI.confirm(T('access.removeAsk').replace('{0}', m.name || m.email), async () => {
+        await Access.revoke(m.id); UI.toast(T('access.removed'), 'success'); refreshAccess();
+      });
+    });
+  }
+
+  bindCloud();
+  bindAccess();
+  bindOffline();
+
+  // ---- Offline ----
+  // The service worker already caches the shell; this is the place a coach can
+  // see whether it actually happened and force it before leaving for a hall
+  // with no signal.
+  function bindOffline() {
+    const tag = mount.querySelector('#offState');
+    const install = mount.querySelector('#offInstall');
+    if (!tag) return;
+    const swOk = 'serviceWorker' in navigator;
+    const standalone = window.matchMedia && window.matchMedia('(display-mode: standalone)').matches;
+    // navigator.serviceWorker.ready never settles when nothing is registered,
+    // which would leave the button spinning for ever.
+    const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms))]);
+    async function state() {
+      if (!swOk) { tag.textContent = T('offline.unsupported'); return; }
+      const reg = await navigator.serviceWorker.getRegistration();
+      let files = 0;
+      try {
+        const keys = await caches.keys();
+        for (const k of keys.filter(x => x.indexOf('sporttactic-') === 0)) {
+          files += (await (await caches.open(k)).keys()).length;
+        }
+      } catch (e) { /* storage blocked (private mode) */ }
+      tag.textContent = (reg ? T('offline.ready') : T('offline.notReady'))
+        + ' · ' + T('offline.files').replace('{0}', files)
+        + (standalone ? ' · ' + T('offline.installed') : '');
+    }
+    state();
+    if (install) {
+      // Chrome fires beforeinstallprompt whenever it likes, often after this
+      // panel is built, so the button stays live and explains itself instead.
+      install.disabled = standalone;
+      install.onclick = async () => {
+        const done = window.STXInstall && await STXInstall.prompt();
+        if (!done) UI.toast(T('offline.installManual'));
+        state();
+      };
+    }
+    const cacheBtn = mount.querySelector('#offCache');
+    if (cacheBtn) cacheBtn.disabled = !swOk;
+    on('#offCache', async () => {
+      cacheBtn.disabled = true;
+      try {
+        const reg = await withTimeout(navigator.serviceWorker.ready, 8000);
+        if (!reg.active) throw new Error('no active worker');
+        // The worker answers when every shell file is in the cache.
+        await new Promise((res, rej) => {
+          const ch = new MessageChannel();
+          ch.port1.onmessage = e => (e.data && e.data.ok) ? res(e.data) : rej(new Error((e.data && e.data.error) || 'failed'));
+          setTimeout(() => rej(new Error('timeout')), 60000);
+          reg.active.postMessage({ type: 'PRECACHE_ALL' }, [ch.port2]);
+        });
+        UI.toast(T('offline.downloaded'), 'success');
+      } catch (e) { UI.toast(T('offline.downloadFailed'), 'error'); }
+      finally { cacheBtn.disabled = false; state(); }
+    });
+    const updBtn = mount.querySelector('#offUpdate');
+    if (updBtn) updBtn.disabled = !swOk;
+    on('#offUpdate', async () => {
+      try {
+        const reg = await navigator.serviceWorker.getRegistration();
+        if (!reg) throw new Error('not registered');
+        await reg.update();
+        UI.toast(T('offline.updated'), 'success');
+      } catch (e) { UI.toast(T('offline.downloadFailed'), 'error'); }
+      state();
+    });
+    on('#offGuide', () => guideDialog(T('offline.guideTitle'), UI.esc(T('offline.desc')), [
+      UI.esc(T('offline.g1')), UI.esc(T('offline.g2')), UI.esc(T('offline.g3')), UI.esc(T('offline.g4'))
+    ], `<p class="hint">${UI.esc(T('offline.hint'))}</p>`));
+  }
 
   // ---- Module menu ----
   const menuBoxes = [...mount.querySelectorAll('[data-menu]')];

@@ -8,7 +8,7 @@
 
    BUMP `VERSION` and the matching `?v=` entries in SHELL whenever an asset changes.
 */
-const VERSION = 'v110';
+const VERSION = 'v114';
 const CACHE = 'sporttactic-' + VERSION;
 
 const SHELL = [
@@ -19,13 +19,17 @@ const SHELL = [
   './oldipads.html',
   './manifest.webmanifest',
   './logo.svg?v=6',
-  './styles.css?v=93',
+  './icon-maskable.svg?v=1',
+  './styles.css?v=97',
   './db.js?v=14',
-  './i18n.js?v=99',
+  './i18n.js?v=103',
   './sports.js?v=20',
   './playbook.js?v=12',
-  './store.js?v=23',
+  './store.js?v=24',
   './ui.js?v=27',
+  './access.js?v=1',
+  './drive.js?v=2',
+  './cloud.js?v=1',
   './mail.js?v=11',
   './ai.js?v=12',
   './dashboard.js?v=16',
@@ -40,22 +44,31 @@ const SHELL = [
   './backgammon.js?v=13',
   './tactics.js?v=64',
   './anim.js?v=1',
-  './video.js?v=23',
+  './video.js?v=24',
   './training.js?v=36',
   './exercises.js?v=30',
   './opponents.js?v=19',
   './reports.js?v=21',
-  './settings.js?v=45',
+  './settings.js?v=49',
   './backup.js?v=2',
   './messenger.js?v=16',
-  './app.js?v=27'
+  './app.js?v=28'
 ];
+
+// Fill the cache and report how much of the shell actually made it, so the
+// install can fail loudly instead of leaving a half-cached app.
+async function precacheAll() {
+  const cache = await caches.open(CACHE);
+  // One bad URL must not abandon the whole precache, so add them individually.
+  const results = await Promise.all(SHELL.map(u =>
+    cache.add(new Request(u, { cache: 'reload' })).then(() => true, () => false)));
+  const ok = results.filter(Boolean).length;
+  return { ok, total: SHELL.length, missing: SHELL.filter((u, i) => !results[i]) };
+}
 
 self.addEventListener('install', e => {
   e.waitUntil((async () => {
-    const cache = await caches.open(CACHE);
-    // One bad URL must not abandon the whole precache, so add them individually.
-    await Promise.all(SHELL.map(u => cache.add(new Request(u, { cache: 'reload' })).catch(() => null)));
+    await precacheAll();
     await self.skipWaiting();
   })());
 });
@@ -69,7 +82,18 @@ self.addEventListener('activate', e => {
 });
 
 self.addEventListener('message', e => {
-  if (e.data && e.data.type === 'SKIP_WAITING') self.skipWaiting();
+  const data = e.data || {};
+  if (data.type === 'SKIP_WAITING') { self.skipWaiting(); return; }
+  // Settings > Offline > "Download for offline use" — the coach forces the whole
+  // shell into the cache before leaving for a hall with no signal, and gets a
+  // straight answer about whether it worked.
+  if (data.type === 'PRECACHE_ALL') {
+    const reply = m => { if (e.ports && e.ports[0]) e.ports[0].postMessage(m); };
+    e.waitUntil(precacheAll().then(
+      r => reply({ ok: r.missing.length === 0, cached: r.ok, total: r.total, missing: r.missing }),
+      err => reply({ ok: false, error: String(err && err.message || err) })
+    ));
+  }
 });
 
 async function putIfOk(request, response) {

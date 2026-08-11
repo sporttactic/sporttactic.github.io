@@ -44,7 +44,7 @@ Show focus areas
 Produce video clips.">
   <link rel="apple-touch-icon" href="logo.svg?v=6" />
   <title>SportTactic</title>
-  <link rel="stylesheet" href="styles.css?v=93" />
+  <link rel="stylesheet" href="styles.css?v=97" />
   <link rel="manifest" href="manifest.webmanifest?v=2" />
   <style>
     /* Boot splash — inline so it paints before styles.css / the app scripts run.
@@ -216,11 +216,14 @@ Produce video clips.">
   <div id="toastHost" class="toast-host"></div>
 
   <script src="db.js?v=14"></script>
-  <script src="i18n.js?v=99"></script>
+  <script src="i18n.js?v=103"></script>
   <script src="sports.js?v=20"></script>
   <script src="playbook.js?v=12"></script>
-  <script src="store.js?v=23"></script>
+  <script src="store.js?v=24"></script>
   <script src="ui.js?v=27"></script>
+  <script src="access.js?v=1"></script>
+  <script src="drive.js?v=2"></script>
+  <script src="cloud.js?v=1"></script>
   <script src="mail.js?v=11"></script>
   <script src="ai.js?v=12"></script>
   <script src="dashboard.js?v=16"></script>
@@ -235,15 +238,15 @@ Produce video clips.">
   <script src="backgammon.js?v=13"></script>
   <script src="tactics.js?v=64"></script>
   <script src="anim.js?v=1"></script>
-  <script src="video.js?v=23"></script>
+  <script src="video.js?v=24"></script>
   <script src="training.js?v=36"></script>
   <script src="exercises.js?v=30"></script>
   <script src="opponents.js?v=19"></script>
   <script src="reports.js?v=21"></script>
-  <script src="settings.js?v=45"></script>
+  <script src="settings.js?v=49"></script>
   <script src="backup.js?v=2"></script>
   <script src="messenger.js?v=16"></script>
-  <script src="app.js?v=27"></script>
+  <script src="app.js?v=28"></script>
   <script>
     // PWA: offline app shell (sw.js) + Chrome's install prompt.
     (function () {
@@ -267,16 +270,25 @@ Produce video clips.">
 
       var btn = document.getElementById('installApp');
       var deferred = null;
+      // Settings > Offline offers the same button, so the event is kept where
+      // both can reach it instead of only on the sidebar.
+      window.STXInstall = {
+        available: function () { return !!deferred; },
+        prompt: function () {
+          if (!deferred) return Promise.resolve(false);
+          var e = deferred;
+          deferred = null;
+          if (btn) btn.classList.add('hidden');
+          e.prompt();
+          return e.userChoice.then(function (c) { return !!(c && c.outcome === 'accepted'); }, function () { return false; });
+        }
+      };
       window.addEventListener('beforeinstallprompt', function (e) {
         e.preventDefault();
         deferred = e;
         if (btn) btn.classList.remove('hidden');
       });
-      if (btn) btn.addEventListener('click', function () {
-        if (!deferred) return;
-        deferred.prompt();
-        deferred.userChoice.then(function () { deferred = null; btn.classList.add('hidden'); });
-      });
+      if (btn) btn.addEventListener('click', function () { window.STXInstall.prompt(); });
       window.addEventListener('appinstalled', function () {
         deferred = null;
         if (btn) btn.classList.add('hidden');
