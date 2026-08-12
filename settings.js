@@ -1049,17 +1049,18 @@ function memberModeDialog(onDone) {
 function roleKeysDialog(onDone) {
   const words = Access.roleKeyWords();
   const made = !!Access.roleKeys();
+  const stale = Access.wordsStale();
   const code = TeamCloud.makeCode();
   const link = location.origin + location.pathname;
   const row = r => `<div class="pol-row" data-key="${UI.esc(r)}">
     <span class="pol-name">${UI.esc(Access.label(r))}
       <span class="share-n">${UI.esc(T('rk.for' + r.replace(/\s/g, '')))}</span></span>
     <span class="pol-opts">
-      ${words[r]
+      ${words[r] && !stale
       ? `<code class="pol-sample rk-word">${UI.esc(words[r])}</code>
          <button type="button" class="btn sm" data-copy="${UI.esc(r)}">${UI.esc(T('cloud.copy'))}</button>
          <button type="button" class="btn sm" data-mail="${UI.esc(r)}">${UI.esc(T('cloud.mailCode'))}</button>`
-      : `<span class="hint">${UI.esc(T(made ? 'rk.elsewhere' : 'rk.none'))}</span>`}
+      : `<span class="hint">${UI.esc(T(stale ? 'rk.stale' : made ? 'rk.elsewhere' : 'rk.none'))}</span>`}
     </span>
   </div>`;
 
@@ -1067,12 +1068,12 @@ function roleKeysDialog(onDone) {
     title: T('rk.title'),
     width: 720,
     body: `<p>${UI.esc(T('rk.intro'))}</p>
-      <div class="callout-warn">${UI.esc(T('rk.warn'))}</div>
+      <div class="callout-warn">${UI.esc(T(stale ? 'rk.staleWarn' : 'rk.warn'))}</div>
       ${Access.KEY_ROLES.map(row).join('')}
       <p class="hint">${UI.esc(T('rk.note'))}</p>
       <p class="hint">${UI.esc(T('rk.storeHint'))}</p>`,
     footer: `<button class="btn ghost" data-close2>${T('common.close')}</button>
-      <button class="btn ${made ? '' : 'primary'}" data-new>${UI.esc(T(made ? 'rk.again' : 'rk.make'))}</button>`,
+      <button class="btn ${made && !stale ? '' : 'primary'}" data-new>${UI.esc(T(made ? 'rk.again' : 'rk.make'))}</button>`,
     onOpen: (m, close) => {
       m.querySelector('[data-close2]').onclick = close;
       m.querySelectorAll('[data-copy]').forEach(b => b.onclick = async () => {
@@ -1092,12 +1093,21 @@ function roleKeysDialog(onDone) {
           + '?subject=' + encodeURIComponent(T('rk.mailSubject'))
           + '&body=' + encodeURIComponent(body);
       });
-      m.querySelector('[data-new]').onclick = () => {
+      const btn = m.querySelector('[data-new]');
+      btn.onclick = () => {
         const go = async () => {
+          btn.disabled = true;
           try { await Access.newRoleKeys(); }
-          catch (e) { return UI.toast(T('rk.noCrypto'), 'error'); }
+          catch (e) { btn.disabled = false; return UI.toast(T('rk.noCrypto'), 'error'); }
+          // The hashes have to reach the shared file before the words are handed
+          // out, or a device that joins first checks against the previous set.
+          let sent = true;
+          if (TeamCloud.isLinked() && Access.can('cloud.write') && TeamCloud.signedIn()) {
+            try { await TeamCloud.push('merge'); } catch (e) { sent = false; }
+          }
           close();
           UI.toast(T('rk.made'), 'success');
+          if (!sent) UI.toast(T('rk.pushFailed'), 'error');
           roleKeysDialog(onDone);
           if (onDone) onDone();
         };
@@ -1218,18 +1228,14 @@ function cloudJoinDialog(onDone) {
         try {
           const pw = m.querySelector('#jn_pw').value.trim();
           const n = await TeamCloud.join(inp.value);
-          // The pull brought the club's password hashes with it. Once a club
-          // uses them the code alone is worth a player's view and no more, so a
-          // device that cannot show a word starts as a player.
-          let got = '';
-          if (Access.roleKeys()) {
-            got = pw ? await Access.claimRole(pw) : '';
-            if (!got && Access.role() !== 'Player') await Store.setSetting('role', 'Player');
-          }
+          // The pull brought the club's password hashes with it, so the word can
+          // be checked here. No word, or the wrong one, and this copy reads.
+          const got = await Access.claimRole(pw);
           close();
           UI.toast(T('cloud.joined').replace('{0}', n), 'success');
           if (got) UI.toast(T('rk.joinedAs').replace('{0}', Access.label(got)), 'success');
-          else if (pw) UI.toast(T('rk.wrong'), 'error');
+          else if (Access.roleKeys()) UI.toast(T(pw ? 'rk.wrong' : 'rk.noneGiven'), 'error');
+          else if (pw) UI.toast(T('rk.noKeys'), 'error');
           const rb = document.getElementById('roleBadge');
           if (rb) rb.textContent = T('role.' + Access.role());
           App.applyMemberMode();
@@ -1385,7 +1391,13 @@ Views.settings = async function (mount) {
     ${readMode ? '' : menuCard()}
     ${UI.acc('setRole', T('settings.roleAccess'), `
       <label class="field"><span>${T('settings.activeRole')}</span><select id="s_role" ${readMode ? 'disabled' : ''}>${['Super Admin', 'Club Admin', 'Coach', 'Analyst', 'Player'].map(r => `<option value="${r}" ${r === role ? 'selected' : ''}>${T('role.' + r)}</option>`).join('')}</select></label>
-      <p style="color:var(--muted);font-size:12px">${readMode ? T('mem.roleLocked') : T('settings.roleHint')}</p>`)}
+      <p style="color:var(--muted);font-size:12px">${readMode ? T('mem.roleLocked') : T('settings.roleHint')}</p>
+      ${Access.roleKeys() && Access.memberCopy() ? `<label class="field"><span>${T('rk.field')}</span>
+        <span class="row" style="flex:0;gap:6px;align-items:center">
+          <input id="s_key" spellcheck="false" autocomplete="off" placeholder="ABCD-EFGH-JK">
+          <button type="button" class="btn" id="s_keyGo" data-member-ok>${T('rk.unlock')}</button>
+        </span>
+        <span class="hint">${T('rk.unlockHint')}</span></label>` : ''}`)}
     <div id="cloudCardHost">${cloudCard()}</div>
     <div id="accessCardHost">${staff ? accessCard() : ''}</div>
     ${UI.acc('setData', T('settings.dataCard'), `
@@ -1734,6 +1746,15 @@ Views.settings = async function (mount) {
 
   const roleSel = mount.querySelector('#s_role');
   roleSel.onchange = e => { Store.setSetting('role', e.target.value); document.getElementById('roleBadge').textContent = T('role.' + e.target.value); App.render(); };
+  on('#s_keyGo', async () => {
+    const inp = mount.querySelector('#s_key');
+    const got = await Access.claimRole(inp.value.trim());
+    if (!got) return UI.toast(T(Access.roleKeys() ? 'rk.wrong' : 'rk.noKeys'), 'error');
+    UI.toast(T('rk.joinedAs').replace('{0}', Access.label(got)), 'success');
+    document.getElementById('roleBadge').textContent = T('role.' + got);
+    App.applyMemberMode();
+    App.render();
+  });
   const openMsg = mount.querySelector('#openMessenger');
   if (openMsg) openMsg.onclick = () => App.go('messenger');
 

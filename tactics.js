@@ -2023,32 +2023,69 @@ Views.tactics = function (mount, params) {
     if (play !== false) playAnimation();
   }
 
-  // Hand every saved animation to one squad, so the coaches working with that
-  // team find them under Teams & Players instead of hunting the whole library.
+  // Hand animations to a squad, so the coaches working with that team find them
+  // under Teams & Players instead of hunting the whole library. Pick the squad,
+  // then tick the ones that belong to it — the ticks follow the squad, so this
+  // screen also shows what it already has and takes one away again.
   function saveAllToTeam() {
     const teams = Store.teams();
     const mine = userSystems();
     if (!teams.length) return UI.toast(T('tactics.animNoTeam'), 'error');
     if (!mine.length) return UI.toast(T('tactics.noSavedAnims'), 'error');
-    const active = Store.activeTeamId();
+    const teamName = id => { const t = teams.find(x => x.id === id); return t ? t.name : ''; };
+    const row = s => `<label class="check-row share-row">
+      <input type="checkbox" data-anim="${UI.esc(s.id)}">
+      <span>${UI.esc(s.name)}
+        <span class="tag">${(s.frames || []).length} ${UI.esc(T('tactics.frameList'))}</span>
+        <span class="share-n" data-owner="${UI.esc(s.id)}"></span>
+      </span></label>`;
     UI.modal({
       title: T('tactics.animToTeam'),
-      width: 520,
+      width: 560,
       body: `<p>${UI.esc(T('tactics.animToTeamIntro').replace('{0}', mine.length))}</p>
         <label class="field"><span>${UI.esc(T('teams.activeTeam'))}</span>
-          <select id="anim_team">${teams.map(t => `<option value="${UI.esc(t.id)}" ${t.id === active ? 'selected' : ''}>${UI.esc(t.name)}</option>`).join('')}</select></label>
+          <select id="anim_team">${teams.map(t => `<option value="${UI.esc(t.id)}" ${t.id === Store.activeTeamId() ? 'selected' : ''}>${UI.esc(t.name)}</option>`).join('')}</select></label>
+        <div class="focus-acts">
+          <button type="button" class="btn sm" data-all>${UI.esc(T('settings.shareAll'))}</button>
+          <button type="button" class="btn sm" data-none>${UI.esc(T('settings.shareNone'))}</button>
+        </div>
+        <div class="draft-list">${mine.map(row).join('')}</div>
         <p class="hint">${UI.esc(T('tactics.animToTeamHint'))}</p>`,
       footer: `<button class="btn ghost" data-close2>${T('common.cancel')}</button>
         <button class="btn primary" data-save>${T('common.save')}</button>`,
       onOpen: (m, close) => {
+        const sel = m.querySelector('#anim_team');
+        const boxes = [...m.querySelectorAll('[data-anim]')];
+        const sync = () => {
+          const teamId = sel.value;
+          mine.forEach(s => {
+            const box = m.querySelector(`[data-anim="${CSS.escape(s.id)}"]`);
+            const note = m.querySelector(`[data-owner="${CSS.escape(s.id)}"]`);
+            box.checked = s.teamId === teamId;
+            note.textContent = (s.teamId && s.teamId !== teamId) ? T('tactics.animOnTeam').replace('{0}', teamName(s.teamId)) : '';
+          });
+        };
+        sel.onchange = sync;
+        m.querySelector('[data-all]').onclick = () => boxes.forEach(b => { b.checked = true; });
+        m.querySelector('[data-none]').onclick = () => boxes.forEach(b => { b.checked = false; });
         m.querySelector('[data-close2]').onclick = close;
         m.querySelector('[data-save]').onclick = async () => {
-          const teamId = m.querySelector('#anim_team').value;
-          for (const s of mine) await Store.save('tactics', Object.assign({}, s, { teamId }));
+          const teamId = sel.value;
+          let n = 0;
+          for (const s of mine) {
+            const on = m.querySelector(`[data-anim="${CSS.escape(s.id)}"]`).checked;
+            // Unticking only lets go of THIS squad — an animation filed under
+            // another one is left where it is.
+            const next = on ? teamId : (s.teamId === teamId ? '' : s.teamId);
+            if ((s.teamId || '') === (next || '')) continue;
+            await Store.save('tactics', Object.assign({}, s, { teamId: next }));
+            n++;
+          }
           close();
-          UI.toast(T('tactics.animToTeamDone').replace('{0}', mine.length), 'success');
+          UI.toast(T('tactics.animToTeamDone').replace('{0}', n), 'success');
           renderAnimList();
         };
+        sync();
       }
     });
   }

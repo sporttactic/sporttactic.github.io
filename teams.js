@@ -110,16 +110,16 @@ Views.teams = function (mount) {
       : `<button class="btn sm" id="mailSquad">✉ ${T('mail.title')}</button>
          <button class="btn sm" id="squadAnims">▶ ${T('teams.anims')} <span class="tag">${teamAnims.length}</span></button>
          <button class="btn sm" id="chatSquad">💬 ${T('chat.squad')}</button>
-         <button class="btn sm" id="editSquad">✎ ${T('teams.editSquad')}</button>
-         <button class="btn sm" id="aiSquad">🤖 ${T('teams.aiSquad')}</button>
+         <button class="btn sm" id="editSquad" data-write>✎ ${T('teams.editSquad')}</button>
+         <button class="btn sm" id="aiSquad" data-write>🤖 ${T('teams.aiSquad')}</button>
          <button class="btn primary" id="addPlayer">+ ${T('teams.addPlayer')}</button>`;
 
     const teamBar = `
       <div class="team-bar">
         <label class="field"><span>${T('teams.activeTeam')}</span>
           <select id="teamPick">${teamList.map(x => `<option value="${UI.esc(x.id)}" ${team && x.id === team.id ? 'selected' : ''}>${UI.esc(x.name)}</option>`).join('') || `<option value="">${UI.esc(T('teams.noTeam'))}</option>`}</select></label>
-        <button class="btn sm" id="editTeamBtn" ${team ? '' : 'disabled'}>✎ ${T('teams.editTeam')}</button>
-        <button class="btn sm" id="newTeam">+ ${T('teams.newTeam')}</button>
+        <button class="btn sm" id="editTeamBtn" data-write ${team ? '' : 'disabled'}>✎ ${T('teams.editTeam')}</button>
+        <button class="btn sm" id="newTeam" data-write>+ ${T('teams.newTeam')}</button>
         <button class="btn sm danger" id="delTeam" ${teamList.length < 2 ? 'disabled' : ''}>${T('teams.delTeam')}</button>
       </div>
       ${team ? `<div class="team-facts">
@@ -135,7 +135,7 @@ Views.teams = function (mount) {
       ${AI.section('injuries')}
       <div class="page-head">
         <div><h1>${T('teams.title')}</h1>
-          <p><button type="button" class="inline-edit" id="editTeam" title="${T('teams.editTeam')}">${UI.esc(team ? team.name : T('teams.noTeam'))}${team && team.division ? ' · ' + UI.esc(team.division) : ''}<span class="pen">✎</span></button></p>
+          <p><button type="button" class="inline-edit" id="editTeam" data-write title="${T('teams.editTeam')}">${UI.esc(team ? team.name : T('teams.noTeam'))}${team && team.division ? ' · ' + UI.esc(team.division) : ''}<span class="pen">✎</span></button></p>
         </div>
       </div>
       ${UI.acc('teamPickers', T('teams.teams'), teamBar, {

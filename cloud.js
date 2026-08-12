@@ -206,7 +206,13 @@ const TeamCloud = (() => {
       n += theirs.length;
     }
     if (Array.isArray(doc.data.settings)) {
-      const rows = Store.unpack(doc.data.settings).filter(r => r && SHARED_SETTINGS.indexOf(r.id) >= 0);
+      const theirs = Store.unpack(doc.data.settings).filter(r => r && SHARED_SETTINGS.indexOf(r.id) >= 0);
+      // These rows are written on this device too, so the newer one wins exactly
+      // like every other store. A blind overwrite here used to undo a change
+      // that had not been pushed yet — new role passwords, for instance, went
+      // back to the previous set and the word handed out stopped working.
+      const mine = (await DB.getAll('settings')).filter(r => SHARED_SETTINGS.indexOf(r.id) >= 0);
+      const rows = replace ? theirs : mergeRows(mine, theirs);
       if (rows.length) { await DB.bulkPut('settings', rows); n += rows.length; }
     }
     await Store.loadAll();

@@ -329,6 +329,8 @@ const MAIL = (() => {
   // compose({ players, subject, text, title })
   function compose(opts) {
     opts = opts || {};
+    // A look-only team copy reads the squad; it does not write to anybody.
+    if (window.Access && Access.readMode()) return UI.toast(t('mem.blocked', 'Read-only copy'), 'error');
     const all = (opts.players || []).slice(0, 200);
     const able = withEmail(all);
     const missing = all.length - able.length;

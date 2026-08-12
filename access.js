@@ -116,7 +116,7 @@ const Access = (() => {
   const MEMBER_STAMP = 'byMember';
   // Device preferences (theme, language, which file to follow) stay theirs;
   // these decide what the copy is allowed to be, so they are not.
-  const FIXED_SETTINGS = ['role', PROFILE_KEY, 'sharePolicy', 'accessMembers', 'menuHidden', 'roleKeys'];
+  const FIXED_SETTINGS = ['role', PROFILE_KEY, 'sharePolicy', 'accessMembers', 'menuHidden', 'roleKeys', 'roleClaim'];
 
   function profile() {
     const rec = Store.find('settings', PROFILE_KEY);
@@ -141,13 +141,13 @@ const Access = (() => {
     const c = (window.TeamCloud && TeamCloud.cfg) ? TeamCloud.cfg() : null;
     return !!(c && c.fileId && !c.owner) && tier() === 'player';
   }
-  function readMode() { return memberCopy() && profile().readOnly; }
+  function readMode() { return memberCopy() && (profile().readOnly || unclaimed()); }
   function hiddenModules() { return memberCopy() ? profile().hide : []; }
   // Is this module one the coach left open to a read-only copy?
   function moduleOpen(route) {
-    return !readMode() || (profile().training && OPEN_ROUTES.indexOf(route) >= 0);
+    return !readMode() || (!unclaimed() && profile().training && OPEN_ROUTES.indexOf(route) >= 0);
   }
-  const openStores = () => (profile().training ? OPEN_STORES : []);
+  const openStores = () => (!unclaimed() && profile().training ? OPEN_STORES : []);
   // The write gate. A read-only member may add to the modules the coach left
   // open and change what they added there; the club's own rows and everything
   // else are refused. `row` is the record on its way in, or the stored one on a
@@ -155,9 +155,9 @@ const Access = (() => {
   function blocks(store, row) {
     if (!readMode()) return false;
     if (store === 'settings') {
-      // A verified role password is the coach's own say-so, so that one write
-      // through claimRole() is let past the lock it is meant to open.
-      if (claiming && row && row.id === 'role') return false;
+      // A verified role password is the coach's own say-so, so those two writes
+      // through claimRole() are let past the lock they are meant to open.
+      if (claiming && row && (row.id === 'role' || row.id === CLAIM_KEY)) return false;
       return FIXED_SETTINGS.indexOf(row && row.id) >= 0;
     }
     if (openStores().indexOf(store) < 0) return true;
@@ -174,6 +174,7 @@ const Access = (() => {
   // on the device that made them, which is the one that hands them out.
   const KEYS_KEY = 'roleKeys';          // shared: { v, salt, iter, roles:{ role: hash } }
   const WORDS_KEY = 'roleKeyWords';     // this device only: { role: password }
+  const CLAIM_KEY = 'roleClaim';        // this device only: which word it showed
   const KEY_ROLES = ['Player', 'Coach', 'Club Admin', 'Super Admin'];
   const KEY_ITER = 310000;
   // No 0/O, 1/I/L — a password read off a screen and typed on a phone.
@@ -201,32 +202,59 @@ const Access = (() => {
   // Only the device that generated them holds the readable words.
   function roleKeyWords() {
     const rec = Store.find('settings', WORDS_KEY);
-    return (rec && rec.value && typeof rec.value === 'object') ? rec.value : {};
+    const v = (rec && rec.value && typeof rec.value === 'object') ? rec.value : {};
+    return (v.words && typeof v.words === 'object') ? v.words : v;
+  }
+  // The words on this device belong to one set of hashes. If the file now holds
+  // a different set — somebody generated new ones elsewhere — these words would
+  // be refused, so the coach is told rather than handing out a dead password.
+  function wordsStale() {
+    const rec = Store.find('settings', WORDS_KEY);
+    const v = rec && rec.value;
+    const keys = roleKeys();
+    if (!keys || !v || !v.words) return false;
+    return String(v.set || '') !== String(keys.set || '');
   }
   async function newRoleKeys() {
     if (!cryptoOk()) throw new Error('no-crypto');
     const salt = crypto.getRandomValues(new Uint8Array(16));
+    const set = b64(crypto.getRandomValues(new Uint8Array(6)));
     const words = {}, roles = {};
     for (const r of KEY_ROLES) {
       words[r] = makeWord();
       roles[r] = await keyHash(words[r], salt, KEY_ITER);
     }
-    await Store.setSetting(KEYS_KEY, { v: 1, salt: b64(salt), iter: KEY_ITER, roles });
-    await Store.setSetting(WORDS_KEY, words);
+    await Store.setSetting(KEYS_KEY, { v: 1, set, salt: b64(salt), iter: KEY_ITER, roles });
+    await Store.setSetting(WORDS_KEY, { set, words });
     return words;
   }
   // Returns the role the word unlocked, or '' when it matches none of them.
+  // It is also what demotes: once a club uses passwords, a copy that cannot show
+  // a valid one is a player, and unclaimed() then holds it read-only.
   async function claimRole(word) {
     const rec = roleKeys();
     const w = String(word == null ? '' : word).trim().toUpperCase();
-    if (!rec || !w || !cryptoOk()) return '';
-    const hash = await keyHash(w, unb64(rec.salt), +rec.iter || KEY_ITER);
-    const hit = KEY_ROLES.find(r => rec.roles[r] === hash);
-    if (!hit) return '';
+    let hit = '';
+    if (rec && w && cryptoOk()) {
+      const hash = await keyHash(w, unb64(rec.salt), +rec.iter || KEY_ITER);
+      hit = KEY_ROLES.find(r => rec.roles[r] === hash) || '';
+    }
     claiming = true;
-    try { await Store.setSetting('role', hit); } finally { claiming = false; }
+    try {
+      if (rec) await Store.setSetting(CLAIM_KEY, hit ? { role: hit, at: Date.now() } : null);
+      if (hit) await Store.setSetting('role', hit);
+      else if (rec && role() !== 'Player') await Store.setSetting('role', 'Player');
+    } finally { claiming = false; }
     return hit;
   }
+  // A copy following a club that uses role passwords, which has never shown one
+  // that matched. It reads and nothing else, whatever the player profile says.
+  function claimedRole() {
+    const rec = Store.find('settings', CLAIM_KEY);
+    const v = rec && rec.value;
+    return (v && typeof v === 'object' && KEY_ROLES.indexOf(v.role) >= 0) ? v.role : '';
+  }
+  function unclaimed() { return !!roleKeys() && !claimedRole(); }
 
   // Everybody the squad already knows about, so the coach picks from a list
   // instead of retyping addresses that are one screen away.
@@ -249,7 +277,7 @@ const Access = (() => {
     members, findMember, saveMembers, grant, revoke, markInvited, suggestions, normEmail,
     OPEN_ROUTES, MEMBER_STAMP, KEY_ROLES,
     profile, saveProfile, memberCopy, readMode, hiddenModules, moduleOpen, blocks,
-    roleKeys, roleKeyWords, newRoleKeys, claimRole
+    roleKeys, roleKeyWords, newRoleKeys, claimRole, claimedRole, unclaimed, wordsStale
   };
 })();
 window.Access = Access;

@@ -462,20 +462,31 @@ tr:hover td { background: var(--surface-2); }
 .lock-badge { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 999px; border: 1px solid var(--warning); background: transparent; color: var(--warning); font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap; }
 .lock-badge:hover { background: var(--surface-2); }
 /* A copy that joined with a look-only team code. Outside the one module the
-   coach left open, the buttons that would change something are not offered at
-   all — the store refuses them anyway, this keeps the app from looking broken.
+   coach left open, the buttons that would change something — or send something
+   to somebody — are not offered at all. The store and MAIL.compose refuse them
+   anyway; this keeps the app from looking broken.
    The primary button of a card header is always its "add" action.
    data-member-ok marks the few a member must keep, such as leaving the team. */
 body[data-member="read"]:not([data-route="training"]) #view [data-del],
 body[data-member="read"]:not([data-route="training"]) #view [data-rm],
 body[data-member="read"]:not([data-route="training"]) #view [data-pdel],
 body[data-member="read"]:not([data-route="training"]) #view [data-edit],
+body[data-member="read"]:not([data-route="training"]) #view [data-editstaff],
+body[data-member="read"]:not([data-route="training"]) #view [data-delstaff],
+body[data-member="read"]:not([data-route="training"]) #view [data-acc-edit],
+body[data-member="read"]:not([data-route="training"]) #view [data-acc-rm],
+body[data-member="read"]:not([data-route="training"]) #view [data-catdel],
+body[data-member="read"] #view [data-write],
 body[data-member="read"]:not([data-route="training"]) #view .acc-acts .btn.primary:not([data-member-ok]),
 body[data-member="read"]:not([data-route="training"]) #view .btn.danger:not([data-member-ok]),
 body[data-member="read"]:not([data-route="training"]) #modalHost [data-del],
 body[data-member="read"]:not([data-route="training"]) #modalHost [data-rm],
 body[data-member="read"]:not([data-route="training"]) #modalHost [data-edit],
-body[data-member="read"]:not([data-route="training"]) #modalHost .btn.danger:not([data-member-ok]) { display: none !important; }
+body[data-member="read"]:not([data-route="training"]) #modalHost .btn.danger:not([data-member-ok]),
+body[data-member="read"] #view [data-mail],
+body[data-member="read"] #view #mailSquad,
+body[data-member="read"] #view #emailAll,
+body[data-member="read"] #modalHost [data-mail] { display: none !important; }
 /* Row actions: one button per line, so a long label never squeezes the column. */
 .row-acts { display: flex; flex-direction: column; align-items: stretch; gap: 6px; min-width: 108px; }
 .row-acts > .btn { width: 100%; }
