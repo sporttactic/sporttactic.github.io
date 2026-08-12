@@ -22,8 +22,9 @@ const TeamCloud = (() => {
   const FORMAT = 1;
   // Device preferences (theme, language, the Google client id) are personal, so
   // the settings store stays out of the shared file — except the member list,
-  // which every coach needs to see the same way.
-  const SHARED_SETTINGS = ['accessMembers'];
+  // which every coach needs to see the same way, and the player profile, which
+  // is the whole point of handing a code to a player.
+  const SHARED_SETTINGS = ['accessMembers', 'memberProfile'];
   const AUTO_MINUTES = [0, 5, 15, 30, 60, 180];
 
   let timer = null;

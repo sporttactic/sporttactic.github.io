@@ -111,6 +111,7 @@ Views.teams = function (mount) {
          <button class="btn sm" id="squadAnims">▶ ${T('teams.anims')} <span class="tag">${teamAnims.length}</span></button>
          <button class="btn sm" id="chatSquad">💬 ${T('chat.squad')}</button>
          <button class="btn sm" id="editSquad">✎ ${T('teams.editSquad')}</button>
+         <button class="btn sm" id="aiSquad">🤖 ${T('teams.aiSquad')}</button>
          <button class="btn primary" id="addPlayer">+ ${T('teams.addPlayer')}</button>`;
 
     const teamBar = `
@@ -184,6 +185,7 @@ Views.teams = function (mount) {
       q('#saveSquad').onclick = () => saveSquad(players);
     } else {
       q('#addPlayer').onclick = () => team ? form(team) : UI.toast(T('teams.noTeamFirst'), 'error');
+      q('#aiSquad').onclick = () => team ? aiSquadForm(team) : UI.toast(T('teams.noTeamFirst'), 'error');
       q('#editSquad').onclick = () => { editing = true; render(); };
       q('#mailSquad').onclick = () => MAIL.compose({
         players, title: T('mail.title') + ' — ' + T('teams.squad')
@@ -345,6 +347,138 @@ Views.teams = function (mount) {
           if (rawMail && !email) return UI.toast(T('teams.badEmail'), 'error');
           await Store.save('players', obj);
           close(); UI.toast(T('common.save'), 'success'); render();
+        };
+      }
+    });
+  }
+
+  // ---- AI squad builder ---------------------------------------------------
+  // Type the names you already have — the model fills in the squad around them:
+  // a shirt number nobody else wears, a position that fits the sport, and a
+  // plausible height and weight for the level. Nothing is invented that could
+  // identify anybody: no phone numbers, no addresses, no e-mail.
+  function aiSquadForm(team) {
+    const positions = SPORTS.positions(sportId);
+    const taken = Store.players(team.id).map(p => +p.number).filter(Boolean);
+    UI.modal({
+      title: T('teams.aiSquad'),
+      width: 640,
+      body: `<p style="color:var(--muted);font-size:13px">${T('teams.aiSquadIntro')}</p>
+        <label class="field"><span>${T('teams.aiSquadNames')}</span>
+          <textarea id="as_names" rows="8" placeholder="${UI.esc(T('teams.aiSquadPh'))}"></textarea>
+          <span class="hint">${T('teams.aiSquadNamesHint')}</span></label>
+        <label class="field"><span>${T('teams.aiSquadLevel')} <span class="hint">— ${T('exercises.aiOptional')}</span></span>
+          <input id="as_level" maxlength="80" value="${UI.esc([team.category, team.division].filter(Boolean).join(' · '))}"></label>
+        <p class="hint">${T('teams.aiSquadHint')}</p>`,
+      footer: `<button class="btn ghost" data-close2>${T('common.cancel')}</button>
+        <button class="btn primary" data-gen>${T('training.aiGenerate')}</button>`,
+      onOpen: (m, close) => {
+        m.querySelector('[data-close2]').onclick = close;
+        const btn = m.querySelector('[data-gen]');
+        btn.onclick = async () => {
+          const names = m.querySelector('#as_names').value.split(/[\n;]+/)
+            .map(s => s.replace(/^\s*[\d.,)#-]+\s*/, '').trim()).filter(Boolean).slice(0, 40);
+          if (!names.length) return UI.toast(T('teams.aiSquadReq'), 'error');
+          btn.disabled = true; btn.textContent = T('ai.asking');
+          const drafts = await generateSquad(names, m.querySelector('#as_level').value.trim(), positions, taken);
+          btn.disabled = false; btn.textContent = T('training.aiGenerate');
+          if (!drafts || !drafts.length) return;
+          close();
+          aiSquadReview(team, drafts);
+        };
+      }
+    });
+  }
+
+  async function generateSquad(names, level, positions, taken) {
+    const sport = SPORTS.name(sportId, 'en');
+    const system = [
+      `You build a ${sport} squad list for a coach.`,
+      'Answer with one JSON object and nothing else — no markdown, no code fence, no commentary.',
+      'Shape: {"players":[{"firstName":"","lastName":"","number":0,"position":"","height":0,"weight":0}]}',
+      'Return exactly one entry for every name you were given, in the same order.',
+      'Split each name into first and last name. Spell both exactly as they were written — never translate, shorten or correct them.',
+      `position must be copied from this list, in English: ${positions.join(', ')}.`,
+      'Spread the positions the way a real squad is built for this sport, with the right number of goalkeepers.',
+      'number is a shirt number from 1 to 99, different for every player, and not one of these already in use: ' + (taken.join(', ') || 'none') + '.',
+      'height is in centimetres and weight in kilograms — plausible for the level, never a real person\'s data.',
+      'Invent nothing else. No e-mail, no phone number, no notes, no comments.'
+    ].join('\n');
+    const user = JSON.stringify({ level: level || '', names });
+    const raw = await AI.complete(system, user, 260 + names.length * 60);
+    if (!raw) return null;
+    let d;
+    try { d = JSON.parse(raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1)); }
+    catch (e) { UI.toast(T('training.aiBad'), 'error'); return null; }
+    const used = new Set(taken);
+    const out = (Array.isArray(d.players) ? d.players : []).map(p => {
+      let num = Math.max(0, Math.min(99, Math.round(+p.number || 0)));
+      while (!num || used.has(num)) num = num < 99 ? num + 1 : 1;
+      used.add(num);
+      return {
+        firstName: String(p.firstName || '').trim().slice(0, 40),
+        lastName: String(p.lastName || '').trim().slice(0, 40),
+        number: num,
+        position: positions.indexOf(String(p.position || '')) >= 0 ? p.position : positions[0],
+        height: Math.max(0, Math.min(260, Math.round(+p.height || 0))),
+        weight: Math.max(0, Math.min(200, Math.round(+p.weight || 0)))
+      };
+    }).filter(p => p.firstName || p.lastName);
+    if (!out.length) UI.toast(T('training.aiBad'), 'error');
+    return out;
+  }
+
+  // Nothing reaches the squad until the coach has looked at it and ticked it.
+  function aiSquadReview(team, list) {
+    const positions = SPORTS.positions(sportId);
+    const row = (p, i) => `<div class="draft-row">
+      <label class="check-row"><input type="checkbox" data-draft="${i}" checked>
+        <span><b>${UI.esc((p.firstName + ' ' + p.lastName).trim())}</b></span></label>
+      <div class="draft-meta">
+        <label class="field" style="max-width:88px"><span>${T('teams.number')}</span>
+          <input type="number" data-f="number" data-i="${i}" min="1" max="99" value="${p.number}"></label>
+        <label class="field" style="max-width:200px"><span>${T('teams.position')}</span>
+          <select data-f="position" data-i="${i}">${positions.map(x => `<option value="${UI.esc(x)}" ${x === p.position ? 'selected' : ''}>${UI.esc(SPORTS.posBadge(sportId, x).ab)} \u2013 ${UI.esc(tt('pos', x))}</option>`).join('')}</select></label>
+        <label class="field" style="max-width:96px"><span>${T('teams.height')}</span>
+          <input type="number" data-f="height" data-i="${i}" value="${p.height || ''}"></label>
+        <label class="field" style="max-width:96px"><span>${T('teams.weight')}</span>
+          <input type="number" data-f="weight" data-i="${i}" value="${p.weight || ''}"></label>
+      </div>
+    </div>`;
+    UI.modal({
+      title: T('teams.aiSquadReview'),
+      width: 720,
+      body: `<p class="hint" style="margin-top:0">${T('teams.aiSquadReviewHint')}</p>
+        <div class="focus-acts">
+          <button type="button" class="btn sm" data-all>${T('settings.shareAll')}</button>
+          <button type="button" class="btn sm" data-none>${T('settings.shareNone')}</button>
+        </div>
+        <div class="draft-list">${list.map(row).join('')}</div>`,
+      footer: `<button class="btn ghost" data-close2>${T('common.cancel')}</button>
+        <button class="btn primary" data-save>${T('common.save')}</button>`,
+      onOpen: (m, close) => {
+        const boxes = [...m.querySelectorAll('[data-draft]')];
+        m.querySelector('[data-all]').onclick = () => boxes.forEach(b => { b.checked = true; });
+        m.querySelector('[data-none]').onclick = () => boxes.forEach(b => { b.checked = false; });
+        // What is on screen is what gets saved, so an edit here is not lost.
+        m.querySelectorAll('[data-f]').forEach(el => el.onchange = () => {
+          const p = list[+el.dataset.i];
+          p[el.dataset.f] = el.type === 'number' ? +el.value || 0 : el.value;
+        });
+        m.querySelector('[data-close2]').onclick = close;
+        m.querySelector('[data-save]').onclick = async () => {
+          const picked = boxes.filter(b => b.checked).map(b => list[+b.dataset.draft]);
+          if (!picked.length) return UI.toast(T('exercises.aiNonePicked'), 'error');
+          for (const p of picked) {
+            await Store.save('players', {
+              teamId: team.id, sport: sportId, status: 'active',
+              firstName: p.firstName, lastName: p.lastName, number: p.number,
+              position: p.position, height: p.height, weight: p.weight
+            });
+          }
+          close();
+          UI.toast(picked.length + ' ' + T('teams.aiSquadSaved'), 'success');
+          render();
         };
       }
     });

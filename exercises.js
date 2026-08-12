@@ -136,6 +136,10 @@ Views.exerciseLib = function (mount, opts) {
   }
 
   // One drill card — rendered inside the accordion of its own category.
+  // A read-only team copy keeps the buttons on the drills it wrote itself; the
+  // library that came down from the coach is looked at, not edited. The gate is
+  // the one the store uses, so the button is offered exactly when it works.
+  const mayChange = e => !Access.blocks('exercises', e);
   function cardHtml(e) {
     return `
       <div class="card" data-card="${e.id}">
@@ -150,8 +154,8 @@ Views.exerciseLib = function (mount, opts) {
         ${linksHtml(e)}
         ${animChips(e)}
         <button class="btn sm" data-show="${e.id}">${T('common.show')}</button>
-        <button class="btn sm" data-edit="${e.id}">${T('common.edit')}</button>
-        <button class="btn sm danger" data-del="${e.id}">${T('common.delete')}</button>
+        ${mayChange(e) ? `<button class="btn sm" data-edit="${e.id}">${T('common.edit')}</button>
+        <button class="btn sm danger" data-del="${e.id}">${T('common.delete')}</button>` : ''}
       </div>`;
   }
 
@@ -196,7 +200,7 @@ Views.exerciseLib = function (mount, opts) {
         <h4 style="margin-bottom:6px">${T('training.anims')}</h4>
         ${ANIM.chipsHtml(e.animations)}
         <div style="margin-top:12px">${linksHtml(e)}</div>`,
-      footer: `<button class="btn ghost" data-close2>${T('common.close')}</button><button class="btn primary" data-edit>${T('common.edit')}</button>`,
+      footer: `<button class="btn ghost" data-close2>${T('common.close')}</button>${mayChange(e) ? `<button class="btn primary" data-edit>${T('common.edit')}</button>` : ''}`,
       onOpen: (m, close) => {
         ANIM.bind(m);
         m.querySelector('[data-close2]').onclick = close;
@@ -221,7 +225,7 @@ Views.exerciseLib = function (mount, opts) {
       `<div class="grid cols-2">${byCat.get(c).map(cardHtml).join('')}</div>`,
       {
         sub: byCat.get(c).length + ' ' + T('training.drills'),
-        actions: `<button class="btn sm danger" data-catdel="${UI.esc(c)}">🗑 ${T('exercises.delCat')}</button>`
+        actions: Access.readMode() ? '' : `<button class="btn sm danger" data-catdel="${UI.esc(c)}">🗑 ${T('exercises.delCat')}</button>`
       })).join('');
   }
 
@@ -250,11 +254,11 @@ Views.exerciseLib = function (mount, opts) {
 
     mount.innerHTML = UI.acc('exlib', T('exercises.title'), inner, {
       sub: T('exercises.subtitle'),
-      actions: `${UI.shareBar('exercises')}
-        <button class="btn" id="genEx">🤖 ${T('training.aiDrill')}</button>
-        <button class="btn" id="trEx">🌐 ${T('exercises.translate')}</button>
-        <button class="btn danger" id="wipeEx">${T('exercises.removeAll')}</button>
-        <button class="btn primary" id="addEx">+ ${T('exercises.newExercise')}</button>`
+      actions: `${Access.readMode() ? '' : UI.shareBar('exercises')}
+        ${mayChange(null) ? `<button class="btn" id="genEx">🤖 ${T('training.aiDrill')}</button>` : ''}
+        ${Access.readMode() ? '' : `<button class="btn" id="trEx">🌐 ${T('exercises.translate')}</button>
+        <button class="btn danger" id="wipeEx">${T('exercises.removeAll')}</button>`}
+        ${mayChange(null) ? `<button class="btn primary" id="addEx">+ ${T('exercises.newExercise')}</button>` : ''}`
     });
     UI.bindAcc(mount);
 
@@ -278,9 +282,12 @@ Views.exerciseLib = function (mount, opts) {
       c.onmouseenter = () => paint(new Set((e && e.muscles) || []));
       c.onmouseleave = () => paint(focus);
     });
-    mount.querySelector('#addEx').onclick = () => form();
-    mount.querySelector('#genEx').onclick = () => aiForm();
-    mount.querySelector('#trEx').onclick = () => translateAll();
+    const addBtn = mount.querySelector('#addEx');
+    if (addBtn) addBtn.onclick = () => form();
+    const genBtn = mount.querySelector('#genEx');
+    if (genBtn) genBtn.onclick = () => aiForm();
+    const trBtn = mount.querySelector('#trEx');
+    if (trBtn) trBtn.onclick = () => translateAll();
     // Emptying one fold at a time — useful after generating a batch you do not want.
     mount.querySelectorAll('[data-catdel]').forEach(b => b.onclick = () => {
       const c = b.dataset.catdel;
@@ -307,7 +314,8 @@ Views.exerciseLib = function (mount, opts) {
     if (exp) exp.onclick = () => setFolds(true);
     const col = mount.querySelector('#exCollapse');
     if (col) col.onclick = () => setFolds(false);
-    mount.querySelector('#wipeEx').onclick = () => {
+    const wipe = mount.querySelector('#wipeEx');
+    if (wipe) wipe.onclick = () => {
       const all = Store.all('exercises');
       if (!all.length) return UI.toast(T('exercises.none'), 'error');
       UI.confirm(T('exercises.removeAllAsk'), async () => {

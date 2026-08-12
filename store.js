@@ -38,21 +38,31 @@ const Store = (() => {
     } catch (e) { /* private mode */ }
     emit();
   }
-  function blockWrite(store) {
-    if (!lockGuard || LOCK_FREE.indexOf(store) >= 0) return false;
+  function blockWrite(store, row) {
+    const lock = !!lockGuard && LOCK_FREE.indexOf(store) < 0;
+    // The second read-only mode: a copy that joined with a team code the coach
+    // handed out as look-only. Access decides; this only reports it.
+    const member = !lock && !!(window.Access && Access.blocks && Access.blocks(store, row));
+    if (!lock && !member) return false;
     const now = Date.now();
     if (!lockQuiet && now - lastNag > 2000 && window.UI && UI.toast) {
       lastNag = now;
-      UI.toast(window.T ? T('lock.blocked') : 'Read-only copy', 'error');
+      const key = member ? 'mem.blocked' : 'lock.blocked';
+      UI.toast(window.T ? T(key) : 'Read-only copy', 'error');
     }
     return true;
   }
 
   async function save(store, obj) {
-    if (blockWrite(store)) return obj;
+    if (blockWrite(store, obj)) return obj;
     if (!obj.id) obj.id = uid(store.slice(0, 3));
     // Anything a team owns is stamped once, so no view has to remember to do it.
     if (TEAM_SCOPED.indexOf(store) >= 0 && !obj.teamId) obj.teamId = activeTeamId();
+    // What a read-only member writes here is their own work, and stays theirs
+    // to change or delete — the club's rows came down from the shared file.
+    if (store !== 'settings' && window.Access && Access.readMode && Access.readMode()) {
+      obj[Access.MEMBER_STAMP] = true;
+    }
     obj.updatedAt = Date.now();
     await DB.put(store, obj);
     const arr = cache[store] || (cache[store] = []);
@@ -63,7 +73,7 @@ const Store = (() => {
   }
 
   async function remove(store, id) {
-    if (blockWrite(store)) return false;
+    if (blockWrite(store, find(store, id))) return false;
     await DB.remove(store, id);
     cache[store] = (cache[store] || []).filter(x => x.id !== id);
     emit();
@@ -131,6 +141,13 @@ const Store = (() => {
     'Core Circuit', 'Steady-State Cardio'
   ];
 
+  // Matches earlier builds shipped with. A season now starts empty, so these two
+  // exist only to sweep the old seeded rows out on upgrade.
+  const SEED_MATCHES = [
+    { opponent: 'Rhein Löwen', venue: 'City Arena', homeScore: 28, awayScore: 25 },
+    { opponent: 'Nord Sturm', venue: 'North Hall', homeScore: 0, awayScore: 0 }
+  ];
+
   async function seedIfEmpty() {
     if (all('clubs').length) return;
     const club = { id: uid('clu'), name: 'Metropolis HC', country: 'Germany', founded: 1974 };
@@ -154,12 +171,7 @@ const Store = (() => {
     ];
     await DB.bulkPut('opponents', opponents);
 
-    const matches = [
-      { id: uid('mat'), teamId: team.id, opponent: 'Rhein Löwen', date: Date.now() - 6 * 864e5, type: 'League', venue: 'City Arena', home: true, homeScore: 28, awayScore: 25, status: 'finished' },
-      { id: uid('mat'), teamId: team.id, opponent: 'Nord Sturm', date: Date.now() + 3 * 864e5, type: 'League', venue: 'North Hall', home: false, homeScore: 0, awayScore: 0, status: 'scheduled' }
-    ];
-    await DB.bulkPut('matches', matches);
-
+    // Matches are the coach's own season — nothing is invented here either.
     // The exercise library starts empty — the coach fills it themselves.
     const training = [
       { id: uid('trn'), teamId: team.id, title: 'Strength & Agility', date: Date.now() + 864e5, duration: 60, focus: 'Physical', exercises: [] }
@@ -205,6 +217,22 @@ const Store = (() => {
       await loadAll();
     }
     await setSetting('drillsNoneV1', true);
+  }
+
+  // One-time upgrade: the app no longer ships demo matches. A seeded row the
+  // coach has since scouted or rewritten is left alone — only an untouched one
+  // goes, so nobody loses a season they actually played.
+  async function purgeSeedMatches() {
+    if (await getSetting('matchesNoneV1', false)) return;
+    const scouted = new Set(all('events').map(e => e.matchId));
+    const victims = all('matches').filter(m => !scouted.has(m.id) && SEED_MATCHES.some(s =>
+      s.opponent === m.opponent && s.venue === m.venue
+      && +s.homeScore === +m.homeScore && +s.awayScore === +m.awayScore));
+    if (victims.length) {
+      for (const m of victims) await DB.remove('matches', m.id);
+      await loadAll();
+    }
+    await setSetting('matchesNoneV1', true);
   }
 
   // ---- Sport-bound squads ------------------------------------------------
@@ -373,7 +401,7 @@ const Store = (() => {
     uid, loadAll, all, find, save, remove, onChange,
     locked, lockInfo, setLock,
     getSetting, setSetting, teamStats, playerStats, matchEvents,
-    seedIfEmpty, purgeDemoPlayers, purgeSeedDrills,
+    seedIfEmpty, purgeDemoPlayers, purgeSeedDrills, purgeSeedMatches,
     players, stampSquadSport,
     teams, activeTeam, activeTeamId, setActiveTeam, scoped, matches, coaches, stampTeamScope,
     pack, unpack, packKinds, exportPack, importPack, GOAL_TYPES

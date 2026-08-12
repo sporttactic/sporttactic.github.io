@@ -12,7 +12,12 @@ const App = (() => {
   const ALWAYS_ON = ['settings'];
   let menuHidden = [];
   const menuOff = r => ALWAYS_ON.indexOf(r) < 0 && menuHidden.indexOf(r) >= 0;
-  const routesFor = id => (SOLO_SPORTS.indexOf(id) >= 0 ? SOLO_ROUTES : ROUTES).filter(r => !menuOff(r));
+  // A copy made with a team code shows what the coach left in its profile, on
+  // top of whatever this device hid for itself.
+  const memberOff = r => ALWAYS_ON.indexOf(r) < 0 &&
+    !!(window.Access && Access.hiddenModules().indexOf(r) >= 0);
+  const routesFor = id => (SOLO_SPORTS.indexOf(id) >= 0 ? SOLO_ROUTES : ROUTES)
+    .filter(r => !menuOff(r) && !memberOff(r));
   function getMenuHidden() { return menuHidden.slice(); }
   function setMenuHidden(list) {
     menuHidden = (list || []).filter(r => ROUTES.indexOf(r) >= 0 && ALWAYS_ON.indexOf(r) < 0);
@@ -25,6 +30,13 @@ const App = (() => {
     document.querySelectorAll('.nav-item[data-route]').forEach(n => {
       n.classList.toggle('hidden', allow.indexOf(n.dataset.route) < 0);
     });
+  }
+  // Read mode is a whole-app state: the sidebar loses what the coach hid and
+  // the stylesheet takes the write controls out of everything still on it.
+  function applyMemberMode() {
+    document.body.dataset.member = (window.Access && Access.readMode()) ? 'read' : '';
+    applyNav();
+    if (routesFor(currentSport).indexOf(currentRoute) < 0) go(routesFor(currentSport)[0]);
   }
 
   // ---- Donations -------------------------------------------------------
@@ -84,6 +96,9 @@ const App = (() => {
     if (ROUTES.indexOf(route) >= 0 && allow.indexOf(route) < 0) route = allow[0];
     if (cleanup) { try { cleanup(); } catch (e) {} cleanup = null; }
     currentRoute = route;
+    // The stylesheet needs to know which module is on screen: the one a
+    // read-only copy may still work in keeps its own buttons.
+    document.body.dataset.route = route;
     document.querySelectorAll('.nav-item').forEach(n => n.classList.toggle('active', n.dataset.route === route));
     const view = document.getElementById('view');
     view.innerHTML = '';
@@ -263,16 +278,21 @@ const App = (() => {
     setInterval(() => { ind.textContent = T('autosave.auto'); setTimeout(() => ind.textContent = T('autosave.saved'), 1500); }, 30000);
   }
 
-  // A backup exported with a pass key opens read-only; the badge is the way back.
+  // A backup exported with a pass key opens read-only; the badge is the way
+  // back. A copy made with a look-only team code wears the same badge, but the
+  // way back is the coach, not a pass key.
   function refreshLockBadge() {
     const b = document.getElementById('lockBadge');
     if (!b) return;
-    const on = Store.locked();
-    b.classList.toggle('hidden', !on);
-    if (!on) return;
-    b.querySelector('span').textContent = T('lock.badge');
-    b.title = T('lock.cardHint');
-    b.onclick = () => { if (window.Backup && Backup.unlock) Backup.unlock(); };
+    const locked = Store.locked();
+    const member = !locked && window.Access && Access.readMode();
+    b.classList.toggle('hidden', !locked && !member);
+    if (!locked && !member) return;
+    b.querySelector('span').textContent = T(member ? 'mem.badge' : 'lock.badge');
+    b.title = T(member ? 'mem.blocked' : 'lock.cardHint');
+    b.onclick = member
+      ? () => UI.toast(T('mem.blocked'), 'error')
+      : () => { if (window.Backup && Backup.unlock) Backup.unlock(); };
   }
 
   async function boot() {
@@ -280,6 +300,7 @@ const App = (() => {
     await Store.seedIfEmpty();
     await Store.purgeDemoPlayers();
     await Store.purgeSeedDrills();
+    await Store.purgeSeedMatches();
     const theme = await Store.getSetting('theme', 'dark');
     setTheme(theme);
     const lang = await Store.getSetting('lang', 'en');
@@ -300,13 +321,17 @@ const App = (() => {
     bindChrome();
     refreshLockBadge();
     Store.onChange(refreshLockBadge);
+    // The profile arrives with the shared file, so a sync can turn read mode on
+    // (or off) while the app is open.
+    if (window.TeamCloud) TeamCloud.onChange(() => { refreshLockBadge(); applyMemberMode(); });
     startAutosave();
     if (window.AUTOBK) AUTOBK.start();   // unattended backups, if the coach turned them on
     if (window.TeamCloud) TeamCloud.start();   // shared team database, if one is linked
     go('dashboard');
+    applyMemberMode();
   }
 
-  return { go, render, setTheme, setLang, getSport, setSport, populateTeamPicker, boot, ROUTES, getMenuHidden, setMenuHidden };
+  return { go, render, setTheme, setLang, getSport, setSport, populateTeamPicker, boot, ROUTES, getMenuHidden, setMenuHidden, applyMemberMode };
 })();
 
 // Expose globally so view modules (tactics, matches, …) can read/switch the

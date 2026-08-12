@@ -40,8 +40,14 @@ const UI = (() => {
   }
 
   function toast(msg, type = '') {
-    const host = document.getElementById('toastHost');
-    // Keep toasts visible when a view is in the Fullscreen API.
+    let host = document.getElementById('toastHost');
+    // Keep toasts visible when a view is in the Fullscreen API. The host is
+    // moved into that element, so a view torn down while still fullscreen takes
+    // it with it — then it is simply put back.
+    if (!host) {
+      host = el('<div id="toastHost" class="toast-host"></div>');
+      document.body.appendChild(host);
+    }
     const fsEl = document.fullscreenElement;
     if (fsEl && !fsEl.contains(host)) fsEl.appendChild(host);
     else if (!fsEl && host.parentNode !== document.body) document.body.appendChild(host);
@@ -350,6 +356,7 @@ const UI = (() => {
       if (!f) return;
       // A read-only copy says so plainly instead of blaming the file.
       if (Store.locked && Store.locked()) return toast(tr('lock.blocked', 'Read-only copy'), 'error');
+      if (window.Access && Access.blocks(kind, null)) return toast(tr('mem.blocked', 'Read-only copy'), 'error');
       const r = new FileReader();
       r.onload = async () => {
         try {

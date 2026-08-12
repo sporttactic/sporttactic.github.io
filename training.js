@@ -31,6 +31,11 @@ Views.training = function (mount) {
       + `</span>${UI.videoEmbed(e, 1)}</li>`;
   }
 
+  // A read-only team copy plans its own work: the sessions and records it wrote
+  // itself keep their buttons, the coach's are read. The gate is the one the
+  // store uses, so a button is offered exactly when it would work.
+  const mayChange = (row, store) => !Access.blocks(store || 'training', row);
+
   function render() {
     const sessions = Store.scoped('training').slice().sort((a, b) => a.date - b.date);
     const cards = `
@@ -45,7 +50,7 @@ Views.training = function (mount) {
               ${(s.exercises || []).map(id => { const e = Store.find('exercises', id); return e ? `<div class="tag" style="margin:2px">${UI.esc(ex(e))}</div>` : ''; }).join('') || `<span style="color:var(--muted)">${T('common.noData')}</span>`}
             </div>
             ${(s.animations || []).length ? `<div style="margin-top:8px"><span class="tag blue">▶ ${(s.animations || []).length} ${T('training.anims')}</span></div>` : ''}
-            <div style="margin-top:12px"><button class="btn sm" data-show="${s.id}">${T('common.show')}</button> <button class="btn sm" data-srep="${s.id}">📄 ${T('training.report')}</button> <button class="btn sm" data-edit="${s.id}">${T('common.edit')}</button> <button class="btn sm danger" data-del="${s.id}">${T('common.delete')}</button></div>
+            <div style="margin-top:12px"><button class="btn sm" data-show="${s.id}">${T('common.show')}</button> <button class="btn sm" data-srep="${s.id}">📄 ${T('training.report')}</button>${mayChange(s) ? ` <button class="btn sm" data-edit="${s.id}">${T('common.edit')}</button> <button class="btn sm danger" data-del="${s.id}">${T('common.delete')}</button>` : ''}</div>
           </div>`).join('') || `<div class="empty"><div class="big">${UI.icon('calendar', 40)}</div>${T('training.noSessions')}</div>`}
       </div>`;
 
@@ -54,17 +59,19 @@ Views.training = function (mount) {
       <div class="page-head"><div><h1>${T('training.title')}</h1><p>${T('training.subtitle')}</p></div></div>
       ${UI.acc('sessions', T('training.sessions'), cards, {
       sub: T('training.sessionsHint'),
-      actions: `${UI.shareBar('training')}
-          <button class="btn" id="genSession">🤖 ${T('training.aiSession')}</button>
-          <button class="btn primary" id="addSession">+ ${T('training.newSession')}</button>`
+      actions: `${Access.readMode() ? '' : UI.shareBar('training')}
+          ${mayChange(null) ? `<button class="btn" id="genSession">🤖 ${T('training.aiSession')}</button>
+          <button class="btn primary" id="addSession">+ ${T('training.newSession')}</button>` : ''}`
     })}
       ${personalAcc()}
       ${progressAcc()}
       <div id="exLib"></div>`;
 
     UI.bindAcc(mount);
-    mount.querySelector('#addSession').onclick = () => sessionForm();
-    mount.querySelector('#genSession').onclick = () => aiSessionForm();
+    const addBtn = mount.querySelector('#addSession');
+    if (addBtn) addBtn.onclick = () => sessionForm();
+    const genBtn = mount.querySelector('#genSession');
+    if (genBtn) genBtn.onclick = () => aiSessionForm();
     UI.bindShare(mount, 'training', render);
     UI.bindShare(mount, 'personal', render);
     AI.bind(mount);
@@ -123,23 +130,25 @@ Views.training = function (mount) {
               <button class="btn sm" data-pshow="${r.id}">${T('common.show')}</button>
               <button class="btn sm" data-prep="${r.id}">📄 ${T('training.report')}</button>
               <button class="btn sm" data-pmax="${r.id}">🤖 ${T('personal.aiMax')}</button>
-              <button class="btn sm" data-pedit="${r.id}">${T('common.edit')}</button>
-              <button class="btn sm danger" data-pdel="${r.id}">${T('common.delete')}</button>
+              ${mayChange(r, 'personal') ? `<button class="btn sm" data-pedit="${r.id}">${T('common.edit')}</button>
+              <button class="btn sm danger" data-pdel="${r.id}">${T('common.delete')}</button>` : ''}
             </div>
           </div>`).join('') || `<div class="empty"><div class="big">${UI.icon('dumbbell', 40)}</div>${T('personal.none')}</div>`}
       </div>`;
     return UI.acc('personal', T('personal.title'), body, {
       sub: T('personal.hint'),
-      actions: `${UI.shareBar('personal')}
+      actions: `${Access.readMode() ? '' : UI.shareBar('personal')}
         <button class="btn" id="personalReport">📄 ${T('training.report')}</button>
-        <button class="btn" id="aiMax">🤖 ${T('personal.aiMax')}</button>
-        <button class="btn primary" id="addPersonal">+ ${T('personal.new')}</button>`
+        ${mayChange(null, 'personal') ? `<button class="btn" id="aiMax">🤖 ${T('personal.aiMax')}</button>
+        <button class="btn primary" id="addPersonal">+ ${T('personal.new')}</button>` : ''}`
     });
   }
 
   function bindPersonal() {
-    mount.querySelector('#addPersonal').onclick = () => personalForm();
-    mount.querySelector('#aiMax').onclick = () => maxTestForm();
+    const addBtn = mount.querySelector('#addPersonal');
+    if (addBtn) addBtn.onclick = () => personalForm();
+    const maxBtn = mount.querySelector('#aiMax');
+    if (maxBtn) maxBtn.onclick = () => maxTestForm();
     mount.querySelector('#personalReport').onclick = () => personalSummaryForm();
     mount.querySelectorAll('[data-pedit]').forEach(b => b.onclick = () => personalForm(Store.find('personal', b.dataset.pedit)));
     mount.querySelectorAll('[data-pshow]').forEach(b => b.onclick = () => showPersonal(Store.find('personal', b.dataset.pshow)));

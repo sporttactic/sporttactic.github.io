@@ -101,6 +101,66 @@ const Access = (() => {
     const set = new Set(ids || []);
     await saveMembers(members().map(m => set.has(m.id) ? Object.assign({}, m, { invitedAt: Date.now() }) : m));
   }
+  // ---- What a copy made with the team code may do ------------------------
+  // The coach decides this once, next to the code itself; it rides along in the
+  // shared file, so every device that joins opens the same way. It only ever
+  // bites on a player-tier device that follows somebody else's file — the owner
+  // and the coaches never see it.
+  const PROFILE_KEY = 'memberProfile';
+  // The one module a read-only copy keeps: the player's own training plan, the
+  // drills they write for it and their own records.
+  const OPEN_ROUTES = ['training'];
+  const OPEN_STORES = ['training', 'exercises', 'personal'];
+  // Rows a read-only member made themselves carry this, so they can change and
+  // remove their own work without ever touching the club's.
+  const MEMBER_STAMP = 'byMember';
+  // Device preferences (theme, language, which file to follow) stay theirs;
+  // these four decide what the copy is allowed to be, so they are not.
+  const FIXED_SETTINGS = ['role', PROFILE_KEY, 'sharePolicy', 'accessMembers', 'menuHidden'];
+
+  function profile() {
+    const rec = Store.find('settings', PROFILE_KEY);
+    const v = (rec && rec.value && typeof rec.value === 'object') ? rec.value : {};
+    return {
+      readOnly: !!v.readOnly,
+      training: v.training !== false,
+      hide: Array.isArray(v.hide) ? v.hide.filter(r => typeof r === 'string') : []
+    };
+  }
+  async function saveProfile(p) {
+    await Store.setSetting(PROFILE_KEY, {
+      readOnly: !!(p && p.readOnly),
+      training: !(p && p.training === false),
+      hide: Array.isArray(p && p.hide) ? p.hide.slice() : []
+    });
+    return profile();
+  }
+  // A copy that follows a file somebody else owns and holds no more than a
+  // player's role. Everything below hangs off this one answer.
+  function memberCopy() {
+    const c = (window.TeamCloud && TeamCloud.cfg) ? TeamCloud.cfg() : null;
+    return !!(c && c.fileId && !c.owner) && tier() === 'player';
+  }
+  function readMode() { return memberCopy() && profile().readOnly; }
+  function hiddenModules() { return memberCopy() ? profile().hide : []; }
+  // Is this module one the coach left open to a read-only copy?
+  function moduleOpen(route) {
+    return !readMode() || (profile().training && OPEN_ROUTES.indexOf(route) >= 0);
+  }
+  const openStores = () => (profile().training ? OPEN_STORES : []);
+  // The write gate. A read-only member may add to the modules left open and
+  // change what they added there; the club's own rows and everything else are
+  // refused. `row` is the record on its way in, or the stored one on a delete.
+  function blocks(store, row) {
+    if (!readMode()) return false;
+    if (store === 'settings') return FIXED_SETTINGS.indexOf(row && row.id) >= 0;
+    if (openStores().indexOf(store) < 0) return true;
+    // The stored row decides, never the incoming one, so an edit cannot claim
+    // a club drill by sending the stamp along with it.
+    const known = (row && row.id) ? Store.find(store, row.id) : null;
+    return !!(known && !known[MEMBER_STAMP]);
+  }
+
   // Everybody the squad already knows about, so the coach picks from a list
   // instead of retyping addresses that are one screen away.
   function suggestions() {
@@ -119,7 +179,9 @@ const Access = (() => {
 
   return {
     ROLES, GRANTABLE, normRole, role, tier, can, isAdmin, isStaff, driveRole, label,
-    members, findMember, saveMembers, grant, revoke, markInvited, suggestions, normEmail
+    members, findMember, saveMembers, grant, revoke, markInvited, suggestions, normEmail,
+    OPEN_ROUTES, MEMBER_STAMP,
+    profile, saveProfile, memberCopy, readMode, hiddenModules, moduleOpen, blocks
   };
 })();
 window.Access = Access;

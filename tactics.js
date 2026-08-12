@@ -240,6 +240,7 @@ Views.tactics = function (mount, params) {
         </div>
       </div>
       <div class="board-stage">
+        <div class="anim-strip hidden" id="animStrip"></div>
         <div class="stage-row">
           <div class="board-side" id="boardSide">
             <div class="frames-anim" id="framesAnim">
@@ -1457,6 +1458,7 @@ Views.tactics = function (mount, params) {
     if (wrap) wrap.classList.toggle('fs', on);
     document.body.classList.toggle('board-fs', on || zen);
     if (btn) btn.textContent = on ? '⛶ ' + T('tactics.exitFullscreen') : '⛶ ' + T('tactics.fullscreen');
+    renderAnimStrip();
     fitCanvas();
   }
 
@@ -1501,6 +1503,7 @@ Views.tactics = function (mount, params) {
     document.body.classList.toggle('board-fs', zen || fsActive());
     const b = mount.querySelector('#zenBtn');
     if (b) b.textContent = '▣ ' + (zen ? T('tactics.boardOnlyExit') : T('tactics.boardOnly'));
+    renderAnimStrip();
     fitCanvas();
   }
   document.addEventListener('fullscreenchange', onFsChange);
@@ -1841,6 +1844,29 @@ Views.tactics = function (mount, params) {
     const all = mount.querySelector('#animPlayAll');
     if (all) all.disabled = !userSystems().length;
     updatePlayAllBtn();
+    renderAnimStrip();
+  }
+  // Presenting on the big screen: full screen squeezes the side column, so the
+  // saved animations also sit as a strip above the court and the next one is one
+  // tap away without leaving it.
+  function renderAnimStrip() {
+    const strip = mount.querySelector('#animStrip');
+    if (!strip) return;
+    const mine = (fsActive() && !zen) ? userSystems() : [];
+    strip.classList.toggle('hidden', !mine.length);
+    if (!mine.length) { strip.innerHTML = ''; return; }
+    const box = mount.querySelector('#animList');
+    const on = box ? box.value : '';
+    strip.innerHTML = mine.map(s =>
+      `<button type="button" class="btn sm anim-chip${s.id === on ? ' active' : ''}" data-strip="${UI.esc(s.id)}">▶ ${UI.esc(s.name)}</button>`).join('')
+      + `<button type="button" class="btn sm" data-strip-all>▶▶ ${T('tactics.animPlayAll')}</button>`;
+    strip.querySelectorAll('[data-strip]').forEach(b => b.onclick = () => {
+      stopPlayAll();
+      const sel = mount.querySelector('#animList');
+      if (sel) { sel.value = b.dataset.strip; syncAnimActions(); }
+      loadSystem(b.dataset.strip);
+    });
+    strip.querySelector('[data-strip-all]').onclick = playAllAnims;
   }
   // Play the saved animations one after another: load one, run it to the end,
   // then move on to the next entry in the list.

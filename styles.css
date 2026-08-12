@@ -461,6 +461,21 @@ tr:hover td { background: var(--surface-2); }
 /* Read-only badge: a guarded backup can be read but not changed. */
 .lock-badge { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 999px; border: 1px solid var(--warning); background: transparent; color: var(--warning); font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap; }
 .lock-badge:hover { background: var(--surface-2); }
+/* A copy that joined with a look-only team code. Outside the one module the
+   coach left open, the buttons that would change something are not offered at
+   all — the store refuses them anyway, this keeps the app from looking broken.
+   The primary button of a card header is always its "add" action.
+   data-member-ok marks the few a member must keep, such as leaving the team. */
+body[data-member="read"]:not([data-route="training"]) #view [data-del],
+body[data-member="read"]:not([data-route="training"]) #view [data-rm],
+body[data-member="read"]:not([data-route="training"]) #view [data-pdel],
+body[data-member="read"]:not([data-route="training"]) #view [data-edit],
+body[data-member="read"]:not([data-route="training"]) #view .acc-acts .btn.primary:not([data-member-ok]),
+body[data-member="read"]:not([data-route="training"]) #view .btn.danger:not([data-member-ok]),
+body[data-member="read"]:not([data-route="training"]) #modalHost [data-del],
+body[data-member="read"]:not([data-route="training"]) #modalHost [data-rm],
+body[data-member="read"]:not([data-route="training"]) #modalHost [data-edit],
+body[data-member="read"]:not([data-route="training"]) #modalHost .btn.danger:not([data-member-ok]) { display: none !important; }
 /* Row actions: one button per line, so a long label never squeezes the column. */
 .row-acts { display: flex; flex-direction: column; align-items: stretch; gap: 6px; min-width: 108px; }
 .row-acts > .btn { width: 100%; }
@@ -672,6 +687,11 @@ body.board-fs { overflow: hidden; }
 /* Frames & Animation controls, docked to the right of the court */
 .stage-row { display: flex; align-items: flex-start; justify-content: center; gap: 12px; width: 100%; align-self: stretch; }
 .stage-row #tacticalCanvas { flex: 0 1 auto; min-width: 0; }
+/* Presenting full screen: the saved animations as one scrolling row above the
+   court, so the next play is a tap away without leaving the big screen. */
+.anim-strip { display: flex; align-items: center; gap: 6px; width: 100%; padding: 2px 2px 8px; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: thin; }
+.anim-strip .btn { flex: 0 0 auto; white-space: nowrap; }
+.anim-strip .anim-chip.active { background: var(--primary); color: var(--on-primary); border-color: var(--primary); }
 /* A court sized above "fit" must keep its exact width — flex-shrink would letterbox it. */
 .stage-row.court-big { justify-content: flex-start; overflow-x: auto; overscroll-behavior-x: contain; }
 .stage-row.court-big #tacticalCanvas { flex: 0 0 auto; }

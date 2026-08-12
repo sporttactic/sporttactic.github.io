@@ -976,6 +976,72 @@ function sharePolicyDialog(onDone) {
   });
 }
 
+// ---- What a copy made with the team code may do --------------------------
+// The other half of handing out a code: the policy above decides what a player
+// may SEE, this decides what they may DO with it and which modules are even on
+// their menu. It is saved with the shared file, so it reaches every device that
+// joined without anybody having to be told anything.
+function memberLabel() {
+  const p = Access.profile();
+  if (!p.readOnly) return T('mem.stateFull');
+  const shown = App.ROUTES.filter(r => p.hide.indexOf(r) < 0).length;
+  return T('mem.stateRead').replace('{0}', shown).replace('{1}', App.ROUTES.length);
+}
+function memberModeDialog(onDone) {
+  const p = Access.profile();
+  const open = Access.OPEN_ROUTES.map(r => T('nav.' + r)).join(', ');
+  const moduleRow = r => `<label class="check-row menu-row">
+    <input type="checkbox" data-mod="${r}" ${p.hide.indexOf(r) < 0 || r === 'settings' ? 'checked' : ''} ${r === 'settings' ? 'disabled' : ''}>
+    <span>${UI.esc(T('nav.' + r))}${r === 'settings' ? ` <span class="tag">${T('settings.menuAlways')}</span>` : ''}</span>
+  </label>`;
+
+  UI.modal({
+    title: T('mem.title'),
+    width: 640,
+    body: `<p>${UI.esc(T('mem.intro'))}</p>
+      <label class="check-row"><input type="checkbox" id="mm_read" ${p.readOnly ? 'checked' : ''}>
+        <span>${UI.esc(T('mem.readOnly'))}<span class="share-n">${UI.esc(T('mem.readOnlyHint'))}</span></span></label>
+      <label class="check-row"><input type="checkbox" id="mm_train" ${p.training ? 'checked' : ''} ${p.readOnly ? '' : 'disabled'}>
+        <span>${UI.esc(T('mem.training').replace('{0}', open))}<span class="share-n">${UI.esc(T('mem.trainingHint'))}</span></span></label>
+      <h4 class="pol-h">${UI.esc(T('mem.modules'))}</h4>
+      <p class="hint">${UI.esc(T('mem.modulesHint'))}</p>
+      <div class="menu-picker">${App.ROUTES.map(moduleRow).join('')}</div>
+      <div class="row" style="flex:0;margin-top:10px;flex-wrap:wrap">
+        <button type="button" class="btn sm" id="mm_all">${UI.esc(T('settings.shareAll'))}</button>
+        <button type="button" class="btn sm" id="mm_min">${UI.esc(T('mem.modMin'))}</button>
+      </div>
+      <p class="hint">${UI.esc(T('mem.note'))}</p>`,
+    footer: `<button class="btn ghost" data-close2>${T('common.cancel')}</button>
+      <button class="btn primary" data-go>${T('common.save')}</button>`,
+    onOpen: (m, close) => {
+      const read = m.querySelector('#mm_read');
+      const train = m.querySelector('#mm_train');
+      const boxes = [...m.querySelectorAll('[data-mod]')];
+      // The exception only means anything while the copy is read-only.
+      read.onchange = () => { train.disabled = !read.checked; };
+      const pick = keep => boxes.forEach(b => {
+        if (b.disabled) return;
+        b.checked = keep.indexOf(b.dataset.mod) >= 0;
+      });
+      m.querySelector('#mm_all').onclick = () => pick(App.ROUTES);
+      // What a player actually opens the app for.
+      m.querySelector('#mm_min').onclick = () => pick(['dashboard', 'training', 'matches', 'statistics']);
+      m.querySelector('[data-close2]').onclick = close;
+      m.querySelector('[data-go]').onclick = async () => {
+        await Access.saveProfile({
+          readOnly: read.checked,
+          training: train.checked,
+          hide: boxes.filter(b => !b.checked).map(b => b.dataset.mod)
+        });
+        close();
+        UI.toast(T('mem.saved'), 'success');
+        App.applyMemberMode();
+        if (onDone) onDone();
+      };
+    }
+  });
+}
+
 // Owner path: name the team, build the file, hand back the code.
 function cloudCreateDialog(onDone) {
   const team = Store.activeTeam();
@@ -1029,6 +1095,8 @@ function cloudCodeDialog() {
         .replace('{0}', s.blocks).replace('{1}', s.totalBlocks)
         .replace('{2}', s.records).replace('{3}', s.hidden))}</span>
         <button type="button" class="btn sm" id="cd_pol">${UI.esc(T('pol.btn'))}</button></p>
+      <p><span class="tag ${Access.profile().readOnly ? 'green' : ''}" id="cd_memstate">${UI.esc(memberLabel())}</span>
+        <button type="button" class="btn sm" id="cd_mem">${UI.esc(T('mem.btn'))}</button></p>
       ${c.apiKey ? '' : `<p class="hint mail-note">${UI.esc(T('cloud.codeNoKey'))}</p>`}
       <p class="hint">${UI.esc(T('cloud.codeHint'))}</p>`,
     footer: `<button class="btn" data-mail>${UI.esc(T('cloud.mailCode'))}</button>
@@ -1038,6 +1106,7 @@ function cloudCodeDialog() {
       const ta = m.querySelector('#cd_code');
       m.querySelector('[data-close2]').onclick = close;
       m.querySelector('#cd_pol').onclick = () => { close(); sharePolicyDialog(); };
+      m.querySelector('#cd_mem').onclick = () => { close(); memberModeDialog(() => cloudCodeDialog()); };
       m.querySelector('[data-copy]').onclick = async () => {
         ta.select();
         try { await navigator.clipboard.writeText(code); } catch (e) { document.execCommand('copy'); }
@@ -1216,16 +1285,19 @@ function accessEditDialog(existing, onDone) {
 Views.settings = async function (mount) {
   const role = await Store.getSetting('role', 'Coach');
   const staff = Access.isStaff(role);
+  // A look-only team copy cannot promote itself out of read mode; the way back
+  // is the coach, or leaving the shared database altogether.
+  const readMode = Access.readMode();
 
   mount.innerHTML = `
     <div class="page-head"><div><h1>${T('settings.title')}</h1><p>${T('settings.subtitle')}</p></div></div>
     ${Store.locked() ? UI.acc('setLock', '🔒 ' + T('lock.title'), `
       <p style="color:var(--muted);font-size:13px">${T('lock.cardHint')}</p>
       <button class="btn primary" id="unlockBtn">🔓 ${T('lock.unlock')}</button>`) : ''}
-    ${menuCard()}
+    ${readMode ? '' : menuCard()}
     ${UI.acc('setRole', T('settings.roleAccess'), `
-      <label class="field"><span>${T('settings.activeRole')}</span><select id="s_role">${['Super Admin', 'Club Admin', 'Coach', 'Analyst', 'Player'].map(r => `<option value="${r}" ${r === role ? 'selected' : ''}>${T('role.' + r)}</option>`).join('')}</select></label>
-      <p style="color:var(--muted);font-size:12px">${T('settings.roleHint')}</p>`)}
+      <label class="field"><span>${T('settings.activeRole')}</span><select id="s_role" ${readMode ? 'disabled' : ''}>${['Super Admin', 'Club Admin', 'Coach', 'Analyst', 'Player'].map(r => `<option value="${r}" ${r === role ? 'selected' : ''}>${T('role.' + r)}</option>`).join('')}</select></label>
+      <p style="color:var(--muted);font-size:12px">${readMode ? T('mem.roleLocked') : T('settings.roleHint')}</p>`)}
     <div id="cloudCardHost">${cloudCard()}</div>
     <div id="accessCardHost">${staff ? accessCard() : ''}</div>
     ${UI.acc('setData', T('settings.dataCard'), `
@@ -1275,7 +1347,10 @@ Views.settings = async function (mount) {
   // the modules — this is where they choose which ones stay on it.
   function menuCard() {
     const hidden = App.getMenuHidden();
-    const rows = App.ROUTES.map(r => {
+    // A module the coach kept off this copy is not offered here either; ticking
+    // it would do nothing.
+    const off = Access.hiddenModules();
+    const rows = App.ROUTES.filter(r => off.indexOf(r) < 0).map(r => {
       const fixed = r === 'settings';
       return `<label class="check-row menu-row">
         <input type="checkbox" data-menu="${r}" ${hidden.indexOf(r) < 0 || fixed ? 'checked' : ''} ${fixed ? 'disabled' : ''}>
@@ -1315,6 +1390,7 @@ Views.settings = async function (mount) {
         ${maySetup ? `<button class="btn primary" id="clCreate">${T('cloud.createBtn')}</button>` : ''}
         <button class="btn" id="clJoin">${T('cloud.joinBtn')}</button>
         ${maySetup ? `<button class="btn" id="clPolicy2">${T('pol.btn')}</button>` : ''}
+        ${maySetup ? `<button class="btn" id="clMember2">${T('mem.btn')}</button>` : ''}
         <button class="btn" id="clGuide">${T('cloud.showMeHow')}</button>
       </div>`;
 
@@ -1330,8 +1406,9 @@ Views.settings = async function (mount) {
         ${mayWrite ? `<button class="btn" id="clPush">${T('cloud.pushAll')}</button>` : ''}
         <button class="btn" id="clCode">${T('cloud.showCode')}</button>
         ${maySetup ? `<button class="btn" id="clPolicy">${T('pol.btn')}</button>` : ''}
+        ${maySetup ? `<button class="btn" id="clMember">${T('mem.btn')}</button>` : ''}
         ${mayWrite && c.owner ? `<button class="btn" id="clInvite">${T('cloud.inviteBtn')}</button>` : ''}
-        <button class="btn danger" id="clForget">${T('cloud.disconnect')}</button>
+        <button class="btn danger" id="clForget" data-member-ok>${T('cloud.disconnect')}</button>
       </div>
       <div class="row" style="flex:0;margin-top:10px;flex-wrap:wrap;align-items:flex-end">
         <label class="field" style="max-width:220px"><span>${T('cloud.autoEvery')}</span>
@@ -1342,7 +1419,8 @@ Views.settings = async function (mount) {
     return UI.acc('setCloud', T('cloud.title'), `
       <p style="color:var(--muted);font-size:13px">${T('cloud.desc')}</p>
       <p><span class="tag ${linked ? 'green' : ''}">${UI.esc(state)}</span>
-         <span class="tag ${online ? 'green' : ''}">${UI.esc(online ? T('cloud.googleOn') : T('cloud.googleOff'))}</span></p>
+         <span class="tag ${online ? 'green' : ''}">${UI.esc(online ? T('cloud.googleOn') : T('cloud.googleOff'))}</span>
+         ${maySetup ? `<span class="tag ${Access.profile().readOnly ? 'green' : ''}">${UI.esc(memberLabel())}</span>` : ''}</p>
       ${linked ? live : setup}
       <div class="row" style="flex:0;margin-top:10px;flex-wrap:wrap">
         <button class="btn sm ${online ? '' : 'primary'}" id="clGoogle">${online ? T('cloud.googleBtn') : T('gw.startBtn')}</button>
@@ -1432,6 +1510,8 @@ Views.settings = async function (mount) {
     on('#clCode', cloudCodeDialog);
     on('#clPolicy', () => sharePolicyDialog(refreshCloud));
     on('#clPolicy2', () => sharePolicyDialog(refreshCloud));
+    on('#clMember', () => memberModeDialog(refreshCloud));
+    on('#clMember2', () => memberModeDialog(refreshCloud));
     on('#clInvite', () => cloudInviteDialog(refreshAccess));
     on('#clSync', () => busyRun('#clSync', () => TeamCloud.sync(), () => T('cloud.synced')));
     on('#clPull', () => UI.confirm(T('cloud.pullAsk'), () =>
@@ -1555,14 +1635,15 @@ Views.settings = async function (mount) {
   const menuBoxes = [...mount.querySelectorAll('[data-menu]')];
   const saveMenu = () => App.setMenuHidden(menuBoxes.filter(b => !b.checked).map(b => b.dataset.menu));
   menuBoxes.forEach(b => b.onchange = saveMenu);
-  mount.querySelector('#menuAll').onclick = () => { menuBoxes.forEach(b => { b.checked = true; }); saveMenu(); };
-  mount.querySelector('#menuMin').onclick = () => {
+  on('#menuAll', () => { menuBoxes.forEach(b => { b.checked = true; }); saveMenu(); });
+  on('#menuMin', () => {
     const keep = ['dashboard', 'training', 'settings'];
     menuBoxes.forEach(b => { b.checked = keep.indexOf(b.dataset.menu) >= 0 || b.disabled; });
     saveMenu();
-  };
+  });
 
-  mount.querySelector('#s_role').onchange = e => { Store.setSetting('role', e.target.value); document.getElementById('roleBadge').textContent = T('role.' + e.target.value); App.render(); };
+  const roleSel = mount.querySelector('#s_role');
+  roleSel.onchange = e => { Store.setSetting('role', e.target.value); document.getElementById('roleBadge').textContent = T('role.' + e.target.value); App.render(); };
   const openMsg = mount.querySelector('#openMessenger');
   if (openMsg) openMsg.onclick = () => App.go('messenger');
 
@@ -1613,6 +1694,11 @@ Views.settings = async function (mount) {
   };
   mount.querySelector('#importAll').onchange = e => {
     const f = e.target.files[0]; if (!f) return;
+    e.target.value = '';
+    // Restoring writes straight to the database, so the two read-only modes are
+    // checked here rather than in the store.
+    if (Store.locked()) return UI.toast(T('lock.blocked'), 'error');
+    if (readMode) return UI.toast(T('mem.blocked'), 'error');
     const r = new FileReader();
     r.onload = async () => {
       try {
@@ -1629,10 +1715,13 @@ Views.settings = async function (mount) {
     r.readAsText(f);
   };
   mount.querySelector('#emailAll').onclick = () => shareDialog();
-  mount.querySelector('#wipe').onclick = () => UI.confirm(T('settings.resetConfirm'), async () => {
-    for (const s of DB.STORES) await DB.clear(s);
-    // Wiping everything also hands a read-only device back to its owner.
-    Store.setLock(null);
-    await Store.loadAll(); await Store.seedIfEmpty(); UI.toast(T('settings.resetDone'), 'success'); App.render();
-  });
+  mount.querySelector('#wipe').onclick = () => {
+    if (readMode) return UI.toast(T('mem.blocked'), 'error');
+    UI.confirm(T('settings.resetConfirm'), async () => {
+      for (const s of DB.STORES) await DB.clear(s);
+      // Wiping everything also hands a read-only device back to its owner.
+      Store.setLock(null);
+      await Store.loadAll(); await Store.seedIfEmpty(); UI.toast(T('settings.resetDone'), 'success'); App.render();
+    });
+  };
 };
