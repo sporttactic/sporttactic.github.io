@@ -257,6 +257,7 @@ Views.teams = function (mount) {
         ${(a.clips || []).length ? `<span class="tag green">▶ ${(a.clips || []).length}</span>` : ''}
       </span>
       <span class="bm-acts">
+        <button class="btn sm" data-anim-show="${UI.esc(a.id)}">▶ ${T('teams.animShowNow')}</button>
         <button class="btn sm primary" data-anim-open="${UI.esc(a.id)}">${T('common.go')}</button>
         <button class="btn sm danger" data-anim-rm="${UI.esc(a.id)}">${T('teams.animRemove')}</button>
       </span>
@@ -274,6 +275,12 @@ Views.teams = function (mount) {
         m.querySelectorAll('[data-anim-open]').forEach(b => b.onclick = () => {
           close();
           App.go('tactics', { animId: b.dataset.animOpen });
+        });
+        // Watch it here and now; the board is for working on it.
+        m.querySelectorAll('[data-anim-show]').forEach(b => b.onclick = () => {
+          const id = b.dataset.animShow;
+          close();
+          ANIM.open(id);
         });
         m.querySelectorAll('[data-anim-rm]').forEach(b => b.onclick = () => {
           const a = Store.find('tactics', b.dataset.animRm);

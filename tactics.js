@@ -1768,7 +1768,10 @@ Views.tactics = function (mount, params) {
 
   // ---- Saved animations: the coach's own `tactics` records tagged `kind:'system'` ----
   function userSystems() {
-    return Store.all('tactics').filter(t => t.kind === 'system' && (t.sport || 'handball') === sportId);
+    // A player copy tied to one squad only ever sees what was sent to that squad.
+    const lock = (window.Access && Access.teamLock) ? Access.teamLock() : '';
+    return Store.all('tactics').filter(t => t.kind === 'system' && (t.sport || 'handball') === sportId
+      && (!lock || t.teamId === lock));
   }
   // Mirror of the saved systems, docked under the Save Animation button.
   function renderAnimList() {
