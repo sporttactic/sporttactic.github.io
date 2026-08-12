@@ -111,6 +111,9 @@ const Access = (() => {
   // drills they write for it and their own records.
   const OPEN_ROUTES = ['training'];
   const OPEN_STORES = ['training', 'exercises', 'personal'];
+  // Live scouting is the coach's tool at the table, so it is never on a player
+  // copy — not the module, and not the events it writes.
+  const NEVER_ROUTES = ['scouting'];
   // Rows a read-only member made themselves carry this, so they can change and
   // remove their own work without ever touching the club's.
   const MEMBER_STAMP = 'byMember';
@@ -144,7 +147,10 @@ const Access = (() => {
     return !!(c && c.fileId && !c.owner) && tier() === 'player';
   }
   function readMode() { return memberCopy() && (profile().readOnly || unclaimed()); }
-  function hiddenModules() { return memberCopy() ? profile().hide : []; }
+  function hiddenModules() { return memberCopy() ? NEVER_ROUTES.concat(profile().hide) : []; }
+  // Everything the app counts — totals, ratings, reports — is derived from the
+  // scouting events, so hiding them at the source empties all of it at once.
+  const hidesEvents = () => memberCopy();
   // Is this module one the coach left open to a read-only copy?
   function moduleOpen(route) {
     return !readMode() || (!unclaimed() && profile().training && OPEN_ROUTES.indexOf(route) >= 0);
@@ -341,7 +347,7 @@ const Access = (() => {
     ROLES, GRANTABLE, normRole, role, tier, can, isAdmin, isStaff, driveRole, label,
     members, findMember, saveMembers, grant, revoke, markInvited, suggestions, normEmail,
     OPEN_ROUTES, MEMBER_STAMP, STAFF_ROLES,
-    profile, saveProfile, memberCopy, readMode, hiddenModules, moduleOpen, blocks,
+    profile, saveProfile, memberCopy, readMode, hiddenModules, moduleOpen, blocks, hidesEvents,
     roleKeys, roleKeyWords, newRoleKeys, ensureTeamKeys, claimRole, claimedRole, claimedTeam: teamLock,
     unclaimed, wordsStale, adoptRoleKeys, teamLock
   };

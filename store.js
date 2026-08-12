@@ -11,7 +11,13 @@ const Store = (() => {
     for (const s of DB.STORES) cache[s] = await DB.getAll(s);
   }
 
-  function all(store) { return cache[store] || []; }
+  function all(store) {
+    // A player copy is not shown the scouting events, so nothing counted from
+    // them — season totals, ratings, match reports — shows up either. They still
+    // sync: the shared file is read and written straight from the database.
+    if (store === 'events' && typeof window !== 'undefined' && window.Access && Access.hidesEvents && Access.hidesEvents()) return [];
+    return cache[store] || [];
+  }
   function find(store, id) { return (cache[store] || []).find(x => x.id === id); }
 
   // ---- Read-only lock ----------------------------------------------------

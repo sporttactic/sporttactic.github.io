@@ -1092,7 +1092,7 @@ async function roleKeysDialog(onDone) {
       <p class="hint">${UI.esc(T('rk.codeNote'))}</p>
       <p class="hint">${UI.esc(T('rk.storeHint'))}</p>`,
     footer: `<button class="btn ghost" data-close2>${T('common.close')}</button>
-      <button class="btn ${made && !stale ? '' : 'primary'}" data-new>${UI.esc(T(made ? 'rk.again' : 'rk.make'))}</button>`,
+      ${Access.can('cloud.setup') ? `<button class="btn ${made && !stale ? '' : 'primary'}" data-new>${UI.esc(T(made ? 'rk.again' : 'rk.make'))}</button>` : ''}`,
     onOpen: (m, close) => {
       m.querySelector('[data-close2]').onclick = close;
       m.querySelectorAll('[data-copy]').forEach(b => b.onclick = async () => {
@@ -1113,7 +1113,7 @@ async function roleKeysDialog(onDone) {
           + '&body=' + encodeURIComponent(body);
       });
       const btn = m.querySelector('[data-new]');
-      btn.onclick = () => {
+      if (btn) btn.onclick = () => {
         const go = async () => {
           btn.disabled = true;
           try { await Access.newRoleKeys(); }
@@ -1205,7 +1205,7 @@ async function cloudCodeDialog() {
       <p><span class="tag ${Access.profile().readOnly ? 'green' : ''}" id="cd_memstate">${UI.esc(memberLabel())}</span>
         <button type="button" class="btn sm" id="cd_mem">${UI.esc(T('mem.btn'))}</button></p>
       <p><span class="tag ${Access.roleKeys() ? 'green' : ''}">${UI.esc(T(Access.roleKeys() ? 'rk.on' : 'rk.off'))}</span>
-        <button type="button" class="btn sm" id="cd_keys">${UI.esc(T('rk.btn'))}</button></p>
+        ${Access.can('cloud.setup') ? `<button type="button" class="btn sm" id="cd_keys">${UI.esc(T('rk.btn'))}</button>` : ''}</p>
       ${c.apiKey ? '' : `<p class="hint mail-note">${UI.esc(T('cloud.codeNoKey'))}</p>`}
       <p class="hint">${UI.esc(T('cloud.codeHint'))}</p>`,
     footer: `<button class="btn" data-mail>${UI.esc(T('cloud.mailCode'))}</button>
@@ -1216,7 +1216,8 @@ async function cloudCodeDialog() {
       m.querySelector('[data-close2]').onclick = close;
       m.querySelector('#cd_pol').onclick = () => { close(); sharePolicyDialog(); };
       m.querySelector('#cd_mem').onclick = () => { close(); memberModeDialog(() => cloudCodeDialog()); };
-      m.querySelector('#cd_keys').onclick = () => { close(); roleKeysDialog(); };
+      const keysBtn = m.querySelector('#cd_keys');
+      if (keysBtn) keysBtn.onclick = () => { close(); roleKeysDialog(); };
       m.querySelector('[data-copy]').onclick = async () => {
         ta.select();
         try { await navigator.clipboard.writeText(code); } catch (e) { document.execCommand('copy'); }
@@ -1458,7 +1459,7 @@ Views.settings = async function (mount) {
       <div class="row" style="flex:0;margin-top:8px">
         <button class="btn danger" id="wipe">${T('settings.resetData')}</button>
       </div>`)}
-    ${UI.acc('setMail', T('settings.mailCard'), `
+    ${readMode ? '' : UI.acc('setMail', T('settings.mailCard'), `
       <p style="color:var(--muted);font-size:13px">${T('settings.mailHint')}</p>
       <p><span class="tag" id="mailSrvState">${UI.esc(MAIL.serverLabel())}</span></p>
       <div class="row" style="flex:0;margin-top:8px;flex-wrap:wrap">
@@ -1794,9 +1795,9 @@ Views.settings = async function (mount) {
 
   // ---- Mail ----
   const mailSrvState = mount.querySelector('#mailSrvState');
-  const refreshMailSrv = () => { mailSrvState.textContent = MAIL.serverLabel(); };
-  mount.querySelector('#mailSetup').onclick = () => MAIL.setupDialog(refreshMailSrv);
-  mount.querySelector('#mailServers').onclick = () => MAIL.serverDialog(refreshMailSrv);
+  const refreshMailSrv = () => { if (mailSrvState) mailSrvState.textContent = MAIL.serverLabel(); };
+  on('#mailSetup', () => MAIL.setupDialog(refreshMailSrv));
+  on('#mailServers', () => MAIL.serverDialog(refreshMailSrv));
 
   mount.querySelector('#csvSquad').onclick = () => {
     downloadCsv(squadCsv(), 'sporttactic-squad-' + new Date().toISOString().slice(0, 10) + '.csv');

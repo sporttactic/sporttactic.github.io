@@ -379,8 +379,12 @@ Views.messenger = function (mount, params) {
   // key ever leaves this device.
   function rosterMembers() {
     if (typeof Store === 'undefined') return [];
+    // A player copy tied to one squad only ever lists that squad, whatever the
+    // active team happens to resolve to.
+    const lock = (window.Access && Access.teamLock) ? Access.teamLock() : '';
     const team = Store.activeTeam();
-    const mine = (rows, f) => (team ? rows.filter(r => r.teamId === team.id) : rows).map(f);
+    const tid = lock || (team ? team.id : '');
+    const mine = (rows, f) => (tid ? rows.filter(r => r.teamId === tid) : rows).map(f);
     // Roles and positions are stored in English; the label is only for display.
     const label = (prefix, v) => {
       if (!v) return '';
@@ -389,7 +393,7 @@ Views.messenger = function (mount, params) {
       return t === k ? v : t;
     };
     const staff = mine(Store.all('coaches'), c => ({ store: 'coaches', id: c.id, name: c.name || '', role: label('coachRole', c.role), key: c.chatKey || '' }));
-    const players = mine(Store.players(), p => ({
+    const players = mine(Store.players(tid || undefined), p => ({
       store: 'players', id: p.id, name: ((p.firstName || '') + ' ' + (p.lastName || '')).trim(),
       role: label('pos', p.position), key: p.chatKey || ''
     }));
