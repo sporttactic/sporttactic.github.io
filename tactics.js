@@ -4,8 +4,6 @@ window.Views = window.Views || {};
 Views.tactics = function (mount, params) {
   document.body.classList.remove('board-fs');   // clear a stale CSS-fullscreen lock
   const BOARD_COLORS = ['#ffd400', '#ff3b30', '#34c759', '#0a84ff', '#ffffff', '#0b1220'];
-  // CrossFit and bodybuilding have no court, so the board is not offered for them.
-  const BOARD_SPORTS = SPORTS.LIST.filter(s => ['crossfit', 'bodybuilding'].indexOf(s.id) < 0);
   let tool = 'select';
   let color = '#ffd400';
   let current;
@@ -169,7 +167,6 @@ Views.tactics = function (mount, params) {
         <button class="btn sm" id="redoBtn" title="${T('tactics.redo')}">↷ ${T('tactics.redo')}</button>
         <button class="btn sm danger" id="resetBoard" title="${T('tactics.resetHint')}">⟳ ${T('tactics.reset')}</button>
         <button class="btn sm primary" id="savePlay">${T('tactics.save')}</button>
-        ${UI.shareBar('tactics')}
         <button class="btn sm" id="shotBtn" title="${T('tactics.screenshot')}">📷 ${T('tactics.screenshot')}</button>
         <button class="btn sm" id="fullscreenBtn">⛶ ${T('tactics.fullscreen')}</button>
         <button class="btn sm" id="zenBtn" title="${T('tactics.boardOnlyHint')}">▣ ${T('tactics.boardOnly')}</button>
@@ -179,12 +176,7 @@ Views.tactics = function (mount, params) {
       <button class="btn sm" id="zenExit">✕ ${T('tactics.boardOnlyExit')}</button>
       <button class="btn sm" id="fsExit">✕ ${T('tactics.exitFullscreen')}</button>
       <div class="tool-panel card">
-        <h3>${T('tactics.sport')}</h3>
-        <div class="tool-group sport-group" id="sports">
-          ${BOARD_SPORTS.map(s => `<div class="tool-btn sport-btn ${s.id === sportId ? 'active' : ''}" data-sport="${s.id}" title="${SPORTS.name(s.id, I18N.getLang())}">${s.icon}</div>`).join('')}
-        </div>
         <div id="normalTools">
-          <h3 style="margin-top:12px">${T('tactics.tools')}</h3>
           <div class="tool-group" id="tools"></div>
           <p class="hint" id="toolHint">${T('tactics.hint')}</p>
           <div id="propsWrap" class="hidden">
@@ -267,7 +259,6 @@ Views.tactics = function (mount, params) {
               <button class="btn sm danger" id="animDel" disabled title="${T('common.delete')}">✕</button>
             </div>
             <button class="btn sm" id="animPlayAll" title="${T('tactics.animPlayAllHint')}">▶▶ ${T('tactics.animPlayAll')}</button>
-            <button class="btn sm" id="animToTeam" title="${T('tactics.animToTeamHint')}">👥 ${T('tactics.animToTeam')}</button>
             <div><span id="recDot" class="rec-dot hidden">REC <span id="recTime">0:00</span> · <span id="frameCount">0</span> ${T('tactics.framesCaptured')}</span></div>
             <div id="recExport" class="rec-export hidden"></div>
             <div id="clipWrap">
@@ -1634,24 +1625,6 @@ Views.tactics = function (mount, params) {
     s.rot = (typeof s.rot === 'number' ? s.rot : -Math.PI / 2) + delta;
     draw(); if (autoRec) captureAutoFrame(); scheduleAutosave();
   }
-  mount.querySelectorAll('[data-sport]').forEach(b => b.onclick = () => {
-    sportId = b.dataset.sport;
-    if (window.App && App.setSport) App.setSport(sportId, true);
-    stopPlayAll();
-    stopAnimation();
-    current = loadOrNew();
-    courtMode = current.courtMode || 'full';
-    history = []; future = []; updateUndoButtons();
-    frameIdx = 0; selectedId = null; aim = null;
-    mount.querySelectorAll('[data-sport]').forEach(x => x.classList.toggle('active', x === b));
-    pendingProp = null; if (tool === 'prop') tool = 'select';
-    setupBotMode();
-    renderAnimList();
-    renderTools();
-    renderProps();
-    updateCourtModeUI();
-    fitCanvas(); draw(); renderTimeline();
-  });
   mount.querySelectorAll('[data-color]').forEach(b => b.onclick = () => {
     color = b.dataset.color;
     mount.querySelectorAll('[data-color]').forEach(x => x.style.outline = x.dataset.color === color ? '2px solid var(--primary)' : '');
@@ -1801,8 +1774,6 @@ Views.tactics = function (mount, params) {
     const saved = await Store.save('tactics', current); current.id = saved.id;
     UI.toast(T('tactics.saved'), 'success');
   };
-  // Imported animations must show up in the listbox straight away.
-  UI.bindShare(mount, 'tactics', () => { renderAnimList(); renderTimeline(); });
 
   // ---- Keyboard shortcuts (undo / redo) ----
   function onKey(e) {
@@ -1913,7 +1884,6 @@ Views.tactics = function (mount, params) {
     box.ondblclick = () => { if (sel()) { stopPlayAll(); loadSystem(sel()); } };
     mount.querySelector('#animLoad').onclick = () => { if (sel()) { stopPlayAll(); loadSystem(sel()); } };
     mount.querySelector('#animPlayAll').onclick = playAllAnims;
-    mount.querySelector('#animToTeam').onclick = saveAllToTeam;
     mount.querySelector('#animEdit').onclick = () => { if (sel()) editSystem(sel()); };
     mount.querySelector('#animVideo').onclick = () => { if (sel()) playSystemVideo(sel()); };
     mount.querySelector('#animShare').onclick = () => { if (sel()) shareSystem(sel()); };
@@ -2027,68 +1997,6 @@ Views.tactics = function (mount, params) {
   // under Teams & Players instead of hunting the whole library. Pick the squad,
   // then tick the ones that belong to it — the ticks follow the squad, so this
   // screen also shows what it already has and takes one away again.
-  function saveAllToTeam() {
-    const teams = Store.teams();
-    const mine = userSystems();
-    if (!teams.length) return UI.toast(T('tactics.animNoTeam'), 'error');
-    if (!mine.length) return UI.toast(T('tactics.noSavedAnims'), 'error');
-    const teamName = id => { const t = teams.find(x => x.id === id); return t ? t.name : ''; };
-    const row = s => `<label class="check-row share-row">
-      <input type="checkbox" data-anim="${UI.esc(s.id)}">
-      <span>${UI.esc(s.name)}
-        <span class="tag">${(s.frames || []).length} ${UI.esc(T('tactics.frameList'))}</span>
-        <span class="share-n" data-owner="${UI.esc(s.id)}"></span>
-      </span></label>`;
-    UI.modal({
-      title: T('tactics.animToTeam'),
-      width: 560,
-      body: `<p>${UI.esc(T('tactics.animToTeamIntro').replace('{0}', mine.length))}</p>
-        <label class="field"><span>${UI.esc(T('teams.activeTeam'))}</span>
-          <select id="anim_team">${teams.map(t => `<option value="${UI.esc(t.id)}" ${t.id === Store.activeTeamId() ? 'selected' : ''}>${UI.esc(t.name)}</option>`).join('')}</select></label>
-        <div class="focus-acts">
-          <button type="button" class="btn sm" data-all>${UI.esc(T('settings.shareAll'))}</button>
-          <button type="button" class="btn sm" data-none>${UI.esc(T('settings.shareNone'))}</button>
-        </div>
-        <div class="draft-list">${mine.map(row).join('')}</div>
-        <p class="hint">${UI.esc(T('tactics.animToTeamHint'))}</p>`,
-      footer: `<button class="btn ghost" data-close2>${T('common.cancel')}</button>
-        <button class="btn primary" data-save>${T('common.save')}</button>`,
-      onOpen: (m, close) => {
-        const sel = m.querySelector('#anim_team');
-        const boxes = [...m.querySelectorAll('[data-anim]')];
-        const sync = () => {
-          const teamId = sel.value;
-          mine.forEach(s => {
-            const box = m.querySelector(`[data-anim="${CSS.escape(s.id)}"]`);
-            const note = m.querySelector(`[data-owner="${CSS.escape(s.id)}"]`);
-            box.checked = s.teamId === teamId;
-            note.textContent = (s.teamId && s.teamId !== teamId) ? T('tactics.animOnTeam').replace('{0}', teamName(s.teamId)) : '';
-          });
-        };
-        sel.onchange = sync;
-        m.querySelector('[data-all]').onclick = () => boxes.forEach(b => { b.checked = true; });
-        m.querySelector('[data-none]').onclick = () => boxes.forEach(b => { b.checked = false; });
-        m.querySelector('[data-close2]').onclick = close;
-        m.querySelector('[data-save]').onclick = async () => {
-          const teamId = sel.value;
-          let n = 0;
-          for (const s of mine) {
-            const on = m.querySelector(`[data-anim="${CSS.escape(s.id)}"]`).checked;
-            // Unticking only lets go of THIS squad — an animation filed under
-            // another one is left where it is.
-            const next = on ? teamId : (s.teamId === teamId ? '' : s.teamId);
-            if ((s.teamId || '') === (next || '')) continue;
-            await Store.save('tactics', Object.assign({}, s, { teamId: next }));
-            n++;
-          }
-          close();
-          UI.toast(T('tactics.animToTeamDone').replace('{0}', n), 'success');
-          renderAnimList();
-        };
-        sync();
-      }
-    });
-  }
   // Store the current frame sequence under a title so it can be replayed later.
   // Recording the clip means playing the animation through once first, so the
   // dialog closes up front and the save finishes when the pass is done.

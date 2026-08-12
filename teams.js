@@ -109,7 +109,6 @@ Views.teams = function (mount) {
          <button class="btn primary" id="saveSquad">${T('teams.saveSquad')}</button>`
       : `<button class="btn sm" id="mailSquad">✉ ${T('mail.title')}</button>
          <button class="btn sm" id="squadAnims">▶ ${T('teams.anims')} <span class="tag">${teamAnims.length}</span></button>
-         <button class="btn sm" id="chatSquad">💬 ${T('chat.squad')}</button>
          <button class="btn sm" id="editSquad" data-write>✎ ${T('teams.editSquad')}</button>
          <button class="btn sm" id="aiSquad" data-write>🤖 ${T('teams.aiSquad')}</button>
          <button class="btn primary" id="addPlayer">+ ${T('teams.addPlayer')}</button>`;
@@ -139,8 +138,7 @@ Views.teams = function (mount) {
         </div>
       </div>
       ${UI.acc('teamPickers', T('teams.teams'), teamBar, {
-      sub: teamList.length + ' · ' + SPORTS.name(sportId, I18N.getLang()),
-      actions: UI.shareBar('team', { exportLabel: T('teams.exportTeam'), importLabel: T('teams.importTeam') })
+      sub: teamList.length + ' · ' + SPORTS.name(sportId, I18N.getLang())
     })}
       ${UI.acc('squad', T('teams.squad'), squadTable, {
       sub: T('teams.squadHint') + ': ' + SPORTS.name(sportId, I18N.getLang()),
@@ -150,9 +148,6 @@ Views.teams = function (mount) {
       actions: `<button class="btn sm primary" id="addStaff">+ ${T('teams.addStaff')}</button>`
     })}`;
     UI.bindAcc(mount);
-    // A team file carries its own squad, staff, club and season, so it lands as
-    // that team rather than being folded into the one on screen.
-    UI.bindShare(mount, 'team', () => { App.populateTeamPicker(); render(); }, { scoped: true });
     bind(team, players);
   }
 
@@ -191,7 +186,6 @@ Views.teams = function (mount) {
         players, title: T('mail.title') + ' — ' + T('teams.squad')
       });
       q('#squadAnims').onclick = () => animListDialog(team, teamAnimations(team));
-      q('#chatSquad').onclick = () => App.go('messenger', { from: 'teams' });
       mount.querySelectorAll('[data-mail]').forEach(b => b.onclick = () => {
         const p = Store.find('players', b.dataset.mail);
         if (p) MAIL.compose({ players: [p], title: T('mail.title') + ' — ' + (p.firstName + ' ' + p.lastName).trim() });

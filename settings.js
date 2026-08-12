@@ -1164,7 +1164,12 @@ function cloudCreateDialog(onDone) {
 }
 
 // The screen the coach reads their code off, and the one a member pastes into.
-function cloudCodeDialog() {
+async function cloudCodeDialog() {
+  // A code is never handed out without the passwords it is checked against, so
+  // a database made before they existed gets a set the first time it is shown.
+  if (!Access.roleKeys() && Access.can('cloud.setup')) {
+    try { await Access.newRoleKeys(); } catch (e) { /* no WebCrypto on this origin */ }
+  }
   const code = TeamCloud.makeCode();
   const c = TeamCloud.cfg();
   const s = Privacy.summary();
