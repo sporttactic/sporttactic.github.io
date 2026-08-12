@@ -28,7 +28,9 @@ Views.statistics = function (mount) {
       ${UI.statCard(matches.length, T('stat.matches'))}
     </div>`;
 
-  const board = `
+  // A player copy reads the team's own totals; the squad's individual numbers,
+  // ratings and profiles are the coach's business, so the board is not built.
+  const board = Access.readMode() ? '' : `
     <div class="table-wrap">
       <table>
         <thead><tr><th>${T('stat.player')}</th><th>${T('stat.pos')}</th><th>${T('teams.weight')}</th><th>${T('stat.goals')}</th><th>${T('stat.attempts')}</th><th>${T('stat.shotPct')}</th><th>${T('stat.assists')}</th><th>${T('stat.to')}</th><th>${T('stat.saves')}</th><th>${T('stat.rating')}</th><th></th></tr></thead>
@@ -61,10 +63,10 @@ Views.statistics = function (mount) {
     ${AI.section('analytics')}
     <div class="page-head"><div><h1>${T('stats.title')}</h1><p>${T('stats.subtitle')}</p></div></div>
     ${UI.acc('statSeason', T('stats.season'), cards)}
-    ${UI.acc('statBoard', T('stats.leaderboard'), board, {
+    ${board ? UI.acc('statBoard', T('stats.leaderboard'), board, {
     actions: UI.shareBar('stats', { exportLabel: T('stats.exportBtn'), importLabel: T('stats.importBtn') })
       + `<button class="btn sm" id="chatBoard">💬 ${T('chat.title')}</button>`
-  })}`;
+  }) : ''}`;
 
   UI.bindAcc(mount);
   UI.bindShare(mount, 'stats', () => App.render(), { scoped: true });
@@ -111,9 +113,9 @@ Views.statistics = function (mount) {
     UI.printDoc(T('reports.playerReport') + ' — ' + name, sub, html, () => UI.toast(T('training.popupBlocked'), 'error'));
   }
   mount.querySelectorAll('[data-pdf]').forEach(b => b.onclick = () => playerPdf(Store.find('players', b.dataset.pdf)));
-
   // Talk the squad through the numbers they just produced.
-  mount.querySelector('#chatBoard').onclick = () => App.go('messenger', { from: 'statistics' });
+  const chatBoard = mount.querySelector('#chatBoard');
+  if (chatBoard) chatBoard.onclick = () => App.go('messenger', { from: 'statistics' });
   mount.querySelectorAll('[data-chat]').forEach(b => b.onclick = () => {
     const p = Store.find('players', b.dataset.chat);
     if (!p) return;
