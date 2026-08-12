@@ -33,9 +33,20 @@ const App = (() => {
   }
   // Read mode is a whole-app state: the sidebar loses what the coach hid and
   // the stylesheet takes the write controls out of everything still on it.
-  function applyMemberMode() {
-    document.body.dataset.member = (window.Access && Access.readMode()) ? 'read' : '';
+  // It has to be re-read after ANY change — the role, the profile and the file
+  // being followed all move it, and they move on their own screens.
+  let memberState = null;
+  function syncMemberMode() {
+    const read = !!(window.Access && Access.readMode());
+    const sig = (read ? 'read' : '') + '|' + (window.Access ? Access.hiddenModules().join(',') : '');
+    if (sig === memberState) return false;
+    memberState = sig;
+    document.body.dataset.member = read ? 'read' : '';
     applyNav();
+    return true;
+  }
+  function applyMemberMode() {
+    syncMemberMode();
     if (routesFor(currentSport).indexOf(currentRoute) < 0) go(routesFor(currentSport)[0]);
   }
 
@@ -92,6 +103,7 @@ const App = (() => {
     if (!Views[route]) route = 'dashboard';
     // Never land on a module this sport does not have; 'messenger' is not in
     // ROUTES and is reachable from any sport, so it is left alone.
+    syncMemberMode();
     const allow = routesFor(currentSport);
     if (ROUTES.indexOf(route) >= 0 && allow.indexOf(route) < 0) route = allow[0];
     if (cleanup) { try { cleanup(); } catch (e) {} cleanup = null; }
@@ -321,6 +333,7 @@ const App = (() => {
     bindChrome();
     refreshLockBadge();
     Store.onChange(refreshLockBadge);
+    Store.onChange(syncMemberMode);
     // The profile arrives with the shared file, so a sync can turn read mode on
     // (or off) while the app is open.
     if (window.TeamCloud) TeamCloud.onChange(() => { refreshLockBadge(); applyMemberMode(); });

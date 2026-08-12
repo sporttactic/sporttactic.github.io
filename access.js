@@ -122,7 +122,9 @@ const Access = (() => {
     const rec = Store.find('settings', PROFILE_KEY);
     const v = (rec && rec.value && typeof rec.value === 'object') ? rec.value : {};
     return {
-      readOnly: !!v.readOnly,
+      // Read-only is what a player copy IS. The coach can open it up, but a club
+      // that never opened this screen still hands out a look-only copy.
+      readOnly: v.readOnly !== false,
       training: v.training !== false,
       hide: Array.isArray(v.hide) ? v.hide.filter(r => typeof r === 'string') : []
     };

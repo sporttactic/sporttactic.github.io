@@ -1745,7 +1745,12 @@ Views.settings = async function (mount) {
   });
 
   const roleSel = mount.querySelector('#s_role');
-  roleSel.onchange = e => { Store.setSetting('role', e.target.value); document.getElementById('roleBadge').textContent = T('role.' + e.target.value); App.render(); };
+  roleSel.onchange = async e => {
+    await Store.setSetting('role', e.target.value);
+    document.getElementById('roleBadge').textContent = T('role.' + e.target.value);
+    App.applyMemberMode();
+    App.render();
+  };
   on('#s_keyGo', async () => {
     const inp = mount.querySelector('#s_key');
     const got = await Access.claimRole(inp.value.trim());
