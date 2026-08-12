@@ -159,7 +159,7 @@ const Access = (() => {
     if (store === 'settings') {
       // A verified role password is the coach's own say-so, so those two writes
       // through claimRole() are let past the lock they are meant to open.
-      if (claiming && row && (row.id === 'role' || row.id === CLAIM_KEY)) return false;
+      if (claiming && row && (row.id === 'role' || row.id === CLAIM_KEY || row.id === KEYS_KEY)) return false;
       return FIXED_SETTINGS.indexOf(row && row.id) >= 0;
     }
     if (openStores().indexOf(store) < 0) return true;
@@ -257,6 +257,20 @@ const Access = (() => {
     return (v && typeof v === 'object' && KEY_ROLES.indexOf(v.role) >= 0) ? v.role : '';
   }
   function unclaimed() { return !!roleKeys() && !claimedRole(); }
+  // The set carried in a team code, taken on by a device that has none of its
+  // own. It goes past the read-only lock the same way a verified word does:
+  // this is the club telling the copy what the rules are, not the copy deciding.
+  async function adoptRoleKeys(keys) {
+    if (!keys || !keys.salt || !keys.roles) return false;
+    claiming = true;
+    try {
+      await Store.setSetting(KEYS_KEY, {
+        v: 1, set: String(keys.set || ''), salt: String(keys.salt),
+        iter: +keys.iter || KEY_ITER, roles: keys.roles
+      });
+    } finally { claiming = false; }
+    return true;
+  }
 
   // Everybody the squad already knows about, so the coach picks from a list
   // instead of retyping addresses that are one screen away.
@@ -279,7 +293,7 @@ const Access = (() => {
     members, findMember, saveMembers, grant, revoke, markInvited, suggestions, normEmail,
     OPEN_ROUTES, MEMBER_STAMP, KEY_ROLES,
     profile, saveProfile, memberCopy, readMode, hiddenModules, moduleOpen, blocks,
-    roleKeys, roleKeyWords, newRoleKeys, claimRole, claimedRole, unclaimed, wordsStale
+    roleKeys, roleKeyWords, newRoleKeys, claimRole, claimedRole, unclaimed, wordsStale, adoptRoleKeys
   };
 })();
 window.Access = Access;

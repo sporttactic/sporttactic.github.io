@@ -1071,6 +1071,7 @@ function roleKeysDialog(onDone) {
       <div class="callout-warn">${UI.esc(T(stale ? 'rk.staleWarn' : 'rk.warn'))}</div>
       ${Access.KEY_ROLES.map(row).join('')}
       <p class="hint">${UI.esc(T('rk.note'))}</p>
+      <p class="hint">${UI.esc(T('rk.codeNote'))}</p>
       <p class="hint">${UI.esc(T('rk.storeHint'))}</p>`,
     footer: `<button class="btn ghost" data-close2>${T('common.close')}</button>
       <button class="btn ${made && !stale ? '' : 'primary'}" data-new>${UI.esc(T(made ? 'rk.again' : 'rk.make'))}</button>`,
@@ -1100,10 +1101,14 @@ function roleKeysDialog(onDone) {
           try { await Access.newRoleKeys(); }
           catch (e) { btn.disabled = false; return UI.toast(T('rk.noCrypto'), 'error'); }
           // The hashes have to reach the shared file before the words are handed
-          // out, or a device that joins first checks against the previous set.
+          // out, or a device that syncs before it joins checks against the
+          // previous set. Signing in here is fine: this is a button press.
           let sent = true;
-          if (TeamCloud.isLinked() && Access.can('cloud.write') && TeamCloud.signedIn()) {
-            try { await TeamCloud.push('merge'); } catch (e) { sent = false; }
+          if (TeamCloud.isLinked() && Access.can('cloud.write')) {
+            try {
+              if (!TeamCloud.signedIn()) await Drive.connect();
+              await TeamCloud.push('merge');
+            } catch (e) { sent = false; }
           }
           close();
           UI.toast(T('rk.made'), 'success');

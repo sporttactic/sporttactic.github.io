@@ -85,6 +85,11 @@ const TeamCloud = (() => {
     if (!c.fileId) return '';
     const payload = { v: 1, i: c.fileId, n: c.teamName || '' };
     if (c.apiKey) payload.k = c.apiKey;
+    // The role password hashes ride along, so a player who pastes the code can
+    // be checked against their word straight away — before the first sync, and
+    // even if the file has not caught up yet. Only hashes travel, never a word.
+    const keys = (window.Access && Access.roleKeys) ? Access.roleKeys() : null;
+    if (keys) payload.r = keys;
     return 'STX1-' + utf8b64(JSON.stringify(payload))
       .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
   }
@@ -95,7 +100,10 @@ const TeamCloud = (() => {
     while (b.length % 4) b += '=';
     try {
       const o = JSON.parse(b64utf8(b));
-      return o && o.i ? { fileId: String(o.i), apiKey: String(o.k || ''), teamName: String(o.n || '') } : null;
+      if (!o || !o.i) return null;
+      const out = { fileId: String(o.i), apiKey: String(o.k || ''), teamName: String(o.n || '') };
+      if (o.r && typeof o.r === 'object' && o.r.salt && o.r.roles) out.roleKeys = o.r;
+      return out;
     } catch (e) { return null; }
   }
   // A coach will paste whatever they have: the code, the whole Drive address
@@ -320,7 +328,12 @@ const TeamCloud = (() => {
     const t = parseTarget(text);
     if (!t) throw new Error('bad-code');
     await setCfg({ fileId: t.fileId, apiKey: t.apiKey || cfg().apiKey, teamName: t.teamName || cfg().teamName, owner: false });
-    return pull('merge');
+    const n = await pull('merge');
+    // The file is the authority on the role passwords; the set carried in the
+    // code is the fallback for a club whose file has not been synced since the
+    // words were made.
+    if (t.roleKeys && window.Access && !Access.roleKeys()) await Access.adoptRoleKeys(t.roleKeys);
+    return n;
   }
 
   // ---- Automatic sync ----------------------------------------------------
