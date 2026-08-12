@@ -309,10 +309,10 @@ const App = (() => {
 
   async function boot() {
     await Store.loadAll();
-    await Store.seedIfEmpty();
     await Store.purgeDemoPlayers();
     await Store.purgeSeedDrills();
     await Store.purgeSeedMatches();
+    await Store.purgeSeedClub();
     const theme = await Store.getSetting('theme', 'dark');
     setTheme(theme);
     const lang = await Store.getSetting('lang', 'en');

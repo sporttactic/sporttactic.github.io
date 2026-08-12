@@ -154,38 +154,15 @@ const Store = (() => {
     { opponent: 'Nord Sturm', venue: 'North Hall', homeScore: 0, awayScore: 0 }
   ];
 
-  async function seedIfEmpty() {
-    if (all('clubs').length) return;
-    const club = { id: uid('clu'), name: 'Metropolis HC', country: 'Germany', founded: 1974 };
-    const season = { id: uid('sea'), name: '2024/2025', clubId: club.id, active: true };
-    const team = { id: uid('tea'), name: 'Metropolis Men A', clubId: club.id, seasonId: season.id, division: 'Bundesliga', category: 'Senior Men' };
-    await DB.bulkPut('clubs', [club]);
-    await DB.bulkPut('seasons', [season]);
-    await DB.bulkPut('teams', [team]);
-
-    // Demo players removed — the roster starts empty so coaches add their own squad.
-    const coaches = [
-      { id: uid('coa'), teamId: team.id, name: 'Heinrich Vogel', role: 'Head Coach' },
-      { id: uid('coa'), teamId: team.id, name: 'Lukas Bauer', role: 'Assistant Coach' },
-      { id: uid('coa'), teamId: team.id, name: 'Mia Wolf', role: 'Goalkeeper Coach' }
-    ];
-    await DB.bulkPut('coaches', coaches);
-
-    const opponents = [
-      { id: uid('opp'), name: 'Rhein Löwen', formation: '6-0', tendencies: 'Strong pivot play, slow transitions', keyPlayers: 'No. 10 (playmaker), No. 44 (pivot)' },
-      { id: uid('opp'), name: 'Nord Sturm', formation: '5-1', tendencies: 'Fast breaks, aggressive defense', keyPlayers: 'No. 7 (left wing sprinter)' }
-    ];
-    await DB.bulkPut('opponents', opponents);
-
-    // Matches are the coach's own season — nothing is invented here either.
-    // The exercise library starts empty — the coach fills it themselves.
-    const training = [
-      { id: uid('trn'), teamId: team.id, title: 'Strength & Agility', date: Date.now() + 864e5, duration: 60, focus: 'Physical', exercises: [] }
-    ];
-    await DB.bulkPut('training', training);
-
-    await loadAll();
-  }
+  // The demo club earlier builds opened with. Nothing is invented any more —
+  // the club, its squads and everything in them are the coach's own — so these
+  // names exist only to sweep the old rows out on upgrade.
+  const SEED_CLUB = 'Metropolis HC';
+  const SEED_SEASON = '2024/2025';
+  const SEED_TEAM = 'Metropolis Men A';
+  const SEED_COACHES = ['Heinrich Vogel', 'Lukas Bauer', 'Mia Wolf'];
+  const SEED_SESSION = 'Strength & Agility';
+  const SEED_OPPONENTS = ['Rhein Löwen', 'Nord Sturm'];
 
   // One-time cleanup: remove the old built-in demo players (and their events)
   // from installs that were seeded before demo players were dropped.
@@ -239,6 +216,41 @@ const Store = (() => {
       await loadAll();
     }
     await setSetting('matchesNoneV1', true);
+  }
+
+  // One-time upgrade: the demo club goes, so the team picker shows the coach's
+  // own squad instead of a made-up one. It only goes if it was never used — a
+  // single player, match or session of their own and the whole club stays.
+  async function purgeSeedClub() {
+    if (await getSetting('clubNoneV1', false)) return;
+    const team = all('teams').find(t => t.name === SEED_TEAM);
+    if (team) {
+      const owns = s => all(s).filter(r => r.teamId === team.id);
+      const staff = owns('coaches');
+      const sessions = owns('training');
+      // The two demo opponents were handed to this team by an earlier upgrade,
+      // so they count as part of the demo club rather than as work of its own.
+      const foes = all('opponents').filter(o => !o.teamId || o.teamId === team.id);
+      const untouched = !owns('players').length && !owns('matches').length && !owns('personal').length
+        && !owns('planner').length && !owns('tactics').length && !owns('videos').length
+        && staff.every(c => SEED_COACHES.indexOf(c.name) >= 0)
+        && sessions.every(s => s.title === SEED_SESSION && !(s.exercises || []).length)
+        && owns('opponents').every(o => SEED_OPPONENTS.indexOf(o.name) >= 0);
+      if (untouched) {
+        for (const c of staff) await DB.remove('coaches', c.id);
+        for (const s of sessions) await DB.remove('training', s.id);
+        for (const o of foes.filter(o => SEED_OPPONENTS.indexOf(o.name) >= 0)) await DB.remove('opponents', o.id);
+        await DB.remove('teams', team.id);
+        // The club and season are only theirs while no other squad uses them.
+        const orphan = id => id && !all('teams').some(t => t.id !== team.id && (t.clubId === id || t.seasonId === id));
+        const season = all('seasons').find(s => s.id === team.seasonId && s.name === SEED_SEASON);
+        if (season && orphan(season.id)) await DB.remove('seasons', season.id);
+        const club = all('clubs').find(c => c.id === team.clubId && c.name === SEED_CLUB);
+        if (club && orphan(club.id)) await DB.remove('clubs', club.id);
+        await loadAll();
+      }
+    }
+    await setSetting('clubNoneV1', true);
   }
 
   // ---- Sport-bound squads ------------------------------------------------
@@ -411,7 +423,7 @@ const Store = (() => {
     uid, loadAll, all, find, save, remove, onChange,
     locked, lockInfo, setLock,
     getSetting, setSetting, teamStats, playerStats, matchEvents,
-    seedIfEmpty, purgeDemoPlayers, purgeSeedDrills, purgeSeedMatches,
+    purgeDemoPlayers, purgeSeedDrills, purgeSeedMatches, purgeSeedClub,
     players, stampSquadSport,
     teams, activeTeam, activeTeamId, setActiveTeam, scoped, matches, coaches, stampTeamScope,
     pack, unpack, packKinds, exportPack, importPack, GOAL_TYPES

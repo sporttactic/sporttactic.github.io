@@ -1867,7 +1867,7 @@ Views.settings = async function (mount) {
       for (const s of DB.STORES) await DB.clear(s);
       // Wiping everything also hands a read-only device back to its owner.
       Store.setLock(null);
-      await Store.loadAll(); await Store.seedIfEmpty(); UI.toast(T('settings.resetDone'), 'success'); App.render();
+      await Store.loadAll(); UI.toast(T('settings.resetDone'), 'success'); App.render();
     });
   };
 };
