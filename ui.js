@@ -148,8 +148,10 @@ const UI = (() => {
     modal({
       title: tr('common.confirmTitle', 'Please confirm'),
       body: `<p>${esc(msg)}</p>`,
+      // Answering a question is not the same as starting a change: read mode
+      // takes away the buttons that OPEN a dialog, never the one that closes it.
       footer: `<button class="btn ghost" data-no>${esc(tr('common.cancel', 'Cancel'))}</button>`
-        + `<button class="btn danger" data-yes>${esc(tr('common.confirm', 'Confirm'))}</button>`,
+        + `<button class="btn danger" data-yes data-member-ok>${esc(tr('common.confirm', 'Confirm'))}</button>`,
       onOpen: (m, close) => {
         m.querySelector('[data-no]').onclick = close;
         m.querySelector('[data-yes]').onclick = () => { close(); onYes(); };

@@ -57,7 +57,7 @@ Views.dashboard = function (mount) {
     ${AI.section('play')}
     <div class="page-head">
       <div><h1>${T('dash.title')}</h1><p>${T('dash.overviewFor')} ${UI.esc(team ? team.name : T('dash.yourTeam'))}</p></div>
-      <button class="btn primary" data-route-link="scouting">${T('dash.startScouting')}</button>
+      <button class="btn primary" data-route-link="scouting" data-write>${T('dash.startScouting')}</button>
     </div>
     ${UI.acc('dashStats', T('dash.season'), stats)}
     ${UI.acc('dashMatches', T('dash.matchesArea'), matchCards)}

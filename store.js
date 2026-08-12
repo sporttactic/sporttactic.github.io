@@ -248,7 +248,11 @@ const Store = (() => {
   const TEAM_SCOPED = ['players', 'coaches', 'matches', 'opponents', 'training', 'personal', 'planner'];
   function teams() {
     const s = sportNow();
-    return all('teams').filter(t => !t.sport || t.sport === s);
+    const list = all('teams').filter(t => !t.sport || t.sport === s);
+    // A player copy that joined with one squad's own password sees that squad
+    // and no other — every team-scoped read runs through here.
+    const lock = (typeof window !== 'undefined' && window.Access && Access.teamLock) ? Access.teamLock() : '';
+    return lock ? list.filter(t => t.id === lock) : list;
   }
   function activeTeam() {
     const list = teams();

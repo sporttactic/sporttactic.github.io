@@ -49,13 +49,11 @@ Views.planner = function (mount) {
       </div>
       ${UI.acc('plannerList', T('planner.schedule'), table, {
       sub: team ? `${upcoming} ${T('planner.upcoming')} · ${team.name}` : `${upcoming} ${T('planner.upcoming')}`,
-      actions: UI.shareBar('planner', { exportLabel: T('planner.exportBtn'), importLabel: T('planner.importBtn') })
-        + (events.length ? `<button class="btn sm danger" id="clearPlanner">🗑 ${T('planner.clearAll')}</button>` : '')
+      actions: (events.length ? `<button class="btn sm danger" id="clearPlanner">🗑 ${T('planner.clearAll')}</button>` : '')
         + `<button class="btn primary" id="addEvent">+ ${T('planner.newEvent')}</button>`
     })}`;
 
     UI.bindAcc(mount);
-    UI.bindShare(mount, 'planner', render, { scoped: true });
     mount.querySelector('#addEvent').onclick = () => form();
     const clear = mount.querySelector('#clearPlanner');
     if (clear) clear.onclick = () => clearAll(events);

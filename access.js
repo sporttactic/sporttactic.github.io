@@ -174,10 +174,12 @@ const Access = (() => {
   // what that device is allowed to BE. Anybody holding the code can read the
   // file, so only a salted PBKDF2 hash travels in it — the words themselves stay
   // on the device that made them, which is the one that hands them out.
-  const KEYS_KEY = 'roleKeys';          // shared: { v, salt, iter, roles:{ role: hash } }
-  const WORDS_KEY = 'roleKeyWords';     // this device only: { role: password }
+  // The three staff words are club-wide; a player word belongs to ONE squad, so
+  // a player who joins with it sees that squad and never the others.
+  const KEYS_KEY = 'roleKeys';          // shared: { v, set, salt, iter, roles, teams }
+  const WORDS_KEY = 'roleKeyWords';     // this device only: { set, words }
   const CLAIM_KEY = 'roleClaim';        // this device only: which word it showed
-  const KEY_ROLES = ['Player', 'Coach', 'Club Admin', 'Super Admin'];
+  const STAFF_ROLES = ['Coach', 'Club Admin', 'Super Admin'];
   const KEY_ITER = 310000;
   // No 0/O, 1/I/L — a password read off a screen and typed on a phone.
   const KEY_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
@@ -221,14 +223,46 @@ const Access = (() => {
     if (!cryptoOk()) throw new Error('no-crypto');
     const salt = crypto.getRandomValues(new Uint8Array(16));
     const set = b64(crypto.getRandomValues(new Uint8Array(6)));
-    const words = {}, roles = {};
-    for (const r of KEY_ROLES) {
+    const words = {}, roles = {}, teams = {};
+    for (const r of STAFF_ROLES) {
       words[r] = makeWord();
       roles[r] = await keyHash(words[r], salt, KEY_ITER);
     }
-    await Store.setSetting(KEYS_KEY, { v: 1, set, salt: b64(salt), iter: KEY_ITER, roles });
+    // Every squad in the club, whatever sport it plays under.
+    for (const t of Store.all('teams')) {
+      const w = makeWord();
+      words['team:' + t.id] = w;
+      teams[t.id] = { name: t.name || '', hash: await keyHash(w, salt, KEY_ITER) };
+    }
+    await Store.setSetting(KEYS_KEY, { v: 2, set, salt: b64(salt), iter: KEY_ITER, roles, teams });
     await Store.setSetting(WORDS_KEY, { set, words });
     return words;
+  }
+  // A squad added after the words were made gets one of its own, without
+  // touching anything already handed out. Only the device holding the words can
+  // do it — anywhere else the new word would be a hash nobody can read.
+  async function ensureTeamKeys() {
+    const rec = roleKeys();
+    const wrec = Store.find('settings', WORDS_KEY);
+    const held = (wrec && wrec.value && wrec.value.words) ? wrec.value.words : null;
+    if (!rec || !held || !cryptoOk() || wordsStale()) return 0;
+    const salt = unb64(rec.salt);
+    const teams = Object.assign({}, rec.teams || {});
+    const words = Object.assign({}, held);
+    let added = 0;
+    for (const t of Store.all('teams')) {
+      if (teams[t.id]) {
+        if (teams[t.id].name !== (t.name || '')) teams[t.id] = Object.assign({}, teams[t.id], { name: t.name || '' });
+        continue;
+      }
+      const w = makeWord();
+      words['team:' + t.id] = w;
+      teams[t.id] = { name: t.name || '', hash: await keyHash(w, salt, +rec.iter || KEY_ITER) };
+      added++;
+    }
+    await Store.setSetting(KEYS_KEY, Object.assign({}, rec, { teams }));
+    await Store.setSetting(WORDS_KEY, { set: rec.set, words });
+    return added;
   }
   // Returns the role the word unlocked, or '' when it matches none of them.
   // It is also what demotes: once a club uses passwords, a copy that cannot show
@@ -236,14 +270,20 @@ const Access = (() => {
   async function claimRole(word) {
     const rec = roleKeys();
     const w = String(word == null ? '' : word).trim().toUpperCase();
-    let hit = '';
+    let hit = '', teamId = '';
     if (rec && w && cryptoOk()) {
       const hash = await keyHash(w, unb64(rec.salt), +rec.iter || KEY_ITER);
-      hit = KEY_ROLES.find(r => rec.roles[r] === hash) || '';
+      hit = STAFF_ROLES.find(r => rec.roles[r] === hash) || '';
+      if (!hit) {
+        const t = Object.keys(rec.teams || {}).find(id => rec.teams[id] && rec.teams[id].hash === hash);
+        if (t) { hit = 'Player'; teamId = t; }
+      }
+      // A set made before player words were per squad had one for the club.
+      if (!hit && rec.roles.Player === hash) hit = 'Player';
     }
     claiming = true;
     try {
-      if (rec) await Store.setSetting(CLAIM_KEY, hit ? { role: hit, at: Date.now() } : null);
+      if (rec) await Store.setSetting(CLAIM_KEY, hit ? { role: hit, teamId, at: Date.now() } : null);
       if (hit) await Store.setSetting('role', hit);
       else if (rec && role() !== 'Player') await Store.setSetting('role', 'Player');
     } finally { claiming = false; }
@@ -251,12 +291,20 @@ const Access = (() => {
   }
   // A copy following a club that uses role passwords, which has never shown one
   // that matched. It reads and nothing else, whatever the player profile says.
-  function claimedRole() {
+  function claim() {
     const rec = Store.find('settings', CLAIM_KEY);
     const v = rec && rec.value;
-    return (v && typeof v === 'object' && KEY_ROLES.indexOf(v.role) >= 0) ? v.role : '';
+    return (v && typeof v === 'object' && ROLES.indexOf(v.role) >= 0) ? v : null;
   }
+  function claimedRole() { const c = claim(); return c ? c.role : ''; }
   function unclaimed() { return !!roleKeys() && !claimedRole(); }
+  // The squad a player word opened. Everything the app shows is filtered through
+  // Store.teams(), so this one answer keeps a player out of the other squads.
+  function teamLock() {
+    if (!memberCopy()) return '';
+    const c = claim();
+    return (c && c.role === 'Player' && c.teamId) ? String(c.teamId) : '';
+  }
   // The set carried in a team code, taken on by a device that has none of its
   // own. It goes past the read-only lock the same way a verified word does:
   // this is the club telling the copy what the rules are, not the copy deciding.
@@ -265,8 +313,9 @@ const Access = (() => {
     claiming = true;
     try {
       await Store.setSetting(KEYS_KEY, {
-        v: 1, set: String(keys.set || ''), salt: String(keys.salt),
-        iter: +keys.iter || KEY_ITER, roles: keys.roles
+        v: +keys.v || 2, set: String(keys.set || ''), salt: String(keys.salt),
+        iter: +keys.iter || KEY_ITER, roles: keys.roles,
+        teams: (keys.teams && typeof keys.teams === 'object') ? keys.teams : {}
       });
     } finally { claiming = false; }
     return true;
@@ -291,9 +340,10 @@ const Access = (() => {
   return {
     ROLES, GRANTABLE, normRole, role, tier, can, isAdmin, isStaff, driveRole, label,
     members, findMember, saveMembers, grant, revoke, markInvited, suggestions, normEmail,
-    OPEN_ROUTES, MEMBER_STAMP, KEY_ROLES,
+    OPEN_ROUTES, MEMBER_STAMP, STAFF_ROLES,
     profile, saveProfile, memberCopy, readMode, hiddenModules, moduleOpen, blocks,
-    roleKeys, roleKeyWords, newRoleKeys, claimRole, claimedRole, unclaimed, wordsStale, adoptRoleKeys
+    roleKeys, roleKeyWords, newRoleKeys, ensureTeamKeys, claimRole, claimedRole, claimedTeam: teamLock,
+    unclaimed, wordsStale, adoptRoleKeys, teamLock
   };
 })();
 window.Access = Access;

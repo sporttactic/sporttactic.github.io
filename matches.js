@@ -46,11 +46,9 @@ Views.matches = function (mount) {
     </div>
     ${UI.acc('matchList', T('matches.schedule'), table, {
     sub: team ? T('matches.ofTeam').replace('{0}', team.name) : '',
-    actions: UI.shareBar('matches', { exportLabel: T('matches.exportBtn'), importLabel: T('matches.importBtn') })
-      + `<button class="btn primary" id="addMatch">+ ${T('matches.newMatch')}</button>`
+    actions: `<button class="btn primary" id="addMatch">+ ${T('matches.newMatch')}</button>`
   })}`;
   UI.bindAcc(mount);
-  UI.bindShare(mount, 'matches', () => App.render(), { scoped: true });
 
   function form(mt = {}) {
     const d = mt.date ? new Date(mt.date) : new Date();

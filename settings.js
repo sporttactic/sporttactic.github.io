@@ -1046,30 +1046,48 @@ function memberModeDialog(onDone) {
 // The team code says WHICH database; one of these words says what the device
 // that pasted it is allowed to be. Only the hashes travel in the shared file,
 // so this screen is the one place the readable words exist.
-function roleKeysDialog(onDone) {
+async function roleKeysDialog(onDone) {
+  // A squad added since the words were made gets one of its own first.
+  try { await Access.ensureTeamKeys(); } catch (e) { /* not this device's set */ }
   const words = Access.roleKeyWords();
-  const made = !!Access.roleKeys();
+  const keys = Access.roleKeys();
+  const made = !!keys;
   const stale = Access.wordsStale();
   const code = TeamCloud.makeCode();
   const link = location.origin + location.pathname;
-  const row = r => `<div class="pol-row" data-key="${UI.esc(r)}">
-    <span class="pol-name">${UI.esc(Access.label(r))}
-      <span class="share-n">${UI.esc(T('rk.for' + r.replace(/\s/g, '')))}</span></span>
+  // One row per squad for the players, then the three club-wide staff words.
+  const teamRows = keys ? Object.keys(keys.teams || {}).map(id => ({
+    key: 'team:' + id, teamId: id,
+    label: Access.label('Player') + ' \u00b7 ' + ((keys.teams[id] || {}).name || id),
+    sub: T('rk.forPlayer')
+  })) : [];
+  const rows = teamRows.concat(Access.STAFF_ROLES.map(r => ({
+    key: r, role: r, label: Access.label(r), sub: T('rk.for' + r.replace(/\s/g, ''))
+  })));
+  const row = r => `<div class="pol-row" data-key="${UI.esc(r.key)}">
+    <span class="pol-name">${UI.esc(r.label)}
+      <span class="share-n">${UI.esc(r.sub)}</span></span>
     <span class="pol-opts">
-      ${words[r] && !stale
-      ? `<code class="pol-sample rk-word">${UI.esc(words[r])}</code>
-         <button type="button" class="btn sm" data-copy="${UI.esc(r)}">${UI.esc(T('cloud.copy'))}</button>
-         <button type="button" class="btn sm" data-mail="${UI.esc(r)}">${UI.esc(T('cloud.mailCode'))}</button>`
+      ${words[r.key] && !stale
+      ? `<code class="pol-sample rk-word">${UI.esc(words[r.key])}</code>
+         <button type="button" class="btn sm" data-copy="${UI.esc(r.key)}">${UI.esc(T('cloud.copy'))}</button>
+         <button type="button" class="btn sm" data-mail="${UI.esc(r.key)}">${UI.esc(T('cloud.mailCode'))}</button>`
       : `<span class="hint">${UI.esc(T(stale ? 'rk.stale' : made ? 'rk.elsewhere' : 'rk.none'))}</span>`}
     </span>
   </div>`;
+  // Each squad's word goes to that squad's own players; a staff word to the
+  // people who already hold that role on the access list.
+  const mailTo = r => (r.teamId
+    ? Store.all('players').filter(p => p.teamId === r.teamId).map(p => p.email)
+    : Access.members().filter(x => x.role === r.role).map(x => x.email)).filter(Boolean).join(',');
 
   UI.modal({
     title: T('rk.title'),
     width: 720,
     body: `<p>${UI.esc(T('rk.intro'))}</p>
       <div class="callout-warn">${UI.esc(T(stale ? 'rk.staleWarn' : 'rk.warn'))}</div>
-      ${Access.KEY_ROLES.map(row).join('')}
+      ${rows.map(row).join('')}
+      <p class="hint">${UI.esc(T('rk.teamNote'))}</p>
       <p class="hint">${UI.esc(T('rk.note'))}</p>
       <p class="hint">${UI.esc(T('rk.codeNote'))}</p>
       <p class="hint">${UI.esc(T('rk.storeHint'))}</p>`,
@@ -1082,15 +1100,15 @@ function roleKeysDialog(onDone) {
         try { await navigator.clipboard.writeText(w); } catch (e) { /* no clipboard permission */ }
         UI.toast(T('cloud.copied'), 'success');
       });
-      // Straight into the coach's own mail app, addressed to the people who
-      // already hold that role on the access list.
+      // Straight into the coach's own mail app, addressed to the squad the word
+      // belongs to, or to the people who hold that role on the access list.
       m.querySelectorAll('[data-mail]').forEach(b => b.onclick = () => {
-        const r = b.dataset.mail;
-        const to = Access.members().filter(x => x.role === r).map(x => x.email).filter(Boolean).join(',');
+        const r = rows.find(x => x.key === b.dataset.mail);
+        if (!r) return;
         const body = T('rk.mailBody')
-          .replace('{0}', Access.label(r)).replace('{1}', code)
-          .replace('{2}', words[r] || '').replace('{3}', link);
-        location.href = 'mailto:' + encodeURIComponent(to)
+          .replace('{0}', r.label).replace('{1}', code)
+          .replace('{2}', words[r.key] || '').replace('{3}', link);
+        location.href = 'mailto:' + encodeURIComponent(mailTo(r))
           + '?subject=' + encodeURIComponent(T('rk.mailSubject'))
           + '&body=' + encodeURIComponent(body);
       });
@@ -1170,6 +1188,7 @@ async function cloudCodeDialog() {
   if (!Access.roleKeys() && Access.can('cloud.setup')) {
     try { await Access.newRoleKeys(); } catch (e) { /* no WebCrypto on this origin */ }
   }
+  try { await Access.ensureTeamKeys(); } catch (e) { /* not this device's set */ }
   const code = TeamCloud.makeCode();
   const c = TeamCloud.cfg();
   const s = Privacy.summary();

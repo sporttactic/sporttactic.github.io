@@ -167,7 +167,6 @@ Views.tactics = function (mount, params) {
         <button class="btn sm" id="redoBtn" title="${T('tactics.redo')}">↷ ${T('tactics.redo')}</button>
         <button class="btn sm danger" id="resetBoard" title="${T('tactics.resetHint')}">⟳ ${T('tactics.reset')}</button>
         <button class="btn sm primary" id="savePlay">${T('tactics.save')}</button>
-        <button class="btn sm" id="shotBtn" title="${T('tactics.screenshot')}">📷 ${T('tactics.screenshot')}</button>
         <button class="btn sm" id="fullscreenBtn">⛶ ${T('tactics.fullscreen')}</button>
         <button class="btn sm" id="zenBtn" title="${T('tactics.boardOnlyHint')}">▣ ${T('tactics.boardOnly')}</button>
       </div>
@@ -258,17 +257,10 @@ Views.tactics = function (mount, params) {
               <button class="btn sm" id="animVideo" disabled title="${T('tactics.animPlayVideo')}">▶</button>
               <button class="btn sm danger" id="animDel" disabled title="${T('common.delete')}">✕</button>
             </div>
+            <button class="btn sm" id="animSend" disabled title="${T('tactics.animSendHint')}">👥 ${T('tactics.animSend')}</button>
             <button class="btn sm" id="animPlayAll" title="${T('tactics.animPlayAllHint')}">▶▶ ${T('tactics.animPlayAll')}</button>
             <div><span id="recDot" class="rec-dot hidden">REC <span id="recTime">0:00</span> · <span id="frameCount">0</span> ${T('tactics.framesCaptured')}</span></div>
             <div id="recExport" class="rec-export hidden"></div>
-            <div id="clipWrap">
-              <h4 class="anim-head">${T('tactics.exportClip')}</h4>
-              <div class="tool-group">
-                <button class="btn sm" id="expWebm">⬇ WebM</button>
-                <button class="btn sm" id="expMp4">⬇ MP4</button>
-              </div>
-              <p class="hint">${T('tactics.exportClipHint')}</p>
-            </div>
             <div id="facingWrap">
               <h4 class="anim-head">${T('tactics.facing')}</h4>
               <label class="check-row"><input type="checkbox" id="facingToggle" checked><span>${T('tactics.facingShow')}</span></label>
@@ -1717,15 +1709,6 @@ Views.tactics = function (mount, params) {
     const s = selected(); if (!s || typeof s.rot !== 'number') return;
     pushHistory(); delete s.rot; draw(); if (autoRec) captureAutoFrame(); scheduleAutosave();
   };
-  const shotBtn = mount.querySelector('#shotBtn');
-  if (shotBtn) shotBtn.onclick = () => {
-    try {
-      const url = canvas.toDataURL('image/png');
-      const a = document.createElement('a');
-      a.href = url; a.download = ((current.name || 'tactics-board').replace(/[^\w.-]+/g, '_')) + '.png'; a.click();
-      UI.toast(T('tactics.shotSaved'), 'success');
-    } catch (e) { UI.toast(T('tactics.shotFailed'), 'error'); }
-  };
   function updateCourtModeUI() {
     const wrap = mount.querySelector('#courtModeWrap');
     if (!wrap) return;
@@ -1811,6 +1794,7 @@ Views.tactics = function (mount, params) {
     mount.querySelector('#animEdit').disabled = !id;
     mount.querySelector('#animDel').disabled = !id;
     mount.querySelector('#animShare').disabled = !id;
+    mount.querySelector('#animSend').disabled = !id;
     mount.querySelector('#animVideo').disabled = !(opt && opt.dataset.vid);
     const all = mount.querySelector('#animPlayAll');
     if (all) all.disabled = !userSystems().length;
@@ -1884,6 +1868,7 @@ Views.tactics = function (mount, params) {
     box.ondblclick = () => { if (sel()) { stopPlayAll(); loadSystem(sel()); } };
     mount.querySelector('#animLoad').onclick = () => { if (sel()) { stopPlayAll(); loadSystem(sel()); } };
     mount.querySelector('#animPlayAll').onclick = playAllAnims;
+    mount.querySelector('#animSend').onclick = () => { if (sel()) sendToTeam(sel()); };
     mount.querySelector('#animEdit').onclick = () => { if (sel()) editSystem(sel()); };
     mount.querySelector('#animVideo').onclick = () => { if (sel()) playSystemVideo(sel()); };
     mount.querySelector('#animShare').onclick = () => { if (sel()) shareSystem(sel()); };
@@ -1997,6 +1982,36 @@ Views.tactics = function (mount, params) {
   // under Teams & Players instead of hunting the whole library. Pick the squad,
   // then tick the ones that belong to it — the ticks follow the squad, so this
   // screen also shows what it already has and takes one away again.
+  // Hand ONE animation to a squad: it then shows up under Teams & Players →
+  // Squad → Animations for that team, and stays in the library here as well.
+  function sendToTeam(id) {
+    const s = Store.find('tactics', id);
+    const teams = Store.teams();
+    if (!s) return;
+    if (!teams.length) return UI.toast(T('tactics.animNoTeam'), 'error');
+    const on = s.teamId || Store.activeTeamId();
+    UI.modal({
+      title: T('tactics.animSendTitle'),
+      width: 480,
+      body: `<p>${UI.esc(T('tactics.animSendIntro').replace('{0}', s.name || ''))}</p>
+        <label class="field"><span>${UI.esc(T('teams.activeTeam'))}</span>
+          <select id="send_team">${teams.map(t => `<option value="${UI.esc(t.id)}" ${t.id === on ? 'selected' : ''}>${UI.esc(t.name)}</option>`).join('')}</select></label>
+        <p class="hint">${UI.esc(T('tactics.animSendHint'))}</p>`,
+      footer: `<button class="btn ghost" data-close2>${T('common.cancel')}</button>
+        <button class="btn primary" data-go>${UI.esc(T('tactics.animSend'))}</button>`,
+      onOpen: (m, close) => {
+        m.querySelector('[data-close2]').onclick = close;
+        m.querySelector('[data-go]').onclick = async () => {
+          const teamId = m.querySelector('#send_team').value;
+          const team = teams.find(t => t.id === teamId);
+          await Store.save('tactics', Object.assign({}, s, { teamId }));
+          close();
+          UI.toast(T('tactics.animSent').replace('{0}', (team && team.name) || ''), 'success');
+          renderAnimList();
+        };
+      }
+    });
+  }
   // Store the current frame sequence under a title so it can be replayed later.
   // Recording the clip means playing the animation through once first, so the
   // dialog closes up front and the save finishes when the pass is done.
@@ -2106,35 +2121,6 @@ Views.tactics = function (mount, params) {
   const saveAnimBtn = mount.querySelector('#saveAnim');
   if (saveAnimBtn) saveAnimBtn.onclick = saveAnimation;
   bindAnimActions();
-
-  // Play the animation once while recording the canvas, then download that pass
-  // in the chosen container. MP4 is only offered where the browser can encode it.
-  function exportClip(ext) {
-    const btns = [mount.querySelector('#expWebm'), mount.querySelector('#expMp4')].filter(Boolean);
-    const me = mount.querySelector(ext === 'mp4' ? '#expMp4' : '#expWebm');
-    const label = me.textContent;
-    btns.forEach(b => { b.disabled = true; });
-    me.textContent = '● ' + T('tactics.recording');
-    recordAnimation().then(outs => {
-      btns.forEach(b => { b.disabled = false; });
-      me.textContent = label;
-      const hit = outs.find(o => o.ext === ext);
-      if (!hit) return UI.toast(T(ext === 'mp4' ? 'video.noMp4' : 'tactics.recDiscard'), 'error');
-      const name = ((current.name || 'tactic').replace(/[^\w.-]+/g, '_') || 'tactic') + '.' + ext;
-      const url = URL.createObjectURL(hit.blob);
-      const a = document.createElement('a'); a.href = url; a.download = name;
-      document.body.appendChild(a); a.click(); a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 60000);
-      UI.toast(T('tactics.recExported') + ' ' + name, 'success');
-    });
-  }
-  const expWebm = mount.querySelector('#expWebm');
-  const expMp4 = mount.querySelector('#expMp4');
-  if (expWebm) expWebm.onclick = () => exportClip('webm');
-  if (expMp4) {
-    expMp4.onclick = () => exportClip('mp4');
-    if (!pickRecFormats().some(f => f.ext === 'mp4')) { expMp4.disabled = true; expMp4.title = T('video.noMp4'); }
-  }
 
   setupBotMode();
   renderAnimList();
