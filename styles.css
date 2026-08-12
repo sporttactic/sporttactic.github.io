@@ -1082,6 +1082,9 @@ td.col-num .cell, td.col-h .cell, td.col-w .cell { max-width: 92px; }
 .pol-chk { display: inline-flex; gap: 5px; align-items: center; font-size: 13px; white-space: nowrap; }
 .pol-opts select { min-width: 120px; }
 .pol-sample { font-size: 12px; color: var(--muted); min-width: 130px; word-break: break-all; }
+/* A role password is read off the screen and typed on a phone, so it is big
+   enough to read and one tap selects the whole word. */
+.rk-word { font-size: 15px; font-weight: 700; letter-spacing: .08em; color: var(--text); user-select: all; -webkit-user-select: all; }
 .callout-warn { margin: 10px 0; padding: 9px 12px; border-radius: 8px; font-size: 13px;
   border: 1px solid var(--danger, #ff3b30); background: rgba(255, 59, 48, .08); }
 

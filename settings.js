@@ -1042,6 +1042,71 @@ function memberModeDialog(onDone) {
   });
 }
 
+// ---- Role passwords ------------------------------------------------------
+// The team code says WHICH database; one of these words says what the device
+// that pasted it is allowed to be. Only the hashes travel in the shared file,
+// so this screen is the one place the readable words exist.
+function roleKeysDialog(onDone) {
+  const words = Access.roleKeyWords();
+  const made = !!Access.roleKeys();
+  const code = TeamCloud.makeCode();
+  const link = location.origin + location.pathname;
+  const row = r => `<div class="pol-row" data-key="${UI.esc(r)}">
+    <span class="pol-name">${UI.esc(Access.label(r))}
+      <span class="share-n">${UI.esc(T('rk.for' + r.replace(/\s/g, '')))}</span></span>
+    <span class="pol-opts">
+      ${words[r]
+      ? `<code class="pol-sample rk-word">${UI.esc(words[r])}</code>
+         <button type="button" class="btn sm" data-copy="${UI.esc(r)}">${UI.esc(T('cloud.copy'))}</button>
+         <button type="button" class="btn sm" data-mail="${UI.esc(r)}">${UI.esc(T('cloud.mailCode'))}</button>`
+      : `<span class="hint">${UI.esc(T(made ? 'rk.elsewhere' : 'rk.none'))}</span>`}
+    </span>
+  </div>`;
+
+  UI.modal({
+    title: T('rk.title'),
+    width: 720,
+    body: `<p>${UI.esc(T('rk.intro'))}</p>
+      <div class="callout-warn">${UI.esc(T('rk.warn'))}</div>
+      ${Access.KEY_ROLES.map(row).join('')}
+      <p class="hint">${UI.esc(T('rk.note'))}</p>
+      <p class="hint">${UI.esc(T('rk.storeHint'))}</p>`,
+    footer: `<button class="btn ghost" data-close2>${T('common.close')}</button>
+      <button class="btn ${made ? '' : 'primary'}" data-new>${UI.esc(T(made ? 'rk.again' : 'rk.make'))}</button>`,
+    onOpen: (m, close) => {
+      m.querySelector('[data-close2]').onclick = close;
+      m.querySelectorAll('[data-copy]').forEach(b => b.onclick = async () => {
+        const w = words[b.dataset.copy] || '';
+        try { await navigator.clipboard.writeText(w); } catch (e) { /* no clipboard permission */ }
+        UI.toast(T('cloud.copied'), 'success');
+      });
+      // Straight into the coach's own mail app, addressed to the people who
+      // already hold that role on the access list.
+      m.querySelectorAll('[data-mail]').forEach(b => b.onclick = () => {
+        const r = b.dataset.mail;
+        const to = Access.members().filter(x => x.role === r).map(x => x.email).filter(Boolean).join(',');
+        const body = T('rk.mailBody')
+          .replace('{0}', Access.label(r)).replace('{1}', code)
+          .replace('{2}', words[r] || '').replace('{3}', link);
+        location.href = 'mailto:' + encodeURIComponent(to)
+          + '?subject=' + encodeURIComponent(T('rk.mailSubject'))
+          + '&body=' + encodeURIComponent(body);
+      });
+      m.querySelector('[data-new]').onclick = () => {
+        const go = async () => {
+          try { await Access.newRoleKeys(); }
+          catch (e) { return UI.toast(T('rk.noCrypto'), 'error'); }
+          close();
+          UI.toast(T('rk.made'), 'success');
+          roleKeysDialog(onDone);
+          if (onDone) onDone();
+        };
+        if (made) UI.confirm(T('rk.againAsk'), go); else go();
+      };
+    }
+  });
+}
+
 // Owner path: name the team, build the file, hand back the code.
 function cloudCreateDialog(onDone) {
   const team = Store.activeTeam();
@@ -1065,6 +1130,9 @@ function cloudCreateDialog(onDone) {
         state.textContent = T('cloud.working');
         try {
           if (!Drive.isConnected()) await Drive.connect();
+          // Made before the file is written, so the hashes are in it from the
+          // first byte. A browser without WebCrypto simply gets no passwords.
+          try { if (!Access.roleKeys()) await Access.newRoleKeys(); } catch (e) { /* no crypto here */ }
           await TeamCloud.createShared(m.querySelector('#cl_name').value.trim(), {
             linkShare: m.querySelector('#cl_link').checked
           });
@@ -1097,6 +1165,8 @@ function cloudCodeDialog() {
         <button type="button" class="btn sm" id="cd_pol">${UI.esc(T('pol.btn'))}</button></p>
       <p><span class="tag ${Access.profile().readOnly ? 'green' : ''}" id="cd_memstate">${UI.esc(memberLabel())}</span>
         <button type="button" class="btn sm" id="cd_mem">${UI.esc(T('mem.btn'))}</button></p>
+      <p><span class="tag ${Access.roleKeys() ? 'green' : ''}">${UI.esc(T(Access.roleKeys() ? 'rk.on' : 'rk.off'))}</span>
+        <button type="button" class="btn sm" id="cd_keys">${UI.esc(T('rk.btn'))}</button></p>
       ${c.apiKey ? '' : `<p class="hint mail-note">${UI.esc(T('cloud.codeNoKey'))}</p>`}
       <p class="hint">${UI.esc(T('cloud.codeHint'))}</p>`,
     footer: `<button class="btn" data-mail>${UI.esc(T('cloud.mailCode'))}</button>
@@ -1107,6 +1177,7 @@ function cloudCodeDialog() {
       m.querySelector('[data-close2]').onclick = close;
       m.querySelector('#cd_pol').onclick = () => { close(); sharePolicyDialog(); };
       m.querySelector('#cd_mem').onclick = () => { close(); memberModeDialog(() => cloudCodeDialog()); };
+      m.querySelector('#cd_keys').onclick = () => { close(); roleKeysDialog(); };
       m.querySelector('[data-copy]').onclick = async () => {
         ta.select();
         try { await navigator.clipboard.writeText(code); } catch (e) { document.execCommand('copy'); }
@@ -1128,6 +1199,9 @@ function cloudJoinDialog(onDone) {
       <label class="field"><span>${UI.esc(T('cloud.code'))}</span>
         <textarea id="jn_code" rows="3" spellcheck="false" placeholder="STX1-…"></textarea>
         <span class="hint">${UI.esc(T('cloud.joinHint'))}</span></label>
+      <label class="field"><span>${UI.esc(T('rk.field'))}</span>
+        <input id="jn_pw" spellcheck="false" autocomplete="off" placeholder="ABCD-EFGH-JK">
+        <span class="hint">${UI.esc(T('rk.fieldHint'))}</span></label>
       <p class="hint" id="jn_state"></p>`,
     footer: `<button class="btn ghost" data-close2>${T('common.cancel')}</button>
       <button class="btn primary" data-go>${UI.esc(T('cloud.joinBtn'))}</button>`,
@@ -1142,9 +1216,23 @@ function cloudJoinDialog(onDone) {
         go.disabled = true;
         state.textContent = T('cloud.working');
         try {
+          const pw = m.querySelector('#jn_pw').value.trim();
           const n = await TeamCloud.join(inp.value);
+          // The pull brought the club's password hashes with it. Once a club
+          // uses them the code alone is worth a player's view and no more, so a
+          // device that cannot show a word starts as a player.
+          let got = '';
+          if (Access.roleKeys()) {
+            got = pw ? await Access.claimRole(pw) : '';
+            if (!got && Access.role() !== 'Player') await Store.setSetting('role', 'Player');
+          }
           close();
           UI.toast(T('cloud.joined').replace('{0}', n), 'success');
+          if (got) UI.toast(T('rk.joinedAs').replace('{0}', Access.label(got)), 'success');
+          else if (pw) UI.toast(T('rk.wrong'), 'error');
+          const rb = document.getElementById('roleBadge');
+          if (rb) rb.textContent = T('role.' + Access.role());
+          App.applyMemberMode();
           if (onDone) onDone();
         } catch (e) {
           state.textContent = T('cloud.joinFailed') + ' ' + String((e && e.message) || e).slice(0, 180);
@@ -1407,6 +1495,7 @@ Views.settings = async function (mount) {
         <button class="btn" id="clCode">${T('cloud.showCode')}</button>
         ${maySetup ? `<button class="btn" id="clPolicy">${T('pol.btn')}</button>` : ''}
         ${maySetup ? `<button class="btn" id="clMember">${T('mem.btn')}</button>` : ''}
+        ${maySetup ? `<button class="btn" id="clKeys">${T('rk.btn')}</button>` : ''}
         ${mayWrite && c.owner ? `<button class="btn" id="clInvite">${T('cloud.inviteBtn')}</button>` : ''}
         <button class="btn danger" id="clForget" data-member-ok>${T('cloud.disconnect')}</button>
       </div>
@@ -1512,6 +1601,7 @@ Views.settings = async function (mount) {
     on('#clPolicy2', () => sharePolicyDialog(refreshCloud));
     on('#clMember', () => memberModeDialog(refreshCloud));
     on('#clMember2', () => memberModeDialog(refreshCloud));
+    on('#clKeys', () => roleKeysDialog(refreshCloud));
     on('#clInvite', () => cloudInviteDialog(refreshAccess));
     on('#clSync', () => busyRun('#clSync', () => TeamCloud.sync(), () => T('cloud.synced')));
     on('#clPull', () => UI.confirm(T('cloud.pullAsk'), () =>
