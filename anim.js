@@ -14,10 +14,11 @@ window.ANIM = (function () {
   const TWEEN_MS = 400;
   const FLOW_MS = 90;      // a sampled point of a recorded drag — runs straight into the next
   const SPEEDS = { slow: 0.5, medium: 1, fast: 2 };
+  const VIEW_SPEEDS = ['slow', 'medium'];   // fast is a board-only pace
   function savedSpeed() {
     let s = '';
     try { s = localStorage.getItem('tacticsPlayerSpeed') || ''; } catch (e) { }
-    return SPEEDS[s] ? s : 'medium';
+    return VIEW_SPEEDS.indexOf(s) >= 0 ? s : 'medium';
   }
   function saveSpeed(s) {
     try { localStorage.setItem('tacticsPlayerSpeed', s); } catch (e) { }
@@ -266,7 +267,6 @@ window.ANIM = (function () {
             <div class="tool-group" title="${UI.esc(T('tactics.pspeedHint'))}">
               <button type="button" class="btn sm" data-spd="slow">${T('tactics.speedSlow')}</button>
               <button type="button" class="btn sm" data-spd="medium">${T('tactics.speedMedium')}</button>
-              <button type="button" class="btn sm" data-spd="fast">${T('tactics.speedFast')}</button>
             </div>
           </div>
         </div>`,
