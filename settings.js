@@ -144,14 +144,14 @@ const SHARE_GROUPS = [
   { id: 'squad', stores: ['clubs', 'teams', 'players', 'coaches', 'seasons'], key: 'settings.shareGSquad', def: 'Squad, staff and teams', sensitive: true },
   { id: 'matches', stores: ['matches', 'events'], key: 'settings.shareGMatches', def: 'Matches and logged events' },
   { id: 'training', stores: ['training', 'exercises'], key: 'settings.shareGTraining', def: 'Training sessions and drill library' },
+  { id: 'planner', stores: ['planner'], key: 'nav.planner', def: 'Event planner' },
   { id: 'personal', stores: ['personal'], key: 'settings.shareGPersonal', def: 'Personal training and max tests', sensitive: true },
   { id: 'opponents', stores: ['opponents'], key: 'settings.shareGOpponents', def: 'Opponent analysis' },
   { id: 'reports', stores: ['reports'], key: 'settings.shareGReports', def: 'Saved reports' }
 ];
-// A backup is the whole app, so it offers the three blocks a mailed share does not.
+// A backup is the whole app, so it offers the two blocks a mailed share does not.
 const EXPORT_GROUPS = SHARE_GROUPS.concat([
   { id: 'tactics', stores: ['tactics'], key: 'tactics.savedAnims', def: 'Saved animations' },
-  { id: 'planner', stores: ['planner'], key: 'nav.planner', def: 'Event planner' },
   { id: 'video', stores: ['videos'], key: 'nav.video', def: 'Video bookmarks' }
 ]);
 

@@ -309,6 +309,22 @@ const Store = (() => {
     await setSetting('teamScopeV1', true);
   }
 
+  // A row that comes down from the shared file without a squad of its own is
+  // filtered out by scoped() and would never be seen again, so it joins the
+  // squad this device works with. updatedAt is left alone: this is a local
+  // repair, not a change the club has to hear about.
+  async function adoptUnscoped() {
+    const tid = activeTeamId();
+    if (!tid) return 0;
+    let n = 0;
+    for (const s of TEAM_SCOPED) {
+      const rows = all(s).filter(r => !r.teamId).map(r => Object.assign({}, r, { teamId: tid }));
+      if (rows.length) { await DB.bulkPut(s, rows); n += rows.length; }
+    }
+    if (n) await loadAll();
+    return n;
+  }
+
   // players()        -> the active team's players, current sport only
   // players(teamId)  -> that team's players, current sport only
   function players(teamId) {
@@ -425,7 +441,7 @@ const Store = (() => {
     getSetting, setSetting, teamStats, playerStats, matchEvents,
     purgeDemoPlayers, purgeSeedDrills, purgeSeedMatches, purgeSeedClub,
     players, stampSquadSport,
-    teams, activeTeam, activeTeamId, setActiveTeam, scoped, matches, coaches, stampTeamScope,
+    teams, activeTeam, activeTeamId, setActiveTeam, scoped, matches, coaches, stampTeamScope, adoptUnscoped,
     pack, unpack, packKinds, exportPack, importPack, GOAL_TYPES
   };
 })();

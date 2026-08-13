@@ -608,8 +608,8 @@ const I18N = (() => {
       'pol.finjuryNote': 'Injury notes', 'pol.fheight': 'Height', 'pol.fweight': 'Weight', 'pol.fnotes': 'Private notes',
       'pol.mkeep': 'As it is', 'pol.mpartial': 'Blurred', 'pol.mfake': 'Made-up', 'pol.mmask': '\u2022\u2022\u2022\u2022\u2022\u2022', 'pol.mremove': 'Left out',
       // What a copy made with the team code may do
-      'mem.btn': 'What a joined copy can do',
-      'mem.title': 'What a joined copy can do',
+      'mem.btn': 'What a player copy and a coach copy can do',
+      'mem.title': 'What a player copy and a coach copy can do',
       'mem.intro': 'The sharing rules decide what a player can see. This decides what they can do with it, and which modules are even on their menu. It is saved with the shared file, so every device that joins with the code opens this way.',
       'mem.readOnly': 'Players open the app read-only',
       'mem.readOnlyHint': 'Every button that would add, change or delete something is taken off their screen, and the app refuses the change even if one is reached another way. It only applies to a device whose role is Player and that follows your file \u2014 your own copy and your coaches are untouched.',
@@ -1525,8 +1525,8 @@ const I18N = (() => {
       'pol.finjuryNote': 'Skadesnoter', 'pol.fheight': 'Højde', 'pol.fweight': 'Vægt', 'pol.fnotes': 'Private noter',
       'pol.mkeep': 'Som den er', 'pol.mpartial': 'Sløret', 'pol.mfake': 'Opdigtet', 'pol.mmask': '\u2022\u2022\u2022\u2022\u2022\u2022', 'pol.mremove': 'Udeladt',
       // Hvad en kopi lavet med holdkoden må
-      'mem.btn': 'Hvad en tilsluttet kopi kan',
-      'mem.title': 'Hvad en tilsluttet kopi kan',
+      'mem.btn': 'Hvad en spillerkopi og en trænerkopi kan',
+      'mem.title': 'Hvad en spillerkopi og en trænerkopi kan',
       'mem.intro': 'Delingsreglerne bestemmer, hvad en spiller kan se. Her bestemmer du, hvad de må gøre med det, og hvilke moduler der overhovedet står i deres menu. Det gemmes sammen med den delte fil, så alle, der tilslutter sig med koden, åbner appen sådan.',
       'mem.readOnly': 'Spillere åbner appen skrivebeskyttet',
       'mem.readOnlyHint': 'Hver knap, der ville tilføje, ændre eller slette noget, forsvinder fra deres skærm, og appen afviser ændringen, selv hvis en knap nås ad anden vej. Det gælder kun en enhed, hvis rolle er Spiller, og som følger din fil \u2014 din egen kopi og dine trænere er urørte.',

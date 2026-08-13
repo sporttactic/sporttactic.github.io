@@ -224,6 +224,10 @@ const TeamCloud = (() => {
       if (rows.length) { await DB.bulkPut('settings', rows); n += rows.length; }
     }
     await Store.loadAll();
+    // The planner, the matches and everything else a squad owns are read through
+    // Store.scoped(), so a row that arrived without one has to be given a squad
+    // or it is on the device and on no screen.
+    await Store.adoptUnscoped();
     return n;
   }
 
