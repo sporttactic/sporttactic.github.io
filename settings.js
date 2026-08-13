@@ -1759,10 +1759,16 @@ Views.settings = async function (mount) {
     bindAccess();
   }
   const on = (sel, fn) => { const el = mount.querySelector(sel); if (el) el.onclick = fn; };
-  const busyRun = async (sel, fn, okKey) => {
+  // Long enough for the toast to be read, then the app comes back on the new data.
+  const reloadSoon = () => setTimeout(() => location.reload(), 900);
+  const busyRun = async (sel, fn, okKey, reload) => {
     const el = mount.querySelector(sel);
     if (el) el.disabled = true;
-    try { const r = await fn(); UI.toast(typeof okKey === 'function' ? okKey(r) : T(okKey), 'success'); }
+    try {
+      const r = await fn();
+      UI.toast(typeof okKey === 'function' ? okKey(r) : T(okKey), 'success');
+      if (reload) { reloadSoon(); return; }
+    }
     catch (e) { UI.toast(String((e && e.message) || e).slice(0, 200), 'error'); }
     finally { if (el) el.disabled = false; refreshCloud(); }
   };
@@ -1785,13 +1791,17 @@ Views.settings = async function (mount) {
     on('#clMember2', () => memberModeDialog(refreshCloud));
     on('#clKeys', () => roleKeysDialog(refreshCloud));
     on('#clInvite', () => cloudInviteDialog(refreshAccess));
-    on('#clSync', () => busyRun('#clSync', () => TeamCloud.sync(), () => T('cloud.synced')));
+    // A sync rewrites every store underneath the open views, so the app is
+    // reloaded rather than left showing what was on screen before it.
+    on('#clSync', () => busyRun('#clSync', () => TeamCloud.sync(), () => T('cloud.synced'), true));
     on('#clPull', () => UI.confirm(T('cloud.pullAsk'), () =>
-      busyRun('#clPull', () => TeamCloud.pull('replace'), () => T('cloud.pulled'))));
+      busyRun('#clPull', () => TeamCloud.pull('replace'), () => T('cloud.pulled'), true)));
     on('#clPush', () => UI.confirm(T('cloud.pushAsk'), () =>
       busyRun('#clPush', () => TeamCloud.push('replace'), () => T('cloud.pushed'))));
     on('#clForget', () => UI.confirm(T('cloud.disconnectAsk'), async () => {
-      await TeamCloud.forget(); UI.toast(T('cloud.disconnected'), 'success'); refreshCloud();
+      await TeamCloud.forget();
+      UI.toast(T('cloud.disconnected'), 'success');
+      reloadSoon();
     }));
     const auto = mount.querySelector('#clAuto');
     if (auto) auto.onchange = async () => {
@@ -2010,7 +2020,9 @@ Views.settings = async function (mount) {
       for (const s of DB.STORES) await DB.clear(s);
       // Wiping everything also hands a read-only device back to its owner.
       Store.setLock(null);
-      await Store.loadAll(); UI.toast(T('settings.resetDone'), 'success'); App.render();
+      await Store.loadAll();
+      UI.toast(T('settings.resetDone'), 'success');
+      reloadSoon();
     });
   };
 };

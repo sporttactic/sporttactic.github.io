@@ -28,11 +28,13 @@ Views.matches = function (mount) {
               <td><span class="tag ${line ? 'green' : ''}">${line ? line.length + '/' + squad.length : T('matches.allPlayers')}</span></td>
               <td>${m.status === 'finished' ? `<strong>${m.homeScore} : ${m.awayScore}</strong>` : '—'}</td>
               <td><span class="tag ${m.status === 'finished' ? 'green' : 'amber'}">${UI.esc(m.status === 'finished' ? T('matches.finished') : m.status === 'live' ? T('matches.live') : T('matches.scheduled'))}</span></td>
-              <td style="text-align:right;white-space:nowrap">
-                <button class="btn sm" data-squad="${m.id}">👥 ${T('matches.squad')}</button>
-                <button class="btn sm" data-scout="${m.id}">${T('nav.scouting')}</button>
-                <button class="btn sm" data-edit="${m.id}">${T('common.edit')}</button>
-                <button class="btn sm danger" data-del="${m.id}">${T('common.delete')}</button>
+              <td style="text-align:right">
+                <div class="row-acts">
+                  <button class="btn sm" data-squad="${m.id}">👥 ${T('matches.squad')}</button>
+                  <button class="btn sm" data-scout="${m.id}">${T('nav.scouting')}</button>
+                  <button class="btn sm" data-edit="${m.id}">${T('common.edit')}</button>
+                  <button class="btn sm danger" data-del="${m.id}">${T('common.delete')}</button>
+                </div>
               </td>
             </tr>`;
   }).join('') || `<tr><td colspan="9" class="empty">${T('common.noData')}</td></tr>`}
@@ -45,6 +47,7 @@ Views.matches = function (mount) {
       <div><h1>${T('matches.title')}</h1><p>${T('matches.subtitle') || ''}</p></div>
     </div>
     ${UI.acc('matchList', T('matches.schedule'), table, {
+    open: true,
     sub: team ? T('matches.ofTeam').replace('{0}', team.name) : '',
     actions: `<button class="btn primary" id="addMatch">+ ${T('matches.newMatch')}</button>`
   })}`;

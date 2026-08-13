@@ -253,6 +253,7 @@ Views.exerciseLib = function (mount, opts) {
       </div>`;
 
     mount.innerHTML = UI.acc('exlib', T('exercises.title'), inner, {
+      open: true,
       sub: T('exercises.subtitle'),
       actions: `${Access.readMode() ? '' : UI.shareBar('exercises')}
         ${mayChange(null) ? `<button class="btn" id="genEx">🤖 ${T('training.aiDrill')}</button>` : ''}
