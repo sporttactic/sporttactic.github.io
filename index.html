@@ -255,6 +255,22 @@ Produce video clips.">
       var say = function (k, fallback, kind) { if (window.UI && UI.toast) UI.toast(tr(k, fallback), kind || 'success'); };
 
       if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
+        // A new worker claims the page the moment it activates, but the scripts
+        // this page already parsed stay old — which is how a copy ends up
+        // running half the new build and half the previous one. So apply it:
+        // reload once, unless a dialog is open and would lose what is typed in it.
+        var hadController = !!navigator.serviceWorker.controller;
+        var reloading = false;
+        navigator.serviceWorker.addEventListener('controllerchange', function () {
+          if (!hadController || reloading) return;
+          var host = document.getElementById('modalHost');
+          if (host && !host.classList.contains('hidden')) {
+            say('footer.updateReady', 'Update installed — reload to apply');
+            return;
+          }
+          reloading = true;
+          location.reload();
+        });
         window.addEventListener('load', function () {
           navigator.serviceWorker.register('sw.js', { scope: './' }).then(function (reg) {
             reg.addEventListener('updatefound', function () {
