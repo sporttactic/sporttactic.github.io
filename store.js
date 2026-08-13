@@ -295,30 +295,41 @@ const Store = (() => {
   // One-time upgrade: rows made before teams were separated are handed to the
   // first team of their sport, so nothing disappears after the update.
   async function stampTeamScope() {
-    if (await getSetting('teamScopeV1', false)) return;
-    const first = teams()[0];
-    if (first) {
-      for (const s of TEAM_SCOPED) {
-        const rows = all(s).filter(r => !r.teamId).map(r => Object.assign({}, r, { teamId: first.id }));
-        if (rows.length) await DB.bulkPut(s, rows);
+    if (!(await getSetting('teamScopeV1', false))) {
+      const first = teams()[0];
+      if (first) {
+        for (const s of TEAM_SCOPED) {
+          const rows = all(s).filter(r => !r.teamId).map(r => Object.assign({}, r, { teamId: first.id }));
+          if (rows.length) await DB.bulkPut(s, rows);
+        }
+        const noSport = all('teams').filter(t => !t.sport).map(t => Object.assign({}, t, { sport: sportNow() }));
+        if (noSport.length) await DB.bulkPut('teams', noSport);
+        await loadAll();
       }
-      const noSport = all('teams').filter(t => !t.sport).map(t => Object.assign({}, t, { sport: sportNow() }));
-      if (noSport.length) await DB.bulkPut('teams', noSport);
-      await loadAll();
+      await setSetting('teamScopeV1', true);
     }
-    await setSetting('teamScopeV1', true);
+    // The event planner became team-scoped after V1 had already run on most
+    // devices, so its events sat there with no squad — and scoped() hides every
+    // one of them the moment a squad is active, on this device and on every
+    // copy that syncs them.
+    if (!(await getSetting('teamScopeV2', false))) {
+      await adoptUnscoped(true);
+      await setSetting('teamScopeV2', true);
+    }
   }
 
   // A row that comes down from the shared file without a squad of its own is
   // filtered out by scoped() and would never be seen again, so it joins the
-  // squad this device works with. updatedAt is left alone: this is a local
-  // repair, not a change the club has to hear about.
-  async function adoptUnscoped() {
-    const tid = activeTeamId();
+  // squad this device works with. `touch` bumps updatedAt so the repair also
+  // wins its way into the shared file; without it the stamp stays local.
+  async function adoptUnscoped(touch) {
+    const lock = (typeof window !== 'undefined' && window.Access && Access.teamLock) ? Access.teamLock() : '';
+    const tid = lock || activeTeamId();
     if (!tid) return 0;
     let n = 0;
     for (const s of TEAM_SCOPED) {
-      const rows = all(s).filter(r => !r.teamId).map(r => Object.assign({}, r, { teamId: tid }));
+      const rows = all(s).filter(r => !r.teamId)
+        .map(r => Object.assign({}, r, touch ? { teamId: tid, updatedAt: Date.now() } : { teamId: tid }));
       if (rows.length) { await DB.bulkPut(s, rows); n += rows.length; }
     }
     if (n) await loadAll();

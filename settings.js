@@ -1053,8 +1053,13 @@ function memberModeDialog(onDone) {
           hide: boxes.filter(b => !b.checked).map(b => b.dataset.mod),
           coachHide: cboxes.filter(b => !b.checked).map(b => b.dataset.cmod)
         });
+        // A module left on their menu is worth nothing without the data behind it.
+        const opened = await Privacy.shareForRoutes(
+          boxes.filter(b => b.checked).map(b => b.dataset.mod)
+            .concat(cboxes.filter(b => b.checked).map(b => b.dataset.cmod)));
         close();
         UI.toast(T('mem.saved'), 'success');
+        if (opened) UI.toast(T('pol.opened').replace('{0}', opened), 'success');
         App.applyMemberMode();
         if (onDone) onDone();
       };
@@ -1098,8 +1103,10 @@ function coachAreasDialog(teamId, name, onDone) {
       m.querySelector('[data-close2]').onclick = close;
       m.querySelector('[data-go]').onclick = async () => {
         await Access.saveCoachAreas(teamId, boxes.filter(b => !b.checked).map(b => b.dataset.cmod));
+        const opened = await Privacy.shareForRoutes(boxes.filter(b => b.checked).map(b => b.dataset.cmod));
         close();
         UI.toast(T('mem.saved'), 'success');
+        if (opened) UI.toast(T('pol.opened').replace('{0}', opened), 'success');
         App.applyMemberMode();
         if (onDone) onDone();
       };
@@ -1352,7 +1359,7 @@ function cloudJoinDialog(onDone) {
           const rb = document.getElementById('roleBadge');
           if (rb) rb.textContent = T('role.' + Access.role());
           App.applyMemberMode();
-          const squad = attachJoinedSquad();
+          const squad = await attachJoinedSquad();
           if (squad) UI.toast(T('cloud.squadAttached').replace('{0}', squad.name || ''), 'success');
           if (onDone) onDone();
         } catch (e) {
@@ -1366,10 +1373,13 @@ function cloudJoinDialog(onDone) {
 // Which squad this copy works with is the club's call, not the joining device's:
 // a squad word narrows Store.teams() to that one squad, so the copy simply
 // opens on what is left instead of being asked.
-function attachJoinedSquad() {
+async function attachJoinedSquad() {
   const teams = Store.teams();
   const pick = teams.length === 1 ? teams[0] : null;
   if (pick) Store.setActiveTeam(pick.id);
+  // Now that the squad is settled, anything that came down without one joins it
+  // rather than staying on the device and on no screen.
+  await Store.adoptUnscoped();
   App.populateTeamPicker();
   return pick;
 }
@@ -1883,7 +1893,7 @@ Views.settings = async function (mount) {
     if (!got) return UI.toast(T(Access.roleKeys() ? 'rk.wrong' : 'rk.noKeys'), 'error');
     UI.toast(T('rk.joinedAs').replace('{0}', Access.label(got)), 'success');
     document.getElementById('roleBadge').textContent = T('role.' + got);
-    const squad = attachJoinedSquad();
+    const squad = await attachJoinedSquad();
     if (squad) UI.toast(T('cloud.squadAttached').replace('{0}', squad.name || ''), 'success');
     App.applyMemberMode();
     App.render();
