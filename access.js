@@ -415,7 +415,7 @@ const Access = (() => {
     ROLES, GRANTABLE, normRole, role, tier, can, isAdmin, isStaff, driveRole, label,
     members, findMember, saveMembers, grant, revoke, markInvited, suggestions, normEmail,
     OPEN_ROUTES, MEMBER_STAMP, STAFF_ROLES,
-    profile, saveProfile, memberCopy, readMode, hiddenModules, moduleOpen, blocks, hidesEvents,
+    profile, saveProfile, memberCopy, following, readMode, hiddenModules, moduleOpen, blocks, hidesEvents,
     coachHidden, saveCoachAreas,
     roleKeys, roleKeyWords, newRoleKeys, ensureTeamKeys, claimRole, claimedRole, claimedTeam: teamLock,
     unclaimed, wordsStale, adoptRoleKeys, teamLock, squadCoach

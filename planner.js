@@ -21,6 +21,11 @@ Views.planner = function (mount) {
     const tid = Store.activeTeamId();
     return list.filter(e => !tid || !e.teamId || e.teamId === tid);
   };
+  // A copy that follows a club file gets its events from a sync, not from here.
+  const following = () => {
+    const c = (window.TeamCloud && TeamCloud.cfg) ? TeamCloud.cfg() : null;
+    return !!(c && c.fileId);
+  };
 
   function render() {
     const tid = Store.activeTeamId();
@@ -60,13 +65,16 @@ Views.planner = function (mount) {
           </tbody>
         </table>
       </div>
-      ${elsewhere > 0 ? `<p class="hint">${UI.esc(T('planner.otherSquad').replace('{0}', elsewhere))}</p>` : ''}`;
+      ${elsewhere > 0 ? `<p class="hint">${UI.esc(T('planner.otherSquad').replace('{0}', elsewhere))}</p>` : ''}
+      ${!Store.all('planner').length && following() ? `<p class="hint">${UI.esc(T('planner.noneShared'))}</p>
+        <div class="row" style="flex:0;margin-top:8px"><button class="btn" id="planSync" data-member-ok>${UI.esc(T('cloud.syncNow'))}</button></div>` : ''}`;
 
     mount.innerHTML = `
       <div class="page-head">
         <div><h1>${T('planner.title')}</h1><p>${T('planner.subtitle')}</p></div>
       </div>
       ${UI.acc('plannerList', T('planner.schedule'), table, {
+      open: true,
       sub: team ? `${upcoming} ${T('planner.upcoming')} · ${team.name}` : `${upcoming} ${T('planner.upcoming')}`,
       actions: (events.length ? `<button class="btn sm danger" id="clearPlanner">🗑 ${T('planner.clearAll')}</button>` : '')
         + (mine(events).length && Store.teams().length > 1 ? `<button class="btn sm" id="shareEvents">📤 ${T('planner.shareBtn')}</button>` : '')
@@ -79,6 +87,13 @@ Views.planner = function (mount) {
     if (clear) clear.onclick = () => clearAll(events);
     const share = mount.querySelector('#shareEvents');
     if (share) share.onclick = () => shareDialog(mine(events));
+    const sync = mount.querySelector('#planSync');
+    if (sync) sync.onclick = async () => {
+      sync.disabled = true;
+      try { await TeamCloud.sync(); UI.toast(T('cloud.synced'), 'success'); }
+      catch (e) { UI.toast(String((e && e.message) || e).slice(0, 200), 'error'); }
+      finally { sync.disabled = false; render(); }
+    };
     mount.querySelectorAll('[data-show]').forEach(b => b.onclick = () => show(Store.find('planner', b.dataset.show)));
     mount.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => form(Store.find('planner', b.dataset.edit)));
     mount.querySelectorAll('[data-del]').forEach(b => b.onclick = () => UI.confirm(T('planner.delAsk'), async () => {

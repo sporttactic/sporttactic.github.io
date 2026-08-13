@@ -1562,7 +1562,7 @@ Views.settings = async function (mount) {
     ${UI.acc('setRole', T('settings.roleAccess'), `
       <label class="field"><span>${T('settings.activeRole')}</span><select id="s_role" ${readMode ? 'disabled' : ''}>${['Super Admin', 'Club Admin', 'Coach', 'Analyst', 'Player'].map(r => `<option value="${r}" ${r === role ? 'selected' : ''}>${T('role.' + r)}</option>`).join('')}</select></label>
       <p style="color:var(--muted);font-size:12px">${readMode ? T('mem.roleLocked') : T('settings.roleHint')}</p>
-      ${Access.roleKeys() && Access.memberCopy() ? `<label class="field"><span>${T('rk.field')}</span>
+      ${Access.roleKeys() && Access.following() ? `<label class="field"><span>${T('rk.field')}</span>
         <span class="row" style="flex:0;gap:6px;align-items:center">
           <input id="s_key" spellcheck="false" autocomplete="off" placeholder="ABCD-EFGH-JK">
           <button type="button" class="btn" id="s_keyGo" data-member-ok>${T('rk.unlock')}</button>
@@ -1678,7 +1678,7 @@ Views.settings = async function (mount) {
         ${maySetup ? `<button class="btn" id="clPolicy">${T('pol.btn')}</button>` : ''}
         ${maySetup ? `<button class="btn" id="clMember">${T('mem.btn')}</button>` : ''}
         ${maySetup ? `<button class="btn" id="clKeys">${T('rk.btn')}</button>` : ''}
-        ${mayWrite && c.owner ? `<button class="btn" id="clInvite">${T('cloud.inviteBtn')}</button>` : ''}
+        ${mayWrite ? `<button class="btn" id="clInvite">${T('cloud.inviteBtn')}</button>` : ''}
         <button class="btn danger" id="clForget" data-member-ok>${T('cloud.disconnect')}</button>
       </div>
       <div class="row" style="flex:0;margin-top:10px;flex-wrap:wrap;align-items:flex-end">

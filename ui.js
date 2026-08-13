@@ -384,6 +384,9 @@ const UI = (() => {
     try {
       const v = localStorage.getItem('stx_acc_' + key);
       if (v !== null) return v === '1';
+      // A page whose whole content is one card asks for open and gets it, first
+      // run or not — collapsed, it reads as an empty screen.
+      if (def === true) return true;
       return accTouched() ? def !== false : false;
     } catch { return def !== false; }
   }
