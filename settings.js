@@ -1597,7 +1597,7 @@ Views.settings = async function (mount) {
       <h4 class="set-sub">${T('settings.dangerZone')}</h4>
       <p class="hint">${T('settings.dangerHint')}</p>
       <div class="row" style="flex:0;margin-top:8px">
-        <button class="btn danger" id="wipe">${T('settings.resetData')}</button>
+        <button class="btn danger" id="wipe" data-member-ok>${T('settings.resetData')}</button>
       </div>`)}
     ${readMode ? '' : UI.acc('setMail', T('settings.mailCard'), `
       <p style="color:var(--muted);font-size:13px">${T('settings.mailHint')}</p>
@@ -2004,7 +2004,8 @@ Views.settings = async function (mount) {
   };
   mount.querySelector('#emailAll').onclick = () => shareDialog();
   mount.querySelector('#wipe').onclick = () => {
-    if (readMode) return UI.toast(T('mem.blocked'), 'error');
+    // Emptying your own device is never the club's business, so a read-only copy
+    // keeps this one: it is also the way out of a copy somebody handed you.
     UI.confirm(T('settings.resetConfirm'), async () => {
       for (const s of DB.STORES) await DB.clear(s);
       // Wiping everything also hands a read-only device back to its owner.

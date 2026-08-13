@@ -16,6 +16,11 @@ Views.planner = function (mount) {
   const shareTag = e => e.allTeams
     ? `<span class="tag blue">${UI.esc(T('planner.sharedAll'))}</span>`
     : (sharedWith(e).length ? `<span class="tag blue">${UI.esc(T('planner.shared').replace('{0}', sharedWith(e).length))}</span>` : '');
+  // Only what this squad owns is ours to hand on.
+  const mine = list => {
+    const tid = Store.activeTeamId();
+    return list.filter(e => !tid || !e.teamId || e.teamId === tid);
+  };
 
   function render() {
     const tid = Store.activeTeamId();
@@ -64,6 +69,7 @@ Views.planner = function (mount) {
       ${UI.acc('plannerList', T('planner.schedule'), table, {
       sub: team ? `${upcoming} ${T('planner.upcoming')} · ${team.name}` : `${upcoming} ${T('planner.upcoming')}`,
       actions: (events.length ? `<button class="btn sm danger" id="clearPlanner">🗑 ${T('planner.clearAll')}</button>` : '')
+        + (mine(events).length && Store.teams().length > 1 ? `<button class="btn sm" id="shareEvents">📤 ${T('planner.shareBtn')}</button>` : '')
         + `<button class="btn primary" id="addEvent">+ ${T('planner.newEvent')}</button>`
     })}`;
 
@@ -71,6 +77,8 @@ Views.planner = function (mount) {
     mount.querySelector('#addEvent').onclick = () => form();
     const clear = mount.querySelector('#clearPlanner');
     if (clear) clear.onclick = () => clearAll(events);
+    const share = mount.querySelector('#shareEvents');
+    if (share) share.onclick = () => shareDialog(mine(events));
     mount.querySelectorAll('[data-show]').forEach(b => b.onclick = () => show(Store.find('planner', b.dataset.show)));
     mount.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => form(Store.find('planner', b.dataset.edit)));
     mount.querySelectorAll('[data-del]').forEach(b => b.onclick = () => UI.confirm(T('planner.delAsk'), async () => {
@@ -90,6 +98,59 @@ Views.planner = function (mount) {
       for (const e of mine) await Store.remove('planner', e.id);
       UI.toast(T('planner.cleared'));
       render();
+    });
+  }
+
+  // Hand several events to other squads in one go, instead of opening each one.
+  function shareDialog(list) {
+    const owner = Store.activeTeamId();
+    const others = Store.teams().filter(t => t.id !== owner);
+    if (!list.length || !others.length) return;
+    const row = e => `<label class="check-row">
+      <input type="checkbox" data-ev="${UI.esc(e.id)}">
+      <span>${UI.esc(UI.fmtDate(e.date))} \u00b7 <b>${UI.esc(e.title || '')}</b> ${shareTag(e)}</span>
+    </label>`;
+    UI.modal({
+      title: T('planner.shareTitle'),
+      width: 620,
+      body: `<p>${UI.esc(T('planner.shareIntro'))}</p>
+        <div class="acc-people">${list.map(row).join('')}</div>
+        <div class="row" style="flex:0;margin:8px 0;flex-wrap:wrap">
+          <button type="button" class="btn sm" data-pick="all">${UI.esc(T('settings.shareAll'))}</button>
+          <button type="button" class="btn sm" data-pick="none">${UI.esc(T('settings.shareNone'))}</button>
+        </div>
+        <h4 style="margin:14px 0 4px">${UI.esc(T('planner.access'))}</h4>
+        <label class="check-row"><input type="checkbox" id="s_all">
+          <span>${UI.esc(T('planner.allTeams'))}</span></label>
+        <div class="menu-picker">${others.map(t => `<label class="check-row menu-row">
+          <input type="checkbox" data-team="${UI.esc(t.id)}"><span>${UI.esc(t.name)}</span></label>`).join('')}</div>
+        <p class="hint">${UI.esc(T('planner.shareReplaces'))}</p>`,
+      footer: `<button class="btn ghost" data-close2>${T('common.cancel')}</button>
+        <button class="btn primary" data-go>${T('planner.shareBtn')}</button>`,
+      onOpen: (m, close) => {
+        const evBoxes = [...m.querySelectorAll('[data-ev]')];
+        const teamBoxes = [...m.querySelectorAll('[data-team]')];
+        const all = m.querySelector('#s_all');
+        const syncAll = () => teamBoxes.forEach(b => { b.disabled = all.checked; });
+        all.onchange = syncAll;
+        m.querySelectorAll('[data-pick]').forEach(b => b.onclick = () => {
+          evBoxes.forEach(x => { x.checked = b.dataset.pick === 'all'; });
+        });
+        m.querySelector('[data-close2]').onclick = close;
+        m.querySelector('[data-go]').onclick = async () => {
+          const picked = evBoxes.filter(b => b.checked).map(b => b.dataset.ev);
+          if (!picked.length) return UI.toast(T('planner.sharePickEvents'), 'error');
+          const teams = all.checked ? [] : teamBoxes.filter(b => b.checked).map(b => b.dataset.team);
+          if (!all.checked && !teams.length) return UI.toast(T('planner.sharePickTeams'), 'error');
+          for (const id of picked) {
+            const e = Store.find('planner', id);
+            if (e) await Store.save('planner', Object.assign({}, e, { allTeams: all.checked, teams }));
+          }
+          close();
+          UI.toast(T('planner.shareDone').replace('{0}', picked.length), 'success');
+          render();
+        };
+      }
     });
   }
 
