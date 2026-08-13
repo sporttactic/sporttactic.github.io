@@ -162,9 +162,30 @@ const Privacy = (() => {
     return { records, blocks, totalBlocks: GROUPS.length, hidden, totalFields: FIELDS.length };
   }
 
+  // Which shared blocks a module has to have before it shows anything. The
+  // player's own health and max tests are not here: that block stays off until
+  // the coach turns it on deliberately.
+  const ROUTE_GROUPS = {
+    dashboard: ['squad', 'matches'], teams: ['squad'], matches: ['matches'],
+    planner: ['planner'], scouting: ['squad', 'matches'], statistics: ['squad', 'matches'],
+    tactics: ['tactics'], video: ['video'], training: ['training'],
+    opponents: ['opponents'], reports: ['reports']
+  };
+  // Leaving a module on a joined copy's menu is a promise that there is
+  // something in it, so the blocks it reads are shared with it.
+  async function shareForRoutes(routes) {
+    const p = policy();
+    let opened = 0;
+    (routes || []).forEach(r => (ROUTE_GROUPS[r] || []).forEach(g => {
+      if (p.groups[g] && !p.groups[g].share) { p.groups[g].share = true; opened++; }
+    }));
+    if (opened) await save(p);
+    return opened;
+  }
+
   return {
-    GROUPS, FIELDS, MODES, MASK, SECRET_FIELDS,
-    defaults, policy, save, reset,
+    GROUPS, FIELDS, MODES, MASK, SECRET_FIELDS, ROUTE_GROUPS,
+    defaults, policy, save, reset, shareForRoutes,
     groupOf, rights, mayShare, mayEdit, mayDelete,
     redactRows, redactValue, protectedPaths, summary, seedOf
   };

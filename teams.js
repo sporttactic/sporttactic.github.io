@@ -132,7 +132,7 @@ Views.teams = function (mount) {
           <select id="teamPick">${teamList.map(x => `<option value="${UI.esc(x.id)}" ${team && x.id === team.id ? 'selected' : ''}>${UI.esc(x.name)}</option>`).join('') || `<option value="">${UI.esc(T('teams.noTeam'))}</option>`}</select></label>
         <button class="btn sm" id="editTeamBtn" data-write ${team ? '' : 'disabled'}>✎ ${T('teams.editTeam')}</button>
         <button class="btn sm" id="newTeam" data-write>+ ${T('teams.newTeam')}</button>
-        <button class="btn sm danger" id="delTeam" ${teamList.length < 2 ? 'disabled' : ''}>${T('teams.delTeam')}</button>
+        <button class="btn sm danger" id="delTeam" ${Store.all('teams').length < 2 ? 'disabled' : ''}>${T('teams.delTeam')}</button>
       </div>
       ${team ? `<div class="team-facts">
         <span class="tag">${T('teams.clubField')}: ${UI.esc(clubName(team) || '—')}</span>

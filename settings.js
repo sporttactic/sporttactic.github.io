@@ -990,12 +990,14 @@ function memberLabel() {
 function memberModeDialog(onDone) {
   const p = Access.profile();
   const open = Access.OPEN_ROUTES.map(r => T('nav.' + r)).join(', ');
+  // A profile saved by an earlier build has no coach list at all.
+  const coachHide = Array.isArray(p.coachHide) ? p.coachHide : [];
   const moduleRow = r => `<label class="check-row menu-row">
     <input type="checkbox" data-mod="${r}" ${p.hide.indexOf(r) < 0 || r === 'settings' ? 'checked' : ''} ${r === 'settings' ? 'disabled' : ''}>
     <span>${UI.esc(T('nav.' + r))}${r === 'settings' ? ` <span class="tag">${T('settings.menuAlways')}</span>` : ''}</span>
   </label>`;
   const coachRow = r => `<label class="check-row menu-row">
-    <input type="checkbox" data-cmod="${r}" ${p.coachHide.indexOf(r) < 0 || r === 'settings' ? 'checked' : ''} ${r === 'settings' ? 'disabled' : ''}>
+    <input type="checkbox" data-cmod="${r}" ${coachHide.indexOf(r) < 0 || r === 'settings' ? 'checked' : ''} ${r === 'settings' ? 'disabled' : ''}>
     <span>${UI.esc(T('nav.' + r))}${r === 'settings' ? ` <span class="tag">${T('settings.menuAlways')}</span>` : ''}</span>
   </label>`;
 
@@ -1047,21 +1049,25 @@ function memberModeDialog(onDone) {
       m.querySelector('#mc_min').onclick = () => cpick(['dashboard', 'teams', 'matches', 'training', 'tactics']);
       m.querySelector('[data-close2]').onclick = close;
       m.querySelector('[data-go]').onclick = async () => {
-        await Access.saveProfile({
-          readOnly: read.checked,
-          training: train.checked,
-          hide: boxes.filter(b => !b.checked).map(b => b.dataset.mod),
-          coachHide: cboxes.filter(b => !b.checked).map(b => b.dataset.cmod)
-        });
-        // A module left on their menu is worth nothing without the data behind it.
-        const opened = await Privacy.shareForRoutes(
-          boxes.filter(b => b.checked).map(b => b.dataset.mod)
-            .concat(cboxes.filter(b => b.checked).map(b => b.dataset.cmod)));
-        close();
-        UI.toast(T('mem.saved'), 'success');
-        if (opened) UI.toast(T('pol.opened').replace('{0}', opened), 'success');
-        App.applyMemberMode();
-        if (onDone) onDone();
+        try {
+          await Access.saveProfile({
+            readOnly: read.checked,
+            training: train.checked,
+            hide: boxes.filter(b => !b.checked).map(b => b.dataset.mod),
+            coachHide: cboxes.filter(b => !b.checked).map(b => b.dataset.cmod)
+          });
+          // A module left on their menu is worth nothing without the data behind it.
+          const opened = await Privacy.shareForRoutes(
+            boxes.filter(b => b.checked).map(b => b.dataset.mod)
+              .concat(cboxes.filter(b => b.checked).map(b => b.dataset.cmod)));
+          close();
+          UI.toast(T('mem.saved'), 'success');
+          if (opened) UI.toast(T('pol.opened').replace('{0}', opened), 'success');
+          App.applyMemberMode();
+          if (onDone) onDone();
+        } catch (e) {
+          UI.toast(String((e && e.message) || e).slice(0, 200), 'error');
+        }
       };
     }
   });
@@ -1102,13 +1108,17 @@ function coachAreasDialog(teamId, name, onDone) {
       m.querySelector('#ca_min').onclick = () => pick(['dashboard', 'teams', 'matches', 'training', 'tactics']);
       m.querySelector('[data-close2]').onclick = close;
       m.querySelector('[data-go]').onclick = async () => {
-        await Access.saveCoachAreas(teamId, boxes.filter(b => !b.checked).map(b => b.dataset.cmod));
-        const opened = await Privacy.shareForRoutes(boxes.filter(b => b.checked).map(b => b.dataset.cmod));
-        close();
-        UI.toast(T('mem.saved'), 'success');
-        if (opened) UI.toast(T('pol.opened').replace('{0}', opened), 'success');
-        App.applyMemberMode();
-        if (onDone) onDone();
+        try {
+          await Access.saveCoachAreas(teamId, boxes.filter(b => !b.checked).map(b => b.dataset.cmod));
+          const opened = await Privacy.shareForRoutes(boxes.filter(b => b.checked).map(b => b.dataset.cmod));
+          close();
+          UI.toast(T('mem.saved'), 'success');
+          if (opened) UI.toast(T('pol.opened').replace('{0}', opened), 'success');
+          App.applyMemberMode();
+          if (onDone) onDone();
+        } catch (e) {
+          UI.toast(String((e && e.message) || e).slice(0, 200), 'error');
+        }
       };
     }
   });

@@ -1253,7 +1253,10 @@ Views.tactics = function (mount, params) {
     const cb = animEnd; animEnd = null; if (cb) cb();
   }
   function playAnimation(onEnd) {
-    if (animTimer) { stopAnimation(); frameIdx = 0; draw(); return; }
+    if (animTimer) { stopAnimation(); frameIdx = 0; draw(); renderTimeline(); return; }
+    // A single pose has nothing to run through, and the recorder still has to
+    // hear back or the save hangs.
+    if (current.frames.length < 2) { if (typeof onEnd === 'function') onEnd(); return; }
     animEnd = typeof onEnd === 'function' ? onEnd : null;
     Sfx.whistle();
     let i = 0;
@@ -1277,7 +1280,7 @@ Views.tactics = function (mount, params) {
     // talk over it, while a point sampled from a recorded drag runs straight
     // into the next one — that is what makes a curve play back as a curve.
     function runPair() {
-      const a = current.frames[i], b = current.frames[(i + 1) % current.frames.length];
+      const a = current.frames[i], b = current.frames[i + 1];
       const flow = !!b.flow;
       const tw = Math.max(40, (flow ? FLOW_MS : TWEEN_MS) / mult);
       const hold = flow ? 0 : (FRAME_MS - TWEEN_MS) / mult;
@@ -1287,8 +1290,14 @@ Views.tactics = function (mount, params) {
         paint(a, b, t);
         if (t < 1) return;
         clearInterval(animStep); animStep = null;
-        i = (i + 1) % current.frames.length;
-        if (i === 0) { stopAnimation(); frameIdx = 0; draw(); return; }
+        i++;
+        // One pass, ending on the last pose: no run back to the opening frame.
+        if (i >= current.frames.length - 1) {
+          stopAnimation();
+          frameIdx = current.frames.length - 1;
+          draw(); renderTimeline();
+          return;
+        }
         animTimer = setTimeout(runPair, hold);
       }, flow ? 20 : 40);
     }
