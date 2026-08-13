@@ -140,11 +140,15 @@ const Access = (() => {
     });
     return profile();
   }
+  // A copy that follows a file somebody else owns.
+  function following() {
+    const c = (window.TeamCloud && TeamCloud.cfg) ? TeamCloud.cfg() : null;
+    return !!(c && c.fileId && !c.owner);
+  }
   // A copy that follows a file somebody else owns and holds no more than a
   // player's role. Everything below hangs off this one answer.
   function memberCopy() {
-    const c = (window.TeamCloud && TeamCloud.cfg) ? TeamCloud.cfg() : null;
-    return !!(c && c.fileId && !c.owner) && tier() === 'player';
+    return following() && tier() === 'player';
   }
   function readMode() { return memberCopy() && (profile().readOnly || unclaimed()); }
   function hiddenModules() { return memberCopy() ? NEVER_ROUTES.concat(profile().hide) : []; }
@@ -180,8 +184,9 @@ const Access = (() => {
   // what that device is allowed to BE. Anybody holding the code can read the
   // file, so only a salted PBKDF2 hash travels in it — the words themselves stay
   // on the device that made them, which is the one that hands them out.
-  // The three staff words are club-wide; a player word belongs to ONE squad, so
-  // a player who joins with it sees that squad and never the others.
+  // The three staff words are club-wide; a squad has two of its own — one for
+  // its players and one for its coaches — so whoever joins with either sees
+  // that squad and never the others.
   const KEYS_KEY = 'roleKeys';          // shared: { v, set, salt, iter, roles, teams }
   const WORDS_KEY = 'roleKeyWords';     // this device only: { set, words }
   const CLAIM_KEY = 'roleClaim';        // this device only: which word it showed
@@ -234,11 +239,17 @@ const Access = (() => {
       words[r] = makeWord();
       roles[r] = await keyHash(words[r], salt, KEY_ITER);
     }
-    // Every squad in the club, whatever sport it plays under.
+    // Every squad in the club, whatever sport it plays under: one word for its
+    // players, one for the coaches the club wants kept to that squad.
     for (const t of Store.all('teams')) {
-      const w = makeWord();
-      words['team:' + t.id] = w;
-      teams[t.id] = { name: t.name || '', hash: await keyHash(w, salt, KEY_ITER) };
+      const pw = makeWord(), cw = makeWord();
+      words['team:' + t.id] = pw;
+      words['coach:' + t.id] = cw;
+      teams[t.id] = {
+        name: t.name || '',
+        hash: await keyHash(pw, salt, KEY_ITER),
+        coachHash: await keyHash(cw, salt, KEY_ITER)
+      };
     }
     await Store.setSetting(KEYS_KEY, { v: 2, set, salt: b64(salt), iter: KEY_ITER, roles, teams });
     await Store.setSetting(WORDS_KEY, { set, words });
@@ -253,17 +264,34 @@ const Access = (() => {
     const held = (wrec && wrec.value && wrec.value.words) ? wrec.value.words : null;
     if (!rec || !held || !cryptoOk() || wordsStale()) return 0;
     const salt = unb64(rec.salt);
+    const iter = +rec.iter || KEY_ITER;
     const teams = Object.assign({}, rec.teams || {});
     const words = Object.assign({}, held);
     let added = 0;
     for (const t of Store.all('teams')) {
-      if (teams[t.id]) {
-        if (teams[t.id].name !== (t.name || '')) teams[t.id] = Object.assign({}, teams[t.id], { name: t.name || '' });
+      const cur = teams[t.id];
+      if (cur) {
+        let next = cur;
+        if (next.name !== (t.name || '')) next = Object.assign({}, next, { name: t.name || '' });
+        // A set made before squads had a coach word of their own gets one here,
+        // so the player word already handed out keeps working.
+        if (!next.coachHash) {
+          const cw = makeWord();
+          words['coach:' + t.id] = cw;
+          next = Object.assign({}, next, { coachHash: await keyHash(cw, salt, iter) });
+          added++;
+        }
+        if (next !== cur) teams[t.id] = next;
         continue;
       }
-      const w = makeWord();
-      words['team:' + t.id] = w;
-      teams[t.id] = { name: t.name || '', hash: await keyHash(w, salt, +rec.iter || KEY_ITER) };
+      const pw = makeWord(), cw = makeWord();
+      words['team:' + t.id] = pw;
+      words['coach:' + t.id] = cw;
+      teams[t.id] = {
+        name: t.name || '',
+        hash: await keyHash(pw, salt, iter),
+        coachHash: await keyHash(cw, salt, iter)
+      };
       added++;
     }
     await Store.setSetting(KEYS_KEY, Object.assign({}, rec, { teams }));
@@ -281,8 +309,14 @@ const Access = (() => {
       const hash = await keyHash(w, unb64(rec.salt), +rec.iter || KEY_ITER);
       hit = STAFF_ROLES.find(r => rec.roles[r] === hash) || '';
       if (!hit) {
-        const t = Object.keys(rec.teams || {}).find(id => rec.teams[id] && rec.teams[id].hash === hash);
-        if (t) { hit = 'Player'; teamId = t; }
+        const ids = Object.keys(rec.teams || {});
+        // A squad's own coach word: everything a coach may do, on that squad.
+        const c = ids.find(id => rec.teams[id] && rec.teams[id].coachHash === hash);
+        if (c) { hit = 'Coach'; teamId = c; }
+        else {
+          const t = ids.find(id => rec.teams[id] && rec.teams[id].hash === hash);
+          if (t) { hit = 'Player'; teamId = t; }
+        }
       }
       // A set made before player words were per squad had one for the club.
       if (!hit && rec.roles.Player === hash) hit = 'Player';
@@ -304,12 +338,13 @@ const Access = (() => {
   }
   function claimedRole() { const c = claim(); return c ? c.role : ''; }
   function unclaimed() { return !!roleKeys() && !claimedRole(); }
-  // The squad a player word opened. Everything the app shows is filtered through
-  // Store.teams(), so this one answer keeps a player out of the other squads.
+  // The squad a per-squad word opened, for a player or for a coach. Everything
+  // the app shows is filtered through Store.teams(), so this one answer keeps
+  // the device out of the club's other squads.
   function teamLock() {
-    if (!memberCopy()) return '';
+    if (!following()) return '';
     const c = claim();
-    return (c && c.role === 'Player' && c.teamId) ? String(c.teamId) : '';
+    return (c && c.teamId) ? String(c.teamId) : '';
   }
   // The set carried in a team code, taken on by a device that has none of its
   // own. It goes past the read-only lock the same way a verified word does:

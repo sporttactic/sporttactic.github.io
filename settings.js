@@ -1055,12 +1055,24 @@ async function roleKeysDialog(onDone) {
   const stale = Access.wordsStale();
   const code = TeamCloud.makeCode();
   const link = location.origin + location.pathname;
-  // One row per squad for the players, then the three club-wide staff words.
-  const teamRows = keys ? Object.keys(keys.teams || {}).map(id => ({
-    key: 'team:' + id, teamId: id,
-    label: Access.label('Player') + ' \u00b7 ' + ((keys.teams[id] || {}).name || id),
-    sub: T('rk.forPlayer')
-  })) : [];
+  // Two words per squad — one for its coaches, one for its players — then the
+  // three club-wide staff words.
+  const teamRows = [];
+  if (keys) {
+    Object.keys(keys.teams || {}).forEach(id => {
+      const name = (keys.teams[id] || {}).name || id;
+      if ((keys.teams[id] || {}).coachHash) {
+        teamRows.push({
+          key: 'coach:' + id, teamId: id, role: 'Coach',
+          label: Access.label('Coach') + ' \u00b7 ' + name, sub: T('rk.forSquadCoach')
+        });
+      }
+      teamRows.push({
+        key: 'team:' + id, teamId: id, role: 'Player',
+        label: Access.label('Player') + ' \u00b7 ' + name, sub: T('rk.forPlayer')
+      });
+    });
+  }
   const rows = teamRows.concat(Access.STAFF_ROLES.map(r => ({
     key: r, role: r, label: Access.label(r), sub: T('rk.for' + r.replace(/\s/g, ''))
   })));
@@ -1075,10 +1087,12 @@ async function roleKeysDialog(onDone) {
       : `<span class="hint">${UI.esc(T(stale ? 'rk.stale' : made ? 'rk.elsewhere' : 'rk.none'))}</span>`}
     </span>
   </div>`;
-  // Each squad's word goes to that squad's own players; a staff word to the
-  // people who already hold that role on the access list.
+  // Each squad's word goes to that squad's own people; a club-wide staff word
+  // to those who already hold that role on the access list.
   const mailTo = r => (r.teamId
-    ? Store.all('players').filter(p => p.teamId === r.teamId).map(p => p.email)
+    ? (r.role === 'Coach'
+      ? Store.all('coaches').filter(c => c.teamId === r.teamId).map(c => c.email)
+      : Store.all('players').filter(p => p.teamId === r.teamId).map(p => p.email))
     : Access.members().filter(x => x.role === r.role).map(x => x.email)).filter(Boolean).join(',');
 
   UI.modal({
@@ -1269,7 +1283,9 @@ function cloudJoinDialog(onDone) {
           const rb = document.getElementById('roleBadge');
           if (rb) rb.textContent = T('role.' + Access.role());
           App.applyMemberMode();
-          joinSquadDialog(onDone);
+          const squad = attachJoinedSquad();
+          if (squad) UI.toast(T('cloud.squadAttached').replace('{0}', squad.name || ''), 'success');
+          if (onDone) onDone();
         } catch (e) {
           state.textContent = T('cloud.joinFailed') + ' ' + String((e && e.message) || e).slice(0, 180);
         } finally { go.disabled = false; }
@@ -1278,33 +1294,15 @@ function cloudJoinDialog(onDone) {
   });
 }
 
-// A club can run several squads, and everything a coach sees is scoped to one
-// of them — so the copy that just joined asks which one it is working with
-// instead of landing on whichever squad happens to come first.
-function joinSquadDialog(onDone) {
+// Which squad this copy works with is the club's call, not the joining device's:
+// a squad word narrows Store.teams() to that one squad, so the copy simply
+// opens on what is left instead of being asked.
+function attachJoinedSquad() {
   const teams = Store.teams();
-  const done = () => { App.populateTeamPicker(); if (onDone) onDone(); };
-  if (!teams.length) return done();
-  if (teams.length === 1) { Store.setActiveTeam(teams[0].id); return done(); }
-  UI.modal({
-    title: T('cloud.squadTitle'),
-    width: 480,
-    body: `<p>${UI.esc(T('cloud.squadIntro'))}</p>
-      <label class="field"><span>${UI.esc(T('teams.activeTeam'))}</span>
-        <select id="jn_team">${teams.map(t => `<option value="${UI.esc(t.id)}">${UI.esc(t.name)}</option>`).join('')}</select></label>
-      <p class="hint">${UI.esc(T('cloud.squadHint'))}</p>`,
-    footer: `<button class="btn primary" data-go>${UI.esc(T('common.save'))}</button>`,
-    onOpen: (m, close) => {
-      m.querySelector('[data-go]').onclick = () => {
-        const id = m.querySelector('#jn_team').value;
-        const team = teams.find(t => t.id === id);
-        Store.setActiveTeam(id);
-        close();
-        UI.toast(T('cloud.squadAttached').replace('{0}', (team && team.name) || ''), 'success');
-        done();
-      };
-    }
-  });
+  const pick = teams.length === 1 ? teams[0] : null;
+  if (pick) Store.setActiveTeam(pick.id);
+  App.populateTeamPicker();
+  return pick;
 }
 
 // Sends the Drive invitations. Everyone on the access list is offered; the
@@ -1816,6 +1814,8 @@ Views.settings = async function (mount) {
     if (!got) return UI.toast(T(Access.roleKeys() ? 'rk.wrong' : 'rk.noKeys'), 'error');
     UI.toast(T('rk.joinedAs').replace('{0}', Access.label(got)), 'success');
     document.getElementById('roleBadge').textContent = T('role.' + got);
+    const squad = attachJoinedSquad();
+    if (squad) UI.toast(T('cloud.squadAttached').replace('{0}', squad.name || ''), 'success');
     App.applyMemberMode();
     App.render();
   });
