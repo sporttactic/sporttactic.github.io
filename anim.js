@@ -291,7 +291,7 @@ window.ANIM = (function () {
         // straight into the next one — that is what makes a curve stay a curve
         // instead of crawling through hundreds of held poses.
         function runPair() {
-          const a = frames[idx], b = frames[(idx + 1) % frames.length];
+          const a = frames[idx], b = frames[idx + 1];
           const mult = SPEEDS[speed] || 1;
           const flow = !!b.flow;
           const tw = Math.max(40, (flow ? FLOW_MS : TWEEN_MS) / mult);
@@ -304,9 +304,11 @@ window.ANIM = (function () {
             const t = Math.min(1, Math.max(0, (now - t0) / tw));
             paint(a, b, t);
             if (t < 1) { raf = requestAnimationFrame(step); return; }
-            idx = (idx + 1) % frames.length;
+            idx++;
             label();
-            if (idx === 0) { stop(); still(); return; }
+            // One pass, ending on the last pose: no run back to the opening
+            // frame and no second lap.
+            if (idx >= frames.length - 1) { stop(); still(); return; }
             hold = setTimeout(runPair, wait);
           };
           raf = requestAnimationFrame(step);
