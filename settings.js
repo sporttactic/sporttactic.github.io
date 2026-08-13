@@ -994,6 +994,10 @@ function memberModeDialog(onDone) {
     <input type="checkbox" data-mod="${r}" ${p.hide.indexOf(r) < 0 || r === 'settings' ? 'checked' : ''} ${r === 'settings' ? 'disabled' : ''}>
     <span>${UI.esc(T('nav.' + r))}${r === 'settings' ? ` <span class="tag">${T('settings.menuAlways')}</span>` : ''}</span>
   </label>`;
+  const coachRow = r => `<label class="check-row menu-row">
+    <input type="checkbox" data-cmod="${r}" ${p.coachHide.indexOf(r) < 0 || r === 'settings' ? 'checked' : ''} ${r === 'settings' ? 'disabled' : ''}>
+    <span>${UI.esc(T('nav.' + r))}${r === 'settings' ? ` <span class="tag">${T('settings.menuAlways')}</span>` : ''}</span>
+  </label>`;
 
   UI.modal({
     title: T('mem.title'),
@@ -1009,6 +1013,13 @@ function memberModeDialog(onDone) {
       <div class="row" style="flex:0;margin-top:10px;flex-wrap:wrap">
         <button type="button" class="btn sm" id="mm_all">${UI.esc(T('settings.shareAll'))}</button>
         <button type="button" class="btn sm" id="mm_min">${UI.esc(T('mem.modMin'))}</button>
+      </div>
+      <h4 class="pol-h">${UI.esc(T('mem.coachModules'))}</h4>
+      <p class="hint">${UI.esc(T('mem.coachModulesHint'))}</p>
+      <div class="menu-picker">${App.ROUTES.map(coachRow).join('')}</div>
+      <div class="row" style="flex:0;margin-top:10px;flex-wrap:wrap">
+        <button type="button" class="btn sm" id="mc_all">${UI.esc(T('settings.shareAll'))}</button>
+        <button type="button" class="btn sm" id="mc_min">${UI.esc(T('mem.coachModMin'))}</button>
       </div>
       <p class="hint">${UI.esc(T('mem.note'))}</p>`,
     footer: `<button class="btn ghost" data-close2>${T('common.cancel')}</button>
@@ -1026,12 +1037,21 @@ function memberModeDialog(onDone) {
       m.querySelector('#mm_all').onclick = () => pick(App.ROUTES);
       // What a player actually opens the app for.
       m.querySelector('#mm_min').onclick = () => pick(['dashboard', 'training', 'matches', 'statistics']);
+      const cboxes = [...m.querySelectorAll('[data-cmod]')];
+      const cpick = keep => cboxes.forEach(b => {
+        if (b.disabled) return;
+        b.checked = keep.indexOf(b.dataset.cmod) >= 0;
+      });
+      m.querySelector('#mc_all').onclick = () => cpick(App.ROUTES);
+      // What a squad coach runs their own training week on.
+      m.querySelector('#mc_min').onclick = () => cpick(['dashboard', 'teams', 'matches', 'training', 'tactics']);
       m.querySelector('[data-close2]').onclick = close;
       m.querySelector('[data-go]').onclick = async () => {
         await Access.saveProfile({
           readOnly: read.checked,
           training: train.checked,
-          hide: boxes.filter(b => !b.checked).map(b => b.dataset.mod)
+          hide: boxes.filter(b => !b.checked).map(b => b.dataset.mod),
+          coachHide: cboxes.filter(b => !b.checked).map(b => b.dataset.cmod)
         });
         close();
         UI.toast(T('mem.saved'), 'success');
@@ -1046,6 +1066,47 @@ function memberModeDialog(onDone) {
 // The team code says WHICH database; one of these words says what the device
 // that pasted it is allowed to be. Only the hashes travel in the shared file,
 // so this screen is the one place the readable words exist.
+
+// The areas one squad's coach gets, set where that squad's word is handed out.
+// Saved with the shared file, so it reaches their device on the next sync.
+function coachAreasDialog(teamId, name, onDone) {
+  const hide = Access.coachHidden(teamId);
+  const areaRow = r => `<label class="check-row menu-row">
+    <input type="checkbox" data-cmod="${r}" ${hide.indexOf(r) < 0 || r === 'settings' ? 'checked' : ''} ${r === 'settings' ? 'disabled' : ''}>
+    <span>${UI.esc(T('nav.' + r))}${r === 'settings' ? ` <span class="tag">${T('settings.menuAlways')}</span>` : ''}</span>
+  </label>`;
+  UI.modal({
+    title: T('mem.coachAreasTitle').replace('{0}', name || ''),
+    width: 560,
+    body: `<p>${UI.esc(T('mem.coachAreasIntro'))}</p>
+      <div class="menu-picker">${App.ROUTES.map(areaRow).join('')}</div>
+      <div class="row" style="flex:0;margin-top:10px;flex-wrap:wrap">
+        <button type="button" class="btn sm" id="ca_all">${UI.esc(T('settings.shareAll'))}</button>
+        <button type="button" class="btn sm" id="ca_min">${UI.esc(T('mem.coachModMin'))}</button>
+      </div>
+      <p class="hint">${UI.esc(T('mem.note'))}</p>`,
+    footer: `<button class="btn ghost" data-close2>${T('common.cancel')}</button>
+      <button class="btn primary" data-go>${T('common.save')}</button>`,
+    onOpen: (m, close) => {
+      const boxes = [...m.querySelectorAll('[data-cmod]')];
+      const pick = keep => boxes.forEach(b => {
+        if (b.disabled) return;
+        b.checked = keep.indexOf(b.dataset.cmod) >= 0;
+      });
+      m.querySelector('#ca_all').onclick = () => pick(App.ROUTES);
+      m.querySelector('#ca_min').onclick = () => pick(['dashboard', 'teams', 'matches', 'training', 'tactics']);
+      m.querySelector('[data-close2]').onclick = close;
+      m.querySelector('[data-go]').onclick = async () => {
+        await Access.saveCoachAreas(teamId, boxes.filter(b => !b.checked).map(b => b.dataset.cmod));
+        close();
+        UI.toast(T('mem.saved'), 'success');
+        App.applyMemberMode();
+        if (onDone) onDone();
+      };
+    }
+  });
+}
+
 async function roleKeysDialog(onDone) {
   // A squad added since the words were made gets one of its own first.
   try { await Access.ensureTeamKeys(); } catch (e) { /* not this device's set */ }
@@ -1080,6 +1141,8 @@ async function roleKeysDialog(onDone) {
     <span class="pol-name">${UI.esc(r.label)}
       <span class="share-n">${UI.esc(r.sub)}</span></span>
     <span class="pol-opts">
+      ${r.role === 'Coach' && r.teamId && Access.can('cloud.setup')
+      ? `<button type="button" class="btn sm" data-areas="${UI.esc(r.teamId)}">${UI.esc(T('mem.coachAreas'))}</button>` : ''}
       ${words[r.key] && !stale
       ? `<code class="pol-sample rk-word">${UI.esc(words[r.key])}</code>
          <button type="button" class="btn sm" data-copy="${UI.esc(r.key)}">${UI.esc(T('cloud.copy'))}</button>
@@ -1109,6 +1172,12 @@ async function roleKeysDialog(onDone) {
       ${Access.can('cloud.setup') ? `<button class="btn ${made && !stale ? '' : 'primary'}" data-new>${UI.esc(T(made ? 'rk.again' : 'rk.make'))}</button>` : ''}`,
     onOpen: (m, close) => {
       m.querySelector('[data-close2]').onclick = close;
+      // Which squad a coach gets is the word you hand out; this is which areas
+      // of it they get once they are in.
+      m.querySelectorAll('[data-areas]').forEach(b => b.onclick = () => {
+        const r = rows.find(x => x.teamId === b.dataset.areas && x.role === 'Coach');
+        coachAreasDialog(b.dataset.areas, r ? r.label : '');
+      });
       m.querySelectorAll('[data-copy]').forEach(b => b.onclick = async () => {
         const w = words[b.dataset.copy] || '';
         try { await navigator.clipboard.writeText(w); } catch (e) { /* no clipboard permission */ }

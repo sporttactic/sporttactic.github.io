@@ -124,21 +124,44 @@ const Access = (() => {
   function profile() {
     const rec = Store.find('settings', PROFILE_KEY);
     const v = (rec && rec.value && typeof rec.value === 'object') ? rec.value : {};
+    const routes = a => Array.isArray(a) ? a.filter(r => typeof r === 'string') : [];
     return {
       // Read-only is what a player copy IS. The coach can open it up, but a club
       // that never opened this screen still hands out a look-only copy.
       readOnly: v.readOnly !== false,
       training: v.training !== false,
-      hide: Array.isArray(v.hide) ? v.hide.filter(r => typeof r === 'string') : []
+      hide: routes(v.hide),
+      // The areas kept off a coach who was let in with one squad's word. Empty
+      // by default: a coach is a coach, just on that squad only.
+      coachHide: routes(v.coachHide),
+      // Per squad, when the club wants one squad's coach to have a different
+      // set from the rest. A squad missing here follows coachHide.
+      coachTeams: (v.coachTeams && typeof v.coachTeams === 'object') ? v.coachTeams : {}
     };
   }
   async function saveProfile(p) {
+    const cur = profile();
     await Store.setSetting(PROFILE_KEY, {
       readOnly: !!(p && p.readOnly),
       training: !(p && p.training === false),
-      hide: Array.isArray(p && p.hide) ? p.hide.slice() : []
+      hide: Array.isArray(p && p.hide) ? p.hide.slice() : [],
+      coachHide: Array.isArray(p && p.coachHide) ? p.coachHide.slice() : [],
+      coachTeams: (p && p.coachTeams && typeof p.coachTeams === 'object') ? p.coachTeams : cur.coachTeams
     });
     return profile();
+  }
+  // What a coach holding this squad's word may not open.
+  function coachHidden(teamId) {
+    const p = profile();
+    const own = teamId ? p.coachTeams[teamId] : null;
+    return Array.isArray(own) ? own.filter(r => typeof r === 'string') : p.coachHide;
+  }
+  async function saveCoachAreas(teamId, hide) {
+    if (!teamId) return profile();
+    const p = profile();
+    const map = Object.assign({}, p.coachTeams);
+    map[teamId] = Array.isArray(hide) ? hide.slice() : [];
+    return saveProfile(Object.assign({}, p, { coachTeams: map }));
   }
   // A copy that follows a file somebody else owns.
   function following() {
@@ -151,7 +174,17 @@ const Access = (() => {
     return following() && tier() === 'player';
   }
   function readMode() { return memberCopy() && (profile().readOnly || unclaimed()); }
-  function hiddenModules() { return memberCopy() ? NEVER_ROUTES.concat(profile().hide) : []; }
+  // Staff let in with ONE squad's word: a full coach on that squad, but only in
+  // the areas the club ticked for them.
+  function squadCoach() {
+    if (!following() || tier() === 'player') return false;
+    const c = claim();
+    return !!(c && c.teamId);
+  }
+  function hiddenModules() {
+    if (memberCopy()) return NEVER_ROUTES.concat(profile().hide);
+    return squadCoach() ? coachHidden(teamLock()) : [];
+  }
   // Everything the app counts — totals, ratings, reports — is derived from the
   // scouting events, so hiding them at the source empties all of it at once.
   const hidesEvents = () => memberCopy();
@@ -383,8 +416,9 @@ const Access = (() => {
     members, findMember, saveMembers, grant, revoke, markInvited, suggestions, normEmail,
     OPEN_ROUTES, MEMBER_STAMP, STAFF_ROLES,
     profile, saveProfile, memberCopy, readMode, hiddenModules, moduleOpen, blocks, hidesEvents,
+    coachHidden, saveCoachAreas,
     roleKeys, roleKeyWords, newRoleKeys, ensureTeamKeys, claimRole, claimedRole, claimedTeam: teamLock,
-    unclaimed, wordsStale, adoptRoleKeys, teamLock
+    unclaimed, wordsStale, adoptRoleKeys, teamLock, squadCoach
   };
 })();
 window.Access = Access;
