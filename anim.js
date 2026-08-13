@@ -8,6 +8,17 @@ window.ANIM = (function () {
     cone: '#ff7a1e', disc: '#ffd400', pole: '#e11d48', hurdle: '#34c759', ladder: 'rgba(255,255,255,.9)',
     ring: '#0a84ff', minigoal: 'rgba(255,255,255,.95)', dummy: '#94a3b8', medicineball: '#7a2b1e', target: '#e11d48'
   };
+  // Same timings as the tactical board, so a clip plays here exactly as it does
+  // there — including the coach's own speed choice.
+  const FRAME_MS = 1200;   // one pose to the next: tween, then hold
+  const TWEEN_MS = 400;
+  const FLOW_MS = 90;      // a sampled point of a recorded drag — runs straight into the next
+  const SPEEDS = { slow: 0.5, medium: 1, fast: 2 };
+  function speedMult() {
+    let s = 'medium';
+    try { s = localStorage.getItem('tacticsPlayerSpeed') || 'medium'; } catch (e) { }
+    return SPEEDS[s] || 1;
+  }
 
   // Every saved animation of one sport, newest board order preserved.
   function systems(sportId) {
@@ -257,36 +268,49 @@ window.ANIM = (function () {
         const paint = renderer(canvas, rec);
         const playBtn = m.querySelector('[data-play]');
         const lbl = m.querySelector('[data-lbl]');
-        let idx = 0, outer = null, inner = null;
+        let idx = 0, raf = null, hold = null, playing = false;
 
         const label = () => { lbl.textContent = T('tactics.frame') + ' ' + (idx + 1) + ' / ' + frames.length; };
         const still = () => { paint(frames[idx], null, 0); label(); };
         function stop() {
-          if (inner) { clearInterval(inner); inner = null; }
-          if (outer) { clearInterval(outer); outer = null; }
+          playing = false;
+          if (raf) { cancelAnimationFrame(raf); raf = null; }
+          if (hold) { clearTimeout(hold); hold = null; }
           playBtn.textContent = '▶ ' + T('tactics.play');
         }
+        // Each pair of frames carries its own timing: a pose is held so the coach
+        // can talk over it, while a point sampled from a recorded drag runs
+        // straight into the next one — that is what makes a curve stay a curve
+        // instead of crawling through hundreds of held poses.
+        function runPair() {
+          const a = frames[idx], b = frames[(idx + 1) % frames.length];
+          const mult = speedMult();
+          const flow = !!b.flow;
+          const tw = Math.max(40, (flow ? FLOW_MS : TWEEN_MS) / mult);
+          const wait = flow ? 0 : (FRAME_MS - TWEEN_MS) / mult;
+          const t0 = performance.now();
+          const step = now => {
+            raf = null;
+            if (!playing) return;
+            if (!canvas.isConnected) { stop(); return; }   // dialog replaced or torn down
+            const t = Math.min(1, Math.max(0, (now - t0) / tw));
+            paint(a, b, t);
+            if (t < 1) { raf = requestAnimationFrame(step); return; }
+            idx = (idx + 1) % frames.length;
+            label();
+            if (idx === 0) { stop(); still(); return; }
+            hold = setTimeout(runPair, wait);
+          };
+          raf = requestAnimationFrame(step);
+        }
         function play() {
-          if (outer) { stop(); idx = 0; still(); return; }
+          if (playing) { stop(); idx = 0; still(); return; }
           if (frames.length < 2) return;
           playBtn.textContent = '■ ' + T('tactics.stop');
+          playing = true;
           idx = 0;
-          const run = () => {
-            const a = frames[idx], b = frames[(idx + 1) % frames.length];
-            let t = 0;
-            inner = setInterval(() => {
-              t += 0.1;
-              paint(a, b, Math.min(1, t));
-              if (t >= 1) {
-                clearInterval(inner); inner = null;
-                idx = (idx + 1) % frames.length;
-                label();
-                if (idx === 0) { stop(); still(); }
-              }
-            }, 40);
-          };
-          run();
-          outer = setInterval(() => { if (!inner && outer) run(); }, 1200);
+          label();
+          runPair();
         }
         playBtn.onclick = play;
         m.querySelector('[data-prev]').onclick = () => { stop(); idx = (idx - 1 + frames.length) % frames.length; still(); };
