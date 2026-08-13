@@ -119,9 +119,10 @@ const TeamCloud = (() => {
   }
 
   // ---- The document ------------------------------------------------------
-  // What actually leaves the device: only the blocks the policy shares, with
-  // the personal fields treated the way the coach chose. The policy travels
-  // with it so the other side knows what it may change.
+  // What actually leaves the device: only the blocks the policy shares, only
+  // the squads it names, with the personal fields treated the way the coach
+  // chose. The policy travels with it so the other side knows what it may
+  // change.
   async function snapshot() {
     const pol = Privacy.policy();
     const data = {};
@@ -129,8 +130,9 @@ const TeamCloud = (() => {
       if (!Privacy.mayShare(pol, s)) continue;
       data[s] = await Store.pack(Privacy.redactRows(s, await DB.getAll(s), pol));
     }
+    const out = Privacy.keepTeams(data, pol);
     const shared = (await DB.getAll('settings')).filter(r => SHARED_SETTINGS.indexOf(r.id) >= 0);
-    if (shared.length) data.settings = await Store.pack(shared);
+    if (shared.length) out.settings = await Store.pack(shared);
     return {
       app: 'SportTactic', kind: 'team-db', format: FORMAT,
       updatedAt: Date.now(),
@@ -138,7 +140,7 @@ const TeamCloud = (() => {
       by: Access.role(),
       policy: pol,
       protected: Privacy.protectedPaths(pol),
-      data
+      data: out
     };
   }
   function isTeamDb(doc) {
@@ -277,6 +279,9 @@ const TeamCloud = (() => {
           doc.data.settings = remote.data.settings;
         }
       }
+      // A squad the file leaves out must not walk back in through the merge, so
+      // what is already up there is filtered by the same rule as what we send.
+      doc.data = Privacy.keepTeams(doc.data, doc.policy);
       await writeRemote(doc);
       await setCfg({ lastPushAt: Date.now(), lastErr: '' });
       return true;

@@ -1021,6 +1021,14 @@ function memberModeDialog(onDone) {
     <input type="checkbox" data-cmod="${r}" ${coachHide.indexOf(r) < 0 || r === 'settings' ? 'checked' : ''} ${r === 'settings' ? 'disabled' : ''}>
     <span>${UI.esc(T('nav.' + r))}${r === 'settings' ? ` <span class="tag">${T('settings.menuAlways')}</span>` : ''}</span>
   </label>`;
+  // Every squad the club has, not only the ones of the sport on screen: a
+  // squad left out here is left out of the file whichever sport it belongs to.
+  const squads = Store.all('teams');
+  const picked = Privacy.sharedTeams();
+  const squadRow = t => `<label class="check-row menu-row">
+    <input type="checkbox" data-team="${UI.esc(t.id)}" ${!picked || picked.has(t.id) ? 'checked' : ''}>
+    <span>${UI.esc(t.name || t.id)}</span>
+  </label>`;
 
   UI.modal({
     title: T('mem.title'),
@@ -1044,6 +1052,12 @@ function memberModeDialog(onDone) {
         <button type="button" class="btn sm" id="mc_all">${UI.esc(T('settings.shareAll'))}</button>
         <button type="button" class="btn sm" id="mc_min">${UI.esc(T('mem.coachModMin'))}</button>
       </div>
+      <h4 class="pol-h">${UI.esc(T('mem.teams'))}</h4>
+      <p class="hint">${UI.esc(T('mem.teamsHint'))}</p>
+      ${squads.length ? `<div class="menu-picker">${squads.map(squadRow).join('')}</div>
+      <div class="row" style="flex:0;margin-top:10px;flex-wrap:wrap">
+        <button type="button" class="btn sm" id="mm_tall">${UI.esc(T('mem.teamsAll'))}</button>
+      </div>` : `<p class="hint">${UI.esc(T('mem.teamsNone'))}</p>`}
       <p class="hint">${UI.esc(T('mem.note'))}</p>`,
     footer: `<button class="btn ghost" data-close2>${T('common.cancel')}</button>
       <button class="btn primary" data-go>${T('common.save')}</button>`,
@@ -1068,6 +1082,9 @@ function memberModeDialog(onDone) {
       m.querySelector('#mc_all').onclick = () => cpick(App.ROUTES);
       // What a squad coach runs their own training week on.
       m.querySelector('#mc_min').onclick = () => cpick(['dashboard', 'teams', 'matches', 'planner', 'training', 'tactics']);
+      const tboxes = [...m.querySelectorAll('[data-team]')];
+      const tall = m.querySelector('#mm_tall');
+      if (tall) tall.onclick = () => tboxes.forEach(b => { b.checked = true; });
       m.querySelector('[data-close2]').onclick = close;
       m.querySelector('[data-go]').onclick = async () => {
         try {
@@ -1077,6 +1094,13 @@ function memberModeDialog(onDone) {
             hide: boxes.filter(b => !b.checked).map(b => b.dataset.mod),
             coachHide: cboxes.filter(b => !b.checked).map(b => b.dataset.cmod)
           });
+          if (tboxes.length) {
+            const on = tboxes.filter(b => b.checked).map(b => b.dataset.team);
+            const pol = Privacy.policy();
+            // All of them ticked means every squad, including one added later.
+            pol.teams = on.length === tboxes.length ? null : on;
+            await Privacy.save(pol);
+          }
           // A module left on their menu is worth nothing without the data behind it.
           const opened = await shareForAreas(
             boxes.filter(b => b.checked).map(b => b.dataset.mod)

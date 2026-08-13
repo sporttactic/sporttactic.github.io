@@ -5,6 +5,7 @@
    apart on purpose:
 
      · is this block of data shared at all
+     · which squads go into the file — a club can run several and share one
      · may a code holder change it, and may they delete from it
      · and for the handful of genuinely personal fields — phone, e-mail, injury
        notes — does the real value travel, a blurred one, a made-up one, ****,
@@ -46,7 +47,8 @@ const Privacy = (() => {
   const MASK = '\u2022\u2022\u2022\u2022\u2022\u2022';
 
   function defaults() {
-    const p = { groups: {}, fields: {} };
+    // teams: null is every squad, including one added tomorrow.
+    const p = { groups: {}, fields: {}, teams: null };
     GROUPS.forEach(g => { p.groups[g.id] = Object.assign({}, g.def); });
     FIELDS.forEach(f => { p.fields[f.id] = f.def; });
     return p;
@@ -55,6 +57,7 @@ const Privacy = (() => {
     const rec = Store.find('settings', KEY);
     const saved = (rec && rec.value && typeof rec.value === 'object') ? rec.value : {};
     const p = defaults();
+    if (Array.isArray(saved.teams)) p.teams = saved.teams.filter(t => typeof t === 'string');
     GROUPS.forEach(g => {
       const s = saved.groups && saved.groups[g.id];
       if (s && typeof s === 'object') {
@@ -81,6 +84,36 @@ const Privacy = (() => {
   const mayShare = (pol, store) => !!rights(pol, store).share;
   const mayEdit = (pol, store) => !!(rights(pol, store).share && rights(pol, store).edit);
   const mayDelete = (pol, store) => !!(mayEdit(pol, store) && rights(pol, store).del);
+
+  // ---- Which squads travel -----------------------------------------------
+  // A club running several squads does not always want all of them in one
+  // shared file. Nothing is deleted by leaving a squad out: it simply stays on
+  // this device, so the coach keeps the whole club and the file holds a part.
+  function sharedTeams(pol) {
+    const t = (pol || policy()).teams;
+    return Array.isArray(t) ? new Set(t) : null;
+  }
+  const teamShared = (ids, teamId) => !ids || !teamId || ids.has(teamId);
+  // Every store at once, because the events carry no squad of their own and
+  // have to follow the matches that survived. A row with no teamId belongs to
+  // the club rather than to a squad, so it travels either way.
+  function keepTeams(data, pol) {
+    const ids = sharedTeams(pol);
+    if (!ids || !data || typeof data !== 'object') return data;
+    const out = {};
+    Object.keys(data).forEach(s => {
+      const rows = data[s];
+      if (!Array.isArray(rows)) { out[s] = rows; return; }
+      out[s] = s === 'teams'
+        ? rows.filter(r => r && ids.has(r.id))
+        : rows.filter(r => r && teamShared(ids, r.teamId));
+    });
+    if (Array.isArray(out.matches) && Array.isArray(out.events)) {
+      const kept = new Set(out.matches.map(r => r.id));
+      out.events = out.events.filter(r => kept.has(r.matchId));
+    }
+    return out;
+  }
 
   // ---- Redaction ---------------------------------------------------------
   // Made-up values are derived from the record id, so the same player gets the
@@ -152,12 +185,16 @@ const Privacy = (() => {
   // How many records and how many personal fields the current policy lets out.
   function summary(pol) {
     const p = pol || policy();
-    let records = 0, blocks = 0;
+    const data = {};
+    let blocks = 0;
     GROUPS.forEach(g => {
       if (!p.groups[g.id].share) return;
       blocks++;
-      g.stores.forEach(s => { records += (Store.all(s) || []).length; });
+      g.stores.forEach(s => { data[s] = Store.all(s) || []; });
     });
+    const kept = keepTeams(data, p);
+    let records = 0;
+    Object.keys(kept).forEach(s => { records += kept[s].length; });
     const hidden = FIELDS.filter(f => (p.fields[f.id] || f.def) !== 'keep').length;
     return { records, blocks, totalBlocks: GROUPS.length, hidden, totalFields: FIELDS.length };
   }
@@ -166,6 +203,7 @@ const Privacy = (() => {
     GROUPS, FIELDS, MODES, MASK, SECRET_FIELDS,
     defaults, policy, save, reset,
     groupOf, rights, mayShare, mayEdit, mayDelete,
+    sharedTeams, keepTeams,
     redactRows, redactValue, protectedPaths, summary, seedOf
   };
 })();
