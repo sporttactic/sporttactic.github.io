@@ -11,8 +11,6 @@ Views.planner = function (mount) {
   // An event belongs to the squad that made it, and can be handed to others: a
   // club meeting or a tournament is rarely one squad's business alone.
   const sharedWith = e => Array.isArray(e.teams) ? e.teams : [];
-  const seenHere = (e, tid) => !tid || !e.teamId || e.teamId === tid
-    || !!e.allTeams || sharedWith(e).indexOf(tid) >= 0;
   const shareTag = e => e.allTeams
     ? `<span class="tag blue">${UI.esc(T('planner.sharedAll'))}</span>`
     : (sharedWith(e).length ? `<span class="tag blue">${UI.esc(T('planner.shared').replace('{0}', sharedWith(e).length))}</span>` : '');
@@ -21,11 +19,22 @@ Views.planner = function (mount) {
     const tid = Store.activeTeamId();
     return list.filter(e => !tid || !e.teamId || e.teamId === tid);
   };
-  // A copy that follows a club file gets its events from a sync, not from here.
-  const following = () => {
+  // Is a shared team database linked at all, and does this copy follow one that
+  // belongs to somebody else?
+  const linked = () => {
     const c = (window.TeamCloud && TeamCloud.cfg) ? TeamCloud.cfg() : null;
     return !!(c && c.fileId);
   };
+  const joined = () => {
+    const c = (window.TeamCloud && TeamCloud.cfg) ? TeamCloud.cfg() : null;
+    return !!(c && c.fileId && !c.owner);
+  };
+  // On a joined copy the club has already decided twice what may be seen: the
+  // sharing policy put these events in the file, and the module list left the
+  // planner on the menu. Filtering them again by squad only hides the calendar
+  // from a coach who has no team picker to go looking with.
+  const seenHere = (e, tid) => joined() || !tid || !e.teamId || e.teamId === tid
+    || !!e.allTeams || sharedWith(e).indexOf(tid) >= 0;
 
   function render() {
     const tid = Store.activeTeamId();
@@ -66,7 +75,7 @@ Views.planner = function (mount) {
         </table>
       </div>
       ${elsewhere > 0 ? `<p class="hint">${UI.esc(T('planner.otherSquad').replace('{0}', elsewhere))}</p>` : ''}
-      ${!Store.all('planner').length && following() ? `<p class="hint">${UI.esc(T('planner.noneShared'))}</p>
+      ${!Store.all('planner').length && linked() ? `<p class="hint">${UI.esc(T('planner.noneShared'))}</p>
         <div class="row" style="flex:0;margin-top:8px"><button class="btn" id="planSync" data-member-ok>${UI.esc(T('cloud.syncNow'))}</button></div>` : ''}`;
 
     mount.innerHTML = `
