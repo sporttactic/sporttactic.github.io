@@ -981,6 +981,27 @@ function sharePolicyDialog(onDone) {
 // may SEE, this decides what they may DO with it and which modules are even on
 // their menu. It is saved with the shared file, so it reaches every device that
 // joined without anybody having to be told anything.
+
+// Which shared blocks a module has to have before it shows anything. The
+// player's own health and max tests are not here: that block stays off until
+// the coach turns it on deliberately.
+const AREA_BLOCKS = {
+  dashboard: ['squad', 'matches'], teams: ['squad'], matches: ['matches'],
+  planner: ['planner'], scouting: ['squad', 'matches'], statistics: ['squad', 'matches'],
+  tactics: ['tactics'], video: ['video'], training: ['training'],
+  opponents: ['opponents'], reports: ['reports']
+};
+// Leaving a module on a joined copy's menu is a promise that there is something
+// in it, so the blocks it reads are shared with it.
+async function shareForAreas(routes) {
+  const p = Privacy.policy();
+  let opened = 0;
+  (routes || []).forEach(r => (AREA_BLOCKS[r] || []).forEach(g => {
+    if (p.groups[g] && !p.groups[g].share) { p.groups[g].share = true; opened++; }
+  }));
+  if (opened) await Privacy.save(p);
+  return opened;
+}
 function memberLabel() {
   const p = Access.profile();
   if (!p.readOnly) return T('mem.stateFull');
@@ -1038,7 +1059,7 @@ function memberModeDialog(onDone) {
       });
       m.querySelector('#mm_all').onclick = () => pick(App.ROUTES);
       // What a player actually opens the app for.
-      m.querySelector('#mm_min').onclick = () => pick(['dashboard', 'training', 'matches', 'statistics']);
+      m.querySelector('#mm_min').onclick = () => pick(['dashboard', 'training', 'matches', 'planner', 'statistics']);
       const cboxes = [...m.querySelectorAll('[data-cmod]')];
       const cpick = keep => cboxes.forEach(b => {
         if (b.disabled) return;
@@ -1046,7 +1067,7 @@ function memberModeDialog(onDone) {
       });
       m.querySelector('#mc_all').onclick = () => cpick(App.ROUTES);
       // What a squad coach runs their own training week on.
-      m.querySelector('#mc_min').onclick = () => cpick(['dashboard', 'teams', 'matches', 'training', 'tactics']);
+      m.querySelector('#mc_min').onclick = () => cpick(['dashboard', 'teams', 'matches', 'planner', 'training', 'tactics']);
       m.querySelector('[data-close2]').onclick = close;
       m.querySelector('[data-go]').onclick = async () => {
         try {
@@ -1057,7 +1078,7 @@ function memberModeDialog(onDone) {
             coachHide: cboxes.filter(b => !b.checked).map(b => b.dataset.cmod)
           });
           // A module left on their menu is worth nothing without the data behind it.
-          const opened = await Privacy.shareForRoutes(
+          const opened = await shareForAreas(
             boxes.filter(b => b.checked).map(b => b.dataset.mod)
               .concat(cboxes.filter(b => b.checked).map(b => b.dataset.cmod)));
           close();
@@ -1105,12 +1126,12 @@ function coachAreasDialog(teamId, name, onDone) {
         b.checked = keep.indexOf(b.dataset.cmod) >= 0;
       });
       m.querySelector('#ca_all').onclick = () => pick(App.ROUTES);
-      m.querySelector('#ca_min').onclick = () => pick(['dashboard', 'teams', 'matches', 'training', 'tactics']);
+      m.querySelector('#ca_min').onclick = () => pick(['dashboard', 'teams', 'matches', 'planner', 'training', 'tactics']);
       m.querySelector('[data-close2]').onclick = close;
       m.querySelector('[data-go]').onclick = async () => {
         try {
           await Access.saveCoachAreas(teamId, boxes.filter(b => !b.checked).map(b => b.dataset.cmod));
-          const opened = await Privacy.shareForRoutes(boxes.filter(b => b.checked).map(b => b.dataset.cmod));
+          const opened = await shareForAreas(boxes.filter(b => b.checked).map(b => b.dataset.cmod));
           close();
           UI.toast(T('mem.saved'), 'success');
           if (opened) UI.toast(T('pol.opened').replace('{0}', opened), 'success');
@@ -1387,6 +1408,9 @@ async function attachJoinedSquad() {
   const teams = Store.teams();
   const pick = teams.length === 1 ? teams[0] : null;
   if (pick) Store.setActiveTeam(pick.id);
+  // Whatever this device had trimmed off its own sidebar is not a decision about
+  // the club it just joined — the club's own lists are what count now.
+  App.setMenuHidden([]);
   // Now that the squad is settled, anything that came down without one joins it
   // rather than staying on the device and on no screen.
   await Store.adoptUnscoped();

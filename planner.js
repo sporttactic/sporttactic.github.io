@@ -12,6 +12,8 @@ Views.planner = function (mount) {
     const events = Store.scoped('planner').slice().sort((a, b) => (b.date || 0) - (a.date || 0));
     const now = Date.now();
     const upcoming = events.filter(e => (e.date || 0) >= now - 864e5 && e.status !== 'cancelled').length;
+    // An empty list with events on the device means they belong to another squad.
+    const elsewhere = Store.all('planner').length - events.length;
 
     const table = `
       <div class="table-wrap">
@@ -41,7 +43,8 @@ Views.planner = function (mount) {
               </tr>`).join('') || `<tr><td colspan="8" class="empty">${T('common.noData')}</td></tr>`}
           </tbody>
         </table>
-      </div>`;
+      </div>
+      ${elsewhere > 0 ? `<p class="hint">${UI.esc(T('planner.otherSquad').replace('{0}', elsewhere))}</p>` : ''}`;
 
     mount.innerHTML = `
       <div class="page-head">
