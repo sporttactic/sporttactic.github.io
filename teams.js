@@ -22,10 +22,20 @@ Views.teams = function (mount) {
     return `<span class="pos-badge role-${b.role}" style="--pos:${b.color}" title="${UI.esc(tt('pos', pos || ''))}">${UI.esc(b.ab)}</span>`;
   };
 
+  // A copy that follows somebody else's shared team database filed nothing
+  // itself, so an animation that arrived with the club file and carries no squad
+  // of its own still belongs to the squad the team code opened.
+  function followsSharedDb() {
+    const c = (window.TeamCloud && TeamCloud.cfg) ? TeamCloud.cfg() : null;
+    return !!(c && c.fileId && !c.owner);
+  }
   // Animations a coach filed under this squad on the tactical board.
   function teamAnimations(team) {
     if (!team) return [];
-    return Store.all('tactics').filter(t => t.kind === 'system' && t.teamId === team.id && (t.sport || 'handball') === sportId);
+    const shared = followsSharedDb();
+    return Store.all('tactics').filter(t => t.kind === 'system'
+      && (t.sport || 'handball') === sportId
+      && (t.teamId === team.id || (shared && !t.teamId)));
   }
 
   function render() {
@@ -259,7 +269,7 @@ Views.teams = function (mount) {
       <span class="bm-acts">
         <button class="btn sm" data-anim-show="${UI.esc(a.id)}">▶ ${T('teams.animShowNow')}</button>
         <button class="btn sm primary" data-anim-open="${UI.esc(a.id)}">${T('common.go')}</button>
-        <button class="btn sm danger" data-anim-rm="${UI.esc(a.id)}">${T('teams.animRemove')}</button>
+        ${team && a.teamId === team.id ? `<button class="btn sm danger" data-anim-rm="${UI.esc(a.id)}">${T('teams.animRemove')}</button>` : ''}
       </span>
     </div>`;
     UI.modal({

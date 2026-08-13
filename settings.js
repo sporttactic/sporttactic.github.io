@@ -1269,10 +1269,39 @@ function cloudJoinDialog(onDone) {
           const rb = document.getElementById('roleBadge');
           if (rb) rb.textContent = T('role.' + Access.role());
           App.applyMemberMode();
-          if (onDone) onDone();
+          joinSquadDialog(onDone);
         } catch (e) {
           state.textContent = T('cloud.joinFailed') + ' ' + String((e && e.message) || e).slice(0, 180);
         } finally { go.disabled = false; }
+      };
+    }
+  });
+}
+
+// A club can run several squads, and everything a coach sees is scoped to one
+// of them — so the copy that just joined asks which one it is working with
+// instead of landing on whichever squad happens to come first.
+function joinSquadDialog(onDone) {
+  const teams = Store.teams();
+  const done = () => { App.populateTeamPicker(); if (onDone) onDone(); };
+  if (!teams.length) return done();
+  if (teams.length === 1) { Store.setActiveTeam(teams[0].id); return done(); }
+  UI.modal({
+    title: T('cloud.squadTitle'),
+    width: 480,
+    body: `<p>${UI.esc(T('cloud.squadIntro'))}</p>
+      <label class="field"><span>${UI.esc(T('teams.activeTeam'))}</span>
+        <select id="jn_team">${teams.map(t => `<option value="${UI.esc(t.id)}">${UI.esc(t.name)}</option>`).join('')}</select></label>
+      <p class="hint">${UI.esc(T('cloud.squadHint'))}</p>`,
+    footer: `<button class="btn primary" data-go>${UI.esc(T('common.save'))}</button>`,
+    onOpen: (m, close) => {
+      m.querySelector('[data-go]').onclick = () => {
+        const id = m.querySelector('#jn_team').value;
+        const team = teams.find(t => t.id === id);
+        Store.setActiveTeam(id);
+        close();
+        UI.toast(T('cloud.squadAttached').replace('{0}', (team && team.name) || ''), 'success');
+        done();
       };
     }
   });

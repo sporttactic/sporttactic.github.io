@@ -14,10 +14,13 @@ window.ANIM = (function () {
   const TWEEN_MS = 400;
   const FLOW_MS = 90;      // a sampled point of a recorded drag — runs straight into the next
   const SPEEDS = { slow: 0.5, medium: 1, fast: 2 };
-  function speedMult() {
-    let s = 'medium';
-    try { s = localStorage.getItem('tacticsPlayerSpeed') || 'medium'; } catch (e) { }
-    return SPEEDS[s] || 1;
+  function savedSpeed() {
+    let s = '';
+    try { s = localStorage.getItem('tacticsPlayerSpeed') || ''; } catch (e) { }
+    return SPEEDS[s] ? s : 'medium';
+  }
+  function saveSpeed(s) {
+    try { localStorage.setItem('tacticsPlayerSpeed', s); } catch (e) { }
   }
 
   // Every saved animation of one sport, newest board order preserved.
@@ -260,6 +263,11 @@ window.ANIM = (function () {
             <button type="button" class="btn sm primary" data-play>▶ ${T('tactics.play')}</button>
             <button type="button" class="btn sm" data-next>▶</button>
             <span class="hint" data-lbl></span>
+            <div class="tool-group" title="${UI.esc(T('tactics.pspeedHint'))}">
+              <button type="button" class="btn sm" data-spd="slow">${T('tactics.speedSlow')}</button>
+              <button type="button" class="btn sm" data-spd="medium">${T('tactics.speedMedium')}</button>
+              <button type="button" class="btn sm" data-spd="fast">${T('tactics.speedFast')}</button>
+            </div>
           </div>
         </div>`,
       footer: `<button class="btn ghost" data-close2>${T('common.close')}</button>`,
@@ -268,7 +276,7 @@ window.ANIM = (function () {
         const paint = renderer(canvas, rec);
         const playBtn = m.querySelector('[data-play]');
         const lbl = m.querySelector('[data-lbl]');
-        let idx = 0, raf = null, hold = null, playing = false;
+        let idx = 0, raf = null, hold = null, playing = false, speed = savedSpeed();
 
         const label = () => { lbl.textContent = T('tactics.frame') + ' ' + (idx + 1) + ' / ' + frames.length; };
         const still = () => { paint(frames[idx], null, 0); label(); };
@@ -284,7 +292,7 @@ window.ANIM = (function () {
         // instead of crawling through hundreds of held poses.
         function runPair() {
           const a = frames[idx], b = frames[(idx + 1) % frames.length];
-          const mult = speedMult();
+          const mult = SPEEDS[speed] || 1;
           const flow = !!b.flow;
           const tw = Math.max(40, (flow ? FLOW_MS : TWEEN_MS) / mult);
           const wait = flow ? 0 : (FRAME_MS - TWEEN_MS) / mult;
@@ -313,6 +321,12 @@ window.ANIM = (function () {
           runPair();
         }
         playBtn.onclick = play;
+        const spdBtns = m.querySelectorAll('[data-spd]');
+        const markSpeed = () => spdBtns.forEach(b => b.classList.toggle('primary', b.dataset.spd === speed));
+        // A new speed takes hold from the next pair of frames, so the step on
+        // screen plays out instead of jumping.
+        spdBtns.forEach(b => b.onclick = () => { speed = b.dataset.spd; saveSpeed(speed); markSpeed(); });
+        markSpeed();
         m.querySelector('[data-prev]').onclick = () => { stop(); idx = (idx - 1 + frames.length) % frames.length; still(); };
         m.querySelector('[data-next]').onclick = () => { stop(); idx = (idx + 1) % frames.length; still(); };
         m.querySelector('[data-close2]').onclick = () => { stop(); close(); };
