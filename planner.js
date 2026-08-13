@@ -8,8 +8,19 @@ const PLANNER_STATUS = ['planned', 'confirmed', 'done', 'cancelled'];
 Views.planner = function (mount) {
   const team = Store.activeTeam();
 
+  // An event belongs to the squad that made it, and can be handed to others: a
+  // club meeting or a tournament is rarely one squad's business alone.
+  const sharedWith = e => Array.isArray(e.teams) ? e.teams : [];
+  const seenHere = (e, tid) => !tid || !e.teamId || e.teamId === tid
+    || !!e.allTeams || sharedWith(e).indexOf(tid) >= 0;
+  const shareTag = e => e.allTeams
+    ? `<span class="tag blue">${UI.esc(T('planner.sharedAll'))}</span>`
+    : (sharedWith(e).length ? `<span class="tag blue">${UI.esc(T('planner.shared').replace('{0}', sharedWith(e).length))}</span>` : '');
+
   function render() {
-    const events = Store.scoped('planner').slice().sort((a, b) => (b.date || 0) - (a.date || 0));
+    const tid = Store.activeTeamId();
+    const events = Store.all('planner').filter(e => seenHere(e, tid))
+      .slice().sort((a, b) => (b.date || 0) - (a.date || 0));
     const now = Date.now();
     const upcoming = events.filter(e => (e.date || 0) >= now - 864e5 && e.status !== 'cancelled').length;
     // An empty list with events on the device means they belong to another squad.
@@ -28,7 +39,7 @@ Views.planner = function (mount) {
               <tr>
                 <td>${UI.fmtDate(e.date)}</td>
                 <td>${UI.esc(e.time || '—')}</td>
-                <td><strong>${UI.esc(e.title || '')}</strong>${e.notes ? `<div class="plan-note">${UI.esc(e.notes)}</div>` : ''}</td>
+                <td><strong>${UI.esc(e.title || '')}</strong> ${shareTag(e)}${e.notes ? `<div class="plan-note">${UI.esc(e.notes)}</div>` : ''}</td>
                 <td><span class="tag blue">${UI.esc(T('plannerKind.' + e.kind) !== 'plannerKind.' + e.kind ? T('plannerKind.' + e.kind) : e.kind)}</span></td>
                 <td>${UI.esc(e.place || '—')}</td>
                 <td>${UI.esc(e.who || '—')}</td>
@@ -71,9 +82,12 @@ Views.planner = function (mount) {
 
   // Empties this squad's calendar only — another team's plan is untouched.
   function clearAll(events) {
-    if (!events.length) return;
-    UI.confirm(T('planner.clearAsk').replace('{0}', events.length), async () => {
-      for (const e of events) await Store.remove('planner', e.id);
+    const tid = Store.activeTeamId();
+    // What another squad shared with us is theirs to delete, not ours.
+    const mine = events.filter(e => !tid || !e.teamId || e.teamId === tid);
+    if (!mine.length) return;
+    UI.confirm(T('planner.clearAsk').replace('{0}', mine.length), async () => {
+      for (const e of mine) await Store.remove('planner', e.id);
       UI.toast(T('planner.cleared'));
       render();
     });
@@ -95,6 +109,8 @@ Views.planner = function (mount) {
           ${line(T('planner.place'), ev.place)}
           ${line(T('planner.who'), ev.who)}
           ${team ? line(T('teams.activeTeam'), team.name) : ''}
+          ${line(T('planner.access'), ev.allTeams ? T('planner.allTeams')
+        : (sharedWith(ev).map(id => (Store.find('teams', id) || {}).name).filter(Boolean).join(', ') || T('planner.accessNone')))}
         </table>
         <h4 style="margin:14px 0 6px">${T('planner.notes')}</h4>
         <p class="plan-note" style="white-space:pre-wrap">${UI.esc(ev.notes || T('common.noData'))}</p>`,
@@ -109,6 +125,9 @@ Views.planner = function (mount) {
   function form(ev = {}) {
     const d = ev.date ? new Date(ev.date) : new Date();
     const dstr = d.toISOString().slice(0, 10);
+    const owner = ev.teamId || Store.activeTeamId();
+    const others = Store.teams().filter(t => t.id !== owner);
+    const on = sharedWith(ev);
     UI.modal({
       title: ev.id ? T('planner.editEvent') : T('planner.newEvent'),
       width: 620,
@@ -125,11 +144,24 @@ Views.planner = function (mount) {
           <label class="field"><span>${T('planner.status')}</span><select id="p_status">${PLANNER_STATUS.map(s => `<option value="${s}" ${s === (ev.status || 'planned') ? 'selected' : ''}>${T('plannerStatus.' + s)}</option>`).join('')}</select></label>
         </div>
         <label class="field"><span>${T('planner.notes')}</span><textarea id="p_notes" rows="3" maxlength="600">${UI.esc(ev.notes || '')}</textarea></label>
+        <h4 style="margin:14px 0 4px">${UI.esc(T('planner.access'))}</h4>
+        <p class="hint" style="margin:0">${UI.esc(T('planner.accessHint'))}</p>
+        <label class="check-row"><input type="checkbox" id="p_all" ${ev.allTeams ? 'checked' : ''}>
+          <span>${UI.esc(T('planner.allTeams'))}</span></label>
+        ${others.length ? `<div class="menu-picker">${others.map(t => `<label class="check-row menu-row">
+          <input type="checkbox" data-team="${UI.esc(t.id)}" ${on.indexOf(t.id) >= 0 ? 'checked' : ''}>
+          <span>${UI.esc(t.name)}</span></label>`).join('')}</div>` : `<p class="hint">${UI.esc(T('planner.accessOnly'))}</p>`}
         <p class="hint">${T('planner.formHint')}</p>`,
       footer: `<button class="btn ghost" data-close2>${T('common.cancel')}</button><button class="btn primary" data-save>${T('common.save')}</button>`,
       onOpen: (m, close) => {
         const q = s => m.querySelector(s);
         q('#p_title').focus();
+        const teamBoxes = [...m.querySelectorAll('[data-team]')];
+        const all = q('#p_all');
+        // Picking the whole club makes the squad-by-squad list meaningless.
+        const syncAll = () => teamBoxes.forEach(b => { b.disabled = all.checked; });
+        all.onchange = syncAll;
+        syncAll();
         q('[data-close2]').onclick = close;
         q('[data-save]').onclick = async () => {
           const title = q('#p_title').value.trim();
@@ -142,7 +174,9 @@ Views.planner = function (mount) {
             place: q('#p_place').value.trim().slice(0, 80),
             who: q('#p_who').value.trim().slice(0, 80),
             status: q('#p_status').value,
-            notes: q('#p_notes').value.trim().slice(0, 600)
+            notes: q('#p_notes').value.trim().slice(0, 600),
+            allTeams: all.checked,
+            teams: all.checked ? [] : teamBoxes.filter(b => b.checked).map(b => b.dataset.team)
           }));
           close();
           UI.toast(T('common.save'), 'success');
