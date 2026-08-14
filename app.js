@@ -342,6 +342,30 @@ const App = (() => {
     } finally { b.classList.remove('busy'); }
   }
 
+  // The Google session lasts about an hour and never survives a restart, so the
+  // way back has to be one tap from wherever the coach is standing.
+  async function refreshSignInBtn() {
+    const b = document.getElementById('topSignIn');
+    if (!b) return;
+    const on = !!(window.Drive && !Drive.isConnected() && await Drive.isConfigured());
+    b.classList.toggle('hidden', !on);
+    if (!on) return;
+    b.title = T('cloud.signIn');
+    b.setAttribute('aria-label', T('cloud.signIn'));
+  }
+  async function runSignIn() {
+    const b = document.getElementById('topSignIn');
+    if (!b || b.classList.contains('busy')) return;
+    b.classList.add('busy');
+    try {
+      await Drive.connect();
+      UI.toast(T('cloud.connected'), 'success');
+      if (TeamCloud.cfg().fileId) { TeamCloud.start(); await TeamCloud.sync().catch(() => { /* reported by its own toast */ }); }
+    } catch (e) {
+      UI.toast(T('cloud.connectFailed') + ' — ' + String((e && e.message) || e).slice(0, 160), 'error');
+    } finally { b.classList.remove('busy'); refreshSignInBtn(); refreshSyncBtn(); }
+  }
+
   async function boot() {
     await Store.loadAll();
     await Store.purgeDemoPlayers();
@@ -372,12 +396,21 @@ const App = (() => {
     refreshSyncBtn();
     const sb = document.getElementById('topSync');
     if (sb) sb.onclick = runTopSync;
+    refreshSignInBtn();
+    const gb = document.getElementById('topSignIn');
+    if (gb) gb.onclick = runSignIn;
+    // Nothing fires when a token quietly expires, so the state is re-read on the
+    // moments a coach is most likely to look at it, and once a minute besides.
+    window.addEventListener('focus', refreshSignInBtn);
+    document.addEventListener('visibilitychange', refreshSignInBtn);
+    setInterval(refreshSignInBtn, 60000);
     // The profile arrives with the shared file, so a sync can turn read mode on
     // (or off) while the app is open.
     if (window.TeamCloud) TeamCloud.onChange(info => {
       refreshLockBadge();
       applyMemberMode();
       refreshSyncBtn();
+      refreshSignInBtn();
       if (info && info.revoked) { UI.toast(T('cloud.revoked'), 'error'); render(); return; }
       // Rows landed from a background pull, so the view on screen was built
       // from the old ones. Redraw it — but not over a dialog, and not over the

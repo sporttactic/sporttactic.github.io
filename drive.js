@@ -35,7 +35,12 @@ const Drive = (() => {
   }
   async function setClientId(id) {
     const raw = String(id == null ? '' : id).trim();
-    await Store.setSetting('driveClientId', raw ? (normClientId(raw) || raw) : '');
+    const next = raw ? (normClientId(raw) || raw) : '';
+    // Re-saving the same id must not drop the token: the setup wizard writes it
+    // again on the way out, and doing so used to undo the sign-in the test had
+    // just made, leaving the card saying Google was not connected.
+    if (next === await getClientId()) return;
+    await Store.setSetting('driveClientId', next);
     token = null; tokenClient = null;
   }
   async function isConfigured() { return !!(await getClientId()); }
