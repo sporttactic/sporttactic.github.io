@@ -252,6 +252,7 @@ Views.tactics = function (mount, params) {
             </div>
             <h4 class="anim-head">${T('tactics.savedAnims')} <span class="tag" id="animCount">0</span></h4>
             <select class="anim-select" id="animList" size="6" aria-label="${T('tactics.savedAnims')}"></select>
+            <p class="hint hidden" id="animHidden"></p>
             <div class="tool-group anim-acts">
               <button class="btn sm" id="animLoad" disabled>↺ ${T('tactics.animLoad')}</button>
               <button class="btn sm" id="animEdit" disabled title="${T('tactics.animEdit')}">✎</button>
@@ -1824,6 +1825,14 @@ Views.tactics = function (mount, params) {
     // player's phone where this list is the whole point of the screen.
     else if (mine.length) box.selectedIndex = 0;
     else box.selectedIndex = -1;
+    // An animation that arrived but is filed under another sport or another
+    // squad simply vanishes here, and a player is left thinking it never came.
+    const hid = mount.querySelector('#animHidden');
+    if (hid) {
+      const off = Store.all('tactics').filter(t => t.kind === 'system').length - mine.length;
+      hid.classList.toggle('hidden', off <= 0);
+      hid.textContent = off > 0 ? T('tactics.animsHidden').replace('{0}', off).replace('{1}', SPORTS.name(sportId, I18N.getLang())) : '';
+    }
     syncAnimActions();
     fitCanvas();
   }
