@@ -402,7 +402,7 @@ const TeamCloud = (() => {
       await setCfg({ lastPullAt: Date.now(), lastErr: '' });
       return got;
     } catch (e) {
-      await setCfg({ lastErr: e && e.oversize ? 'oversize' : msg(e) });
+      await setCfg({ lastErr: e && e.oversize ? (cfg().owner ? 'oversize-owner' : 'oversize') : msg(e) });
       throw e;
     } finally { busy = false; emit({ pulled: got }); }
   }
@@ -461,7 +461,7 @@ const TeamCloud = (() => {
       await setCfg({ lastPushAt: Date.now(), lastErr: '' });
       return true;
     } catch (e) {
-      await setCfg({ lastErr: e && e.oversize ? 'oversize' : msg(e) });
+      await setCfg({ lastErr: e && e.oversize ? (cfg().owner ? 'oversize-owner' : 'oversize') : msg(e) });
       throw e;
     } finally { busy = false; emit(); }
   }

@@ -134,7 +134,11 @@ const Drive = (() => {
   // multi-gigabyte body into memory until the tab dies. So every read of a
   // shared file is bounded three ways: a deadline, a declared-size check and a
   // hard cap while the body streams in.
-  const MAX_JSON_BYTES = 48 * 1024 * 1024;   // a very large club still fits
+  // Matches the backup import limit. Files written before the split existed are
+  // one lump, and refusing to open them leaves the club no way back in: opening
+  // one is what lets the next push rewrite it in pieces. Still a hard stop, so a
+  // hostile file cannot read a phone out of memory.
+  const MAX_JSON_BYTES = 96 * 1024 * 1024;
   const FETCH_TIMEOUT = 45000;
 
   async function fetchJson(url, opts) {

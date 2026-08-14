@@ -455,6 +455,13 @@ function fmtWhen(ts) {
   return UI.fmtDate(ts) + ' ' + new Date(ts).toTimeString().slice(0, 5);
 }
 
+// Sync stores a token rather than a sentence, so the wording follows the
+// language the coach is reading in right now.
+const CLOUD_ERR = { 'oversize': 'cloud.oversize', 'oversize-owner': 'cloud.oversizeOwner' };
+function cloudErrText(err) {
+  return CLOUD_ERR[err] ? T(CLOUD_ERR[err]) : err;
+}
+
 // The three or four sentences that get somebody with a phone and no patience
 // from nothing to a working shared database.
 function cloudGuide() {
@@ -1715,7 +1722,7 @@ Views.settings = async function (mount) {
         <span class="tag">${UI.esc(T('cloud.lastPull'))}: ${UI.esc(fmtWhen(c.lastPullAt))}</span>
         <span class="tag">${UI.esc(T('cloud.lastPush'))}: ${UI.esc(fmtWhen(c.lastPushAt))}</span>
         ${c.lastSkipped ? `<span class="tag warn">${UI.esc(T('cloud.skipped').replace('{0}', c.lastSkipped))}</span>` : ''}
-        ${c.lastErr ? `<span class="tag warn">${UI.esc(c.lastErr === 'oversize' ? T('cloud.oversize') : c.lastErr)}</span>` : ''}
+        ${c.lastErr ? `<span class="tag warn">${UI.esc(cloudErrText(c.lastErr))}</span>` : ''}
       </div>
       <div class="row" style="flex:0;margin-top:10px;flex-wrap:wrap">
         <button class="btn primary" id="clSync">${T('cloud.syncNow')}</button>
