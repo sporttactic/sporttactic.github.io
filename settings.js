@@ -1324,11 +1324,26 @@ function cloudCreateDialog(onDone) {
         <input id="cl_name" maxlength="60" value="${UI.esc((team && team.name) || TeamCloud.cfg().teamName || '')}"></label>
       <label class="check-row"><input type="checkbox" id="cl_link" checked>
         <span>${UI.esc(T('cloud.linkShare'))}<span class="share-n">${UI.esc(T('cloud.linkShareHint'))}</span></span></label>
+      <label class="field"><span>${UI.esc(T('cloud.apiKey'))}</span>
+        <input id="cl_key" spellcheck="false" autocomplete="off" placeholder="AIza…" value="${UI.esc(TeamCloud.cfg().apiKey || '')}">
+        <span class="hint">${UI.esc(T('cloud.apiKeyWhy'))}</span></label>
+      <p class="hint warn" id="cl_keywarn"></p>
       <p class="hint" id="cl_state"></p>`,
     footer: `<button class="btn ghost" data-close2>${T('common.cancel')}</button>
       <button class="btn primary" data-go>${UI.esc(T('cloud.createBtn'))}</button>`,
     onOpen: (m, close) => {
       const state = m.querySelector('#cl_state');
+      const key = m.querySelector('#cl_key');
+      const warn = m.querySelector('#cl_keywarn');
+      // Said before the file exists, not after the code has been handed out:
+      // without a key every player needs a Google account of their own.
+      const keyState = () => {
+        const v = key.value.trim();
+        warn.textContent = !v ? T('cloud.apiKeyMissing')
+          : API_KEY_RE.test(v) ? '' : T('cloud.apiKeyBad');
+      };
+      key.oninput = keyState;
+      keyState();
       m.querySelector('[data-close2]').onclick = close;
       const go = m.querySelector('[data-go]');
       go.onclick = async () => {
@@ -1340,7 +1355,8 @@ function cloudCreateDialog(onDone) {
           // first byte. A browser without WebCrypto simply gets no passwords.
           try { if (!Access.roleKeys()) await Access.newRoleKeys(); } catch (e) { /* no crypto here */ }
           await TeamCloud.createShared(m.querySelector('#cl_name').value.trim(), {
-            linkShare: m.querySelector('#cl_link').checked
+            linkShare: m.querySelector('#cl_link').checked,
+            apiKey: key.value.trim()
           });
           close();
           UI.toast(T('cloud.created'), 'success');
@@ -1448,26 +1464,42 @@ function cloudJoinDialog(onDone) {
           offerDriveConnect();
         } catch (e) {
           state.textContent = T('cloud.joinFailed') + ' ' + String((e && e.message) || e).slice(0, 180);
+          // A club that shares with named people instead of a link hands out a
+          // code that cannot open anything on its own. The sign-in is offered
+          // here, on the attempt that just failed, and the code tried again.
+          if (!TeamCloud.canSyncQuietly() && window.Drive && !Drive.isConnected() && await Drive.isConfigured()) {
+            UI.confirm(T('cloud.connectNeeded'), async () => {
+              try {
+                await Drive.connect();
+                UI.toast(T('cloud.connected'), 'success');
+                go.click();
+              } catch (err) {
+                UI.toast(T('cloud.connectFailed') + ' — ' + String((err && err.message) || err).slice(0, 160), 'error');
+              }
+            });
+          }
         } finally { go.disabled = false; }
       };
     }
   });
 }
 
-// Reading the club file needs no Google account — the code carries its own key.
-// Sending anything back does, so whoever the word let in as staff, or as a
-// player the club takes work from, is offered the sign-in once, here, while the
-// click that opened the popup is still theirs.
+// A code that carries the club's read key opens the file with no Google account
+// at all. Without that key the file can only be opened by signing in, so a
+// player who is never asked simply never gets the coach's work. Both cases are
+// offered here, while the click that opened the popup is still theirs.
 async function offerDriveConnect() {
   if (!window.Drive || Drive.isConnected()) return;
   if (!(await Drive.isConfigured())) return;
-  const mayWrite = Access.can('cloud.write') || (window.TeamCloud && TeamCloud.mayContribute());
-  if (!mayWrite) return;
-  UI.confirm(T('cloud.connectAsk'), async () => {
+  const needed = !TeamCloud.canSyncQuietly();
+  UI.confirm(T(needed ? 'cloud.connectNeeded' : 'cloud.connectAsk'), async () => {
     try {
       await Drive.connect();
       UI.toast(T('cloud.connected'), 'success');
-      if (window.TeamCloud) TeamCloud.start();
+      // Signing in is what made the file readable, so fetch it now rather than
+      // leaving the player on an empty screen until the timer comes round.
+      TeamCloud.start();
+      if (needed) await TeamCloud.pull('merge');
     } catch (e) {
       UI.toast(T('cloud.connectFailed') + ' — ' + String((e && e.message) || e).slice(0, 160), 'error');
     }

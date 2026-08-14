@@ -400,13 +400,52 @@ const TeamCloud = (() => {
   }
 
   // ---- The four things a coach can actually press ------------------------
+  // A copy let in with one squad's word has nothing left to follow once the club
+  // deletes that squad. Both the file's squad list and the password set have to
+  // say it is gone: a club that simply stopped sharing a squad for a while must
+  // not cost anybody their link.
+  function revoked(doc) {
+    if (cfg().owner || !window.Access || !Access.teamLock) return false;
+    const lock = Access.teamLock();
+    if (!lock) return false;
+    const teams = doc && doc.data && doc.data.teams;
+    if (!Array.isArray(teams) || !teams.length) return false;
+    if (teams.some(t => t && t.id === lock)) return false;
+    const keys = Access.roleKeys();
+    if (!keys || !keys.teams) return false;
+    return !keys.teams[lock];
+  }
+  // Let go of the club completely: no file, no timer, no Google session, and
+  // none of the club's data left behind on a device that is no longer in it.
+  async function cutOff() {
+    stop();
+    forget();
+    try { if (window.Drive && Drive.disconnect) Drive.disconnect(); } catch (e) { /* already gone */ }
+    for (const s of DB.STORES) { if (s !== 'settings') await DB.clear(s); }
+    // Written straight to the database: these are the rows the member lock is
+    // built to refuse, and the lock is exactly what is being torn down here.
+    const now = Date.now();
+    await DB.bulkPut('settings', [
+      { id: 'roleClaim', value: null, updatedAt: now },
+      { id: 'roleKeys', value: null, updatedAt: now },
+      { id: 'memberProfile', value: null, updatedAt: now },
+      { id: 'sharePolicy', value: null, updatedAt: now },
+      { id: 'accessMembers', value: null, updatedAt: now },
+      { id: 'role', value: 'Coach', updatedAt: now }
+    ]);
+    await Store.loadAll();
+    emit({ revoked: true });
+  }
   async function pull(mode) {
     if (busy) throw new Error('busy');
     busy = true;
     let got = 0;
     try {
-      got = await applyDoc(await readRemote(), mode);
+      const doc = await readRemote();
+      got = await applyDoc(doc, mode);
       await setCfg({ lastPullAt: Date.now(), lastErr: '' });
+      // Nothing of it was kept, so it is not an update anybody wants announced.
+      if (revoked(doc)) { busy = false; await cutOff(); got = 0; return 0; }
       return got;
     } catch (e) {
       await setCfg({ lastErr: e && e.oversize ? (cfg().owner ? 'oversize-owner' : 'oversize') : msg(e) });
@@ -486,6 +525,8 @@ const TeamCloud = (() => {
       return 0;
     }
     const mayWrite = Access.can('cloud.write') || mayContribute();
+    // The pull may have cut this device loose from the club altogether.
+    if (!cfg().fileId) return got;
     // Skipping the upload without a word is how a coach ends up certain they
     // shared something that never left the device.
     if (mayWrite && !signedIn()) { await setCfg({ lastErr: 'signin' }); throw new Error('signin'); }

@@ -180,6 +180,9 @@ Views.teams = function (mount) {
           for (const r of Store.all(s).filter(x => x.teamId === team.id)) await Store.remove(s, r.id);
         }
         await Store.remove('teams', team.id);
+        // The squad's own passwords die with it, so the copies let in on them
+        // stop following the club at their next sync.
+        try { if (Access.pruneTeamKeys) await Access.pruneTeamKeys(); } catch (e) { /* no passwords in use */ }
         Store.setActiveTeam('');
         App.populateTeamPicker();
         UI.toast(T('common.delete'), 'success'); render();

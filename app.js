@@ -324,6 +324,11 @@ const App = (() => {
   async function runTopSync() {
     const b = document.getElementById('topSync');
     if (!b || b.classList.contains('busy')) return;
+    // No read key and no live Google session means the file cannot be opened at
+    // all. A sign-in needs this very click, so it is offered before the attempt
+    // rather than after it fails.
+    if (!TeamCloud.canSyncQuietly() && window.Drive && !Drive.isConnected()
+      && typeof offerDriveConnect === 'function') { offerDriveConnect(); return; }
     b.classList.add('busy');
     try {
       // Anything that came down is announced by the onChange handler above, so
@@ -373,6 +378,7 @@ const App = (() => {
       refreshLockBadge();
       applyMemberMode();
       refreshSyncBtn();
+      if (info && info.revoked) { UI.toast(T('cloud.revoked'), 'error'); render(); return; }
       // Rows landed from a background pull, so the view on screen was built
       // from the old ones. Redraw it — but not over a dialog, and not over the
       // modules that hold live work a redraw would throw away: a running match

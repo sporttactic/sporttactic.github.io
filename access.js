@@ -353,6 +353,27 @@ const Access = (() => {
     await Store.setSetting(WORDS_KEY, { set: rec.set, words });
     return added;
   }
+  // A squad the club deleted must not keep letting devices in. Its words go with
+  // it, and the copies holding them find out on their next sync.
+  async function pruneTeamKeys() {
+    const rec = roleKeys();
+    const wrec = Store.find('settings', WORDS_KEY);
+    if (!rec || !rec.teams) return 0;
+    const live = new Set(Store.all('teams').map(t => t.id));
+    const teams = Object.assign({}, rec.teams);
+    const words = (wrec && wrec.value && wrec.value.words) ? Object.assign({}, wrec.value.words) : null;
+    let gone = 0;
+    Object.keys(teams).forEach(id => {
+      if (live.has(id)) return;
+      delete teams[id];
+      if (words) { delete words['team:' + id]; delete words['coach:' + id]; }
+      gone++;
+    });
+    if (!gone) return 0;
+    await Store.setSetting(KEYS_KEY, Object.assign({}, rec, { teams }));
+    if (words) await Store.setSetting(WORDS_KEY, { set: rec.set, words });
+    return gone;
+  }
   // Returns the role the word unlocked, or '' when it matches none of them.
   // It is also what demotes: once a club uses passwords, a copy that cannot show
   // a valid one is a player, and unclaimed() then holds it read-only.
@@ -439,7 +460,7 @@ const Access = (() => {
     OPEN_ROUTES, MEMBER_STAMP, STAFF_ROLES,
     profile, saveProfile, memberCopy, following, readMode, hiddenModules, moduleOpen, blocks, hidesEvents,
     coachHidden, saveCoachAreas,
-    roleKeys, roleKeyWords, newRoleKeys, ensureTeamKeys, claimRole, claimedRole, claimedTeam: teamLock,
+    roleKeys, roleKeyWords, newRoleKeys, ensureTeamKeys, pruneTeamKeys, claimRole, claimedRole, claimedTeam: teamLock,
     unclaimed, wordsStale, adoptRoleKeys, teamLock, squadCoach
   };
 })();
