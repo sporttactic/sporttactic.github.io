@@ -177,6 +177,7 @@ Views.tactics = function (mount, params) {
       <div class="tool-panel card">
         <div id="normalTools">
           <div class="tool-group" id="tools"></div>
+          <button type="button" class="btn sm fold-btn" id="toolsFold" aria-expanded="false"></button>
           <p class="hint" id="toolHint">${T('tactics.hint')}</p>
           <div id="propsWrap" class="hidden">
             <h3 style="margin-top:12px">${T('tactics.props')}</h3>
@@ -236,6 +237,7 @@ Views.tactics = function (mount, params) {
           <div class="board-side" id="boardSide">
             <div class="frames-anim" id="framesAnim">
             <h3>${T('tactics.frames')}</h3>
+            <button type="button" class="btn sm fold-btn" id="framesFold" aria-expanded="false"></button>
             <div class="tool-group">
               <button class="btn sm" id="playAnim">▶ ${T('tactics.play')}</button>
               <button class="btn sm primary" id="recFramesBtn">● ${T('tactics.recFrames')}</button>
@@ -1664,6 +1666,25 @@ Views.tactics = function (mount, params) {
   };
   mount.querySelector('#playAnim').onclick = () => { stopPlayAll(); playAnimation(); };
   mount.querySelector('#clearShapes').onclick = () => { pushHistory(); frame().shapes = []; draw(); if (autoRec) captureAutoFrame(); };
+
+  // On a phone the two side columns are ~900px of settings each, which buries
+  // the court under everything a coach touches once a season. The drawing tools
+  // and the frame strip stay out; the rest folds away behind one button.
+  function fold(btnId, boxSel) {
+    const btn = mount.querySelector('#' + btnId);
+    const box = mount.querySelector(boxSel);
+    if (!btn || !box) return;
+    const paint = () => {
+      const open = !box.classList.contains('folded');
+      btn.textContent = (open ? '▴ ' : '▾ ') + T(open ? 'tactics.foldLess' : 'tactics.foldMore');
+      btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    };
+    box.classList.add('folded');
+    btn.onclick = () => { box.classList.toggle('folded'); paint(); };
+    paint();
+  }
+  fold('toolsFold', '.tool-panel');
+  fold('framesFold', '.frames-anim');
   const addNameBtn = mount.querySelector('#addNameBtn');
   if (addNameBtn) addNameBtn.onclick = () => { if (naming) commitName(); else startNaming(); };
   const cancelNameBtn = mount.querySelector('#cancelNameBtn');

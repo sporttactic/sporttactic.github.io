@@ -2,11 +2,80 @@
 <html lang="en" data-theme="dark">
 <head>
   <meta charset="UTF-8" />
-  <!-- Legacy-device gate. MUST stay the first script and MUST stay ES3: an old
-       iPad (iOS 3-6) or a 2010-era Chrome throws a SyntaxError on the ES6 in the
-       splash builder and the app modules, so the check has to run and redirect
-       before any of that is parsed. ?full=1 forces the modern app, ?classic=1
-       forces the legacy one. -->
+  <!-- Content-Security-Policy. There is no server to set headers on (the app is
+       static hosting), so it lives here and must therefore be the first thing in
+       <head> — a meta policy only governs what is loaded after it.
+
+       script-src and connect-src are the two that actually stop an attacker:
+       the first means injected markup cannot pull code from anywhere but the
+       hosts below, the second means nothing on this page can post the squad,
+       the Drive key or a team code to an address that is not listed. Keep both
+       tight. img/media/frame stay broader on purpose: a coach may paste a link
+       to any club's video or image, and neither can execute code.
+
+       'unsafe-inline' is required by the inline blocks this file still needs
+       (the legacy gate must run before any external file is fetched). Moving
+       them out and switching to hashes is the next step if a build is ever
+       added — until then treat the escaping in ui.js as the XSS defence and
+       this policy as the second line.
+
+       WHEN ADDING A THIRD-PARTY SERVICE, ADD ITS ORIGIN HERE OR IT WILL BE
+       BLOCKED AT RUNTIME WITH NOTHING BUT A CONSOLE MESSAGE.
+         googletagmanager / google-analytics  analytics
+         paypalobjects / paypal               donate button
+         accounts.google.com                  Google sign-in (GIS)
+         googleapis.com                       Drive API (shared team database)
+         drive.google.com                     Drive file preview
+         api.openai.com                       AI assistant
+         api.emailjs.com                      sending mail
+         cdn.jsdelivr.net                      PeerJS (messenger)
+         *.peerjs.com                          PeerJS signalling
+         youtube / ytimg                      video embeds and thumbnails -->
+  <meta http-equiv="Content-Security-Policy" content="
+    default-src 'self';
+    script-src 'self' 'unsafe-inline' https://www.googletagmanager.com https://www.paypalobjects.com https://*.paypal.com https://accounts.google.com https://apis.google.com https://cdn.jsdelivr.net;
+    connect-src 'self' blob: data: https://www.googleapis.com https://accounts.google.com https://api.openai.com https://api.emailjs.com https://www.youtube.com https://*.google-analytics.com https://*.analytics.google.com https://*.googletagmanager.com https://*.paypal.com https://*.peerjs.com wss://*.peerjs.com;
+    img-src 'self' data: blob: https:;
+    media-src 'self' data: blob: https:;
+    frame-src 'self' https:;
+    style-src 'self' 'unsafe-inline';
+    font-src 'self' data:;
+    worker-src 'self';
+    manifest-src 'self';
+    object-src 'none';
+    base-uri 'self';
+    form-action 'self' https://*.paypal.com;
+    upgrade-insecure-requests" />
+  <!-- Keep the address out of third-party logs: it has carried a team code. -->
+  <meta name="referrer" content="strict-origin-when-cross-origin" />
+  <!-- Transport and framing guard. Runs before the legacy gate and before any
+       app code, so a framed or plain-http copy is dealt with before it can be
+       shown anything or handed anything. ES3 only — the oldest devices reach
+       this line too. -->
+  <script>
+    (function () {
+      var l = window.location;
+      var dev = l.hostname === 'localhost' || l.hostname === '127.0.0.1' || l.protocol === 'file:';
+      // frame-ancestors cannot be set from a meta CSP, so clickjacking is
+      // handled here. If the parent refuses to be navigated, blanking our own
+      // frame is always allowed and leaves the attacker with nothing.
+      if (window.top !== window.self && !dev) {
+        try { window.top.location.replace(l.href); }
+        catch (e) { l.replace('about:blank'); }
+      }
+      // Plain http would put the team code, the Drive API key and the whole
+      // squad on the wire in the clear, and let anyone in the middle rewrite
+      // the app itself.
+      if (l.protocol === 'http:' && !dev) {
+        l.replace('https://' + l.host + l.pathname + l.search + l.hash);
+      }
+    })();
+  </script>
+  <!-- Legacy-device gate. MUST stay ahead of every ES6 file and MUST stay ES3:
+       an old iPad (iOS 3-6) or a 2010-era Chrome throws a SyntaxError on the ES6
+       in the splash builder and the app modules, so the check has to run and
+       redirect before any of that is parsed. Only the ES3 transport guard above
+       may come first. ?full=1 forces the modern app, ?classic=1 the legacy one. -->
   <script>
     (function () {
       var q = String(window.location.search || '');
@@ -20,7 +89,14 @@
           window.matchMedia && document.querySelector && document.documentElement.classList &&
           window.localStorage && Array.prototype.forEach && window.CustomEvent);
         // ES6 syntax support — an old parser cannot even read the app files.
-        if (ok) { try { new Function('var f=(a)=>`${a}`;class C{};let x=0;'); } catch (e) { ok = false; } }
+        // Only a real SyntaxError means "old parser". The Content-Security-Policy
+        // above forbids eval, so a modern browser throws an EvalError here
+        // instead — treating that as legacy would send everyone to the classic
+        // page.
+        if (ok) {
+          try { new Function('var f=(a)=>`${a}`;class C{};let x=0;'); }
+          catch (e) { if (e instanceof SyntaxError) ok = false; }
+        }
         // Original iPad / early iOS report these; they pass some checks above.
         var ua = navigator.userAgent || '';
         if (ok && /\((iPad|iPhone|iPod)[^)]*OS ([1-9]|10)_/.test(ua)) ok = false;
@@ -44,7 +120,7 @@ Show focus areas
 Produce video clips.">
   <link rel="apple-touch-icon" href="logo.svg?v=6" />
   <title>SportTactic</title>
-  <link rel="stylesheet" href="styles.css?v=107" />
+  <link rel="stylesheet" href="styles.css?v=109" />
   <link rel="manifest" href="manifest.webmanifest?v=2" />
   <style>
     /* Boot splash — inline so it paints before styles.css / the app scripts run.
@@ -219,38 +295,38 @@ Produce video clips.">
   <!-- Loads first: beforeinstallprompt can fire the moment the page is
        interactive, and an event that is not caught cannot be asked for again. -->
   <script src="install.js?v=1"></script>
-  <script src="i18n.js?v=133"></script>
+  <script src="i18n.js?v=137"></script>
   <script src="sports.js?v=20"></script>
   <script src="playbook.js?v=12"></script>
-  <script src="store.js?v=32"></script>
+  <script src="store.js?v=33"></script>
   <script src="ui.js?v=31"></script>
   <script src="access.js?v=14"></script>
   <script src="privacy.js?v=2"></script>
-  <script src="drive.js?v=2"></script>
-  <script src="cloud.js?v=7"></script>
+  <script src="drive.js?v=3"></script>
+  <script src="cloud.js?v=9"></script>
   <script src="mail.js?v=12"></script>
   <script src="ai.js?v=12"></script>
-  <script src="dashboard.js?v=17"></script>
-  <script src="teams.js?v=41"></script>
-  <script src="matches.js?v=23"></script>
-  <script src="planner.js?v=9"></script>
-  <script src="scouting.js?v=30"></script>
-  <script src="statistics.js?v=26"></script>
+  <script src="dashboard.js?v=18"></script>
+  <script src="teams.js?v=42"></script>
+  <script src="matches.js?v=25"></script>
+  <script src="planner.js?v=10"></script>
+  <script src="scouting.js?v=31"></script>
+  <script src="statistics.js?v=27"></script>
   <script src="chess.js?v=13"></script>
   <script src="bridge.js?v=13"></script>
   <script src="poker.js?v=13"></script>
   <script src="backgammon.js?v=13"></script>
-  <script src="tactics.js?v=72"></script>
+  <script src="tactics.js?v=73"></script>
   <script src="anim.js?v=5"></script>
-  <script src="video.js?v=24"></script>
-  <script src="training.js?v=37"></script>
-  <script src="exercises.js?v=32"></script>
+  <script src="video.js?v=25"></script>
+  <script src="training.js?v=38"></script>
+  <script src="exercises.js?v=33"></script>
   <script src="opponents.js?v=20"></script>
-  <script src="reports.js?v=22"></script>
-  <script src="settings.js?v=78"></script>
+  <script src="reports.js?v=23"></script>
+  <script src="settings.js?v=80"></script>
   <script src="backup.js?v=2"></script>
   <script src="messenger.js?v=18"></script>
-  <script src="app.js?v=33"></script>
+  <script src="app.js?v=34"></script>
   <!-- Phone layout. Loads last: it reads the sidebar App has already wired and
        drives App.go, so both must exist before it runs. -->
   <script src="mobile.js?v=3"></script>

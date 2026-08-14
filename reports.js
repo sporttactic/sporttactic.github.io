@@ -15,7 +15,7 @@ Views.reports = function (mount) {
           <button class="btn primary sm" id="genMatch">${T('common.new')}</button>
           <button class="btn sm" id="aiMatch">🤖 ${T('reports.aiAnalysis')}</button></div></div>
       <div class="card"><h3>${T('reports.playerReport')}</h3>
-        <select id="pSel">${players.map(p => `<option value="${p.id}">#${p.number} ${UI.esc(fullName(p))}</option>`).join('')}</select>
+        <select id="pSel">${players.map(p => `<option value="${p.id}">#${UI.esc(p.number)} ${UI.esc(fullName(p))}</option>`).join('')}</select>
         <div class="head-acts" style="margin-top:10px">
           <button class="btn primary sm" id="genPlayer">${T('common.new')}</button>
           <button class="btn sm" id="aiPlayer">🤖 ${T('reports.aiAnalysis')}</button></div></div>

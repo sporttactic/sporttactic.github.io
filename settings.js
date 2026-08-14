@@ -6,6 +6,9 @@ window.Views = window.Views || {};
 // and Blobs are base64-encoded by Store.pack, because JSON.stringify silently
 // turns a Blob into `{}` — that is how recorded animation clips used to vanish.
 const BACKUP_FORMAT = 2;
+// A restore reads the whole file into a string and then parses it, so the
+// ceiling has to be checked before either happens.
+const MAX_BACKUP_BYTES = 96 * 1024 * 1024;
 // Everything the app keeps outside IndexedDB lives in localStorage under `stx_`:
 // the athlete name, the scouting focus areas, the progression filters, which
 // panels are folded open, the mail setup. A backup that skipped them restored a
@@ -1710,6 +1713,7 @@ Views.settings = async function (mount) {
         <label class="field" style="max-width:220px"><span>${T('cloud.autoEvery')}</span>
           <select id="clAuto">${TeamCloud.AUTO_MINUTES.map(m => `<option value="${m}" ${m === c.autoMin ? 'selected' : ''}>${everyLabel(m)}</option>`).join('')}</select></label>
       </div>
+      ${c.owner ? '' : `<p class="hint">${UI.esc(T('cloud.memberFresh'))}</p>`}
       ${mayWrite ? '' : `<p class="hint mail-note">${UI.esc(T('cloud.readOnlyRole'))}</p>`}`;
 
     return UI.acc('setCloud', T('cloud.title'), `
@@ -2035,6 +2039,9 @@ Views.settings = async function (mount) {
     // checked here rather than in the store.
     if (Store.locked()) return UI.toast(T('lock.blocked'), 'error');
     if (readMode) return UI.toast(T('mem.blocked'), 'error');
+    // A backup arrives by mail or over a chat, so its size is somebody else's
+    // decision. Reading it as text first would be the point of no return.
+    if (f.size > MAX_BACKUP_BYTES) return UI.toast(T('settings.backupTooBig'), 'error');
     const r = new FileReader();
     r.onload = async () => {
       try {

@@ -332,6 +332,22 @@ body {
 .video-panel.fs #mediaWrap video { max-height: 68vh; object-fit: contain; }
 .video-panel.fs #localControls, .video-panel.fs .bm-section { max-width: 1100px; margin-left: auto; margin-right: auto; width: 100%; }
 .video-panel.fs .bm-list { max-height: 22vh; }
+/* Move mode: the panel leaves the flow and is dragged by its header, so the
+   picture can sit beside the bookmark list instead of on top of it. */
+.video-panel.float {
+  position: fixed; z-index: 150; margin: 0;
+  width: min(92vw, 720px); max-height: 88vh; overflow: auto;
+  padding: 12px; border: 1px solid var(--primary); border-radius: 14px;
+  background: var(--surface); box-shadow: 0 18px 48px rgba(0, 0, 0, .5);
+}
+.video-panel.float .video-head {
+  cursor: move; touch-action: none;
+  margin: -12px -12px 8px; padding: 8px 12px;
+  border-bottom: 1px solid var(--border); background: var(--surface-2);
+  border-radius: 13px 13px 0 0;
+}
+.video-panel.float .video-head::before { content: '⠿'; color: var(--muted); margin-right: 6px; }
+.video-panel.float .bm-list { max-height: 160px; }
 
 /* Main */
 .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
@@ -532,6 +548,16 @@ input:focus, select:focus, textarea:focus { border-color: var(--primary); }
 /* A row of buttons is a toolbar, not a form row: keep them at their own width
    and the same height rather than stretching one long label across the card. */
 .row > .btn, .row > label.btn { flex: 0 0 auto; min-width: 0; }
+/* Dialog forms sit on a fixed two-column grid instead of a flex row per line.
+   Two reasons: every label then starts at the same x down the whole form rather
+   than the columns shifting with however many fields that line happens to hold,
+   and grid gap works on Safari 10.1 where flex gap only arrives in 14.1 — on the
+   phones this app still supports a flex row with no gap puts the fields
+   literally against each other. */
+.form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 14px; }
+.form-grid > label.field, .form-grid > .field { min-width: 0; }
+.form-grid > .wide { grid-column: 1 / -1; }
+@media (max-width: 560px) { .form-grid { grid-template-columns: 1fr; } }
 
 /* Staff list (Teams & Players) */
 .staff-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--border); }
@@ -869,7 +895,7 @@ body.board-fs { overflow: hidden; }
 .ex-fig { margin: 0 0 10px; }
 .ex-fig .ai-fig { margin: 0; }
 .ex-fig svg { display: block; width: 100%; max-width: 340px; height: auto; }
-.ex-embed { position: relative; width: 100%; max-width: 420px; aspect-ratio: 16 / 9; margin: 0 0 10px; border-radius: 10px; overflow: hidden; background: #000; border: 1px solid var(--border); }
+.ex-embed { position: relative; width: 100%; max-width: 420px; aspect-ratio: 16 / 9; margin: 0 auto 10px; border-radius: 10px; overflow: hidden; background: #000; border: 1px solid var(--border); }
 .ex-embed iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
 .ex-embed.lite { cursor: pointer; }
 .ex-embed.lite img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
@@ -884,7 +910,7 @@ body.board-fs { overflow: hidden; }
 .drill-list { list-style: none; margin: 8px 0; padding: 0; }
 .drill-list > li { margin: 0 0 12px; }
 .drill-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 6px; }
-.drill-list .ex-embed { max-width: 360px; margin: 0; }
+.drill-list .ex-embed { max-width: 360px; margin: 0 auto; }
 .draft-vids { margin: 6px 0 0; }
 .draft-vids > .hint { display: block; margin-bottom: 4px; }
 .draft-vids .vid-row input { font-size: 12px; }
@@ -1457,6 +1483,47 @@ body[data-mobile="1"] .qs-bar > .btn { padding: 8px 9px; }
 body[data-mobile="1"] .scoreboard { padding: 10px; margin-bottom: 12px; }
 body[data-mobile="1"] .scoreboard .score { font-size: 28px; }
 body[data-mobile="1"] .scoreboard .clock { font-size: 18px; }
+
+/* Tactical board on a phone: the drawing tools and the frame strip stay out,
+   everything after the fold button goes away until it is asked for. Without
+   this the court sits below ~900px of settings in each side column. */
+.fold-btn { display: none; }
+body[data-mobile="1"] .fold-btn { display: flex; width: 100%; justify-content: center; margin: 8px 0 0; }
+body[data-mobile="1"] .tool-panel.folded #toolsFold ~ * { display: none; }
+body[data-mobile="1"] .frames-anim.folded #framesFold ~ * { display: none; }
+body[data-mobile="1"] .tool-panel { padding: 10px; }
+body[data-mobile="1"] .board-actions input { width: 100%; }
+/* A tool grid that fits five across is reachable without scrolling the panel. */
+body[data-mobile="1"] #tools.tool-group { grid-template-columns: repeat(auto-fill, minmax(58px, 1fr)); }
+/* Leaving full screen belongs under the court, not floating over the top-right
+   corner of it where it sits under the thumb that is drawing. */
+body[data-mobile="1"] #fsExit,
+body[data-mobile="1"] #zenExit {
+  top: auto; right: auto; left: 50%;
+  bottom: 12px;
+  bottom: calc(12px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  opacity: 1; padding: 11px 20px; font-size: 14px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, .45);
+}
+body[data-mobile="1"] .board-wrap.fs #tacticalCanvas { max-height: calc(100vh - 130px); }
+body[data-mobile="1"] .board-wrap.zen #tacticalCanvas { max-height: calc(100vh - 76px); }
+
+/* Video analysis on a phone: the head stacks, the two long button rows become
+   even grids instead of a ragged wrap, and the lists lose their dead height. */
+body[data-mobile="1"] .video-head, body[data-mobile="1"] .bm-head { flex-direction: column; align-items: stretch; gap: 6px; }
+body[data-mobile="1"] .video-head .tool-group, body[data-mobile="1"] .bm-head .tool-group { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+body[data-mobile="1"] .video-head .vsize { grid-column: 1 / -1; margin: 0; }
+body[data-mobile="1"] #localControls { display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px; }
+body[data-mobile="1"] #localControls .btn { padding: 9px 4px; font-size: 12px; }
+body[data-mobile="1"] #localControls .mark-group { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr auto; }
+body[data-mobile="1"] #localControls #bm { grid-column: 1 / -1; }
+body[data-mobile="1"] .draw-bar { gap: 5px; }
+body[data-mobile="1"] .draw-bar .tool-group { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; width: 100%; }
+body[data-mobile="1"] .draw-colors { justify-content: center; width: 100%; }
+body[data-mobile="1"] .bm-list { max-height: 200px; }
+body[data-mobile="1"] .bm-acts { justify-content: flex-start; }
+body[data-mobile="1"] .video-panel.float { width: calc(100vw - 16px); max-height: 76vh; }
 
 body[data-mobile="1"] .to-top {
   right: 12px;

@@ -638,8 +638,8 @@ Views.exerciseLib = function (mount, opts) {
         <p class="hint" style="margin-top:0">${T('exercises.editLang').replace('{0}', langName(I18N.getLang()))}</p>
         <label class="field"><span>${T('training.titleField')}</span><input id="e_t" value="${UI.esc(exTitle(e))}"></label>
         <div class="row">
-          <label class="field"><span>${T('training.category')}</span><select id="e_c">${cats2.map(x => `<option value="${x}" ${x === e.category ? 'selected' : ''}>${UI.esc(tt('cat', x))}</option>`).join('')}</select></label>
-          <label class="field"><span>${T('training.duration')}</span><input id="e_d" type="number" value="${e.duration || 15}"></label>
+          <label class="field"><span>${T('training.category')}</span><select id="e_c">${cats2.map(x => `<option value="${UI.esc(x)}" ${x === e.category ? 'selected' : ''}>${UI.esc(tt('cat', x))}</option>`).join('')}</select></label>
+          <label class="field"><span>${T('training.duration')}</span><input id="e_d" type="number" value="${UI.esc(e.duration || 15)}"></label>
           <label class="field"><span>${T('training.intensity')}</span><select id="e_i">${INT.map(x => `<option value="${x}" ${x === e.intensity ? 'selected' : ''}>${UI.esc(tt('intensity', x))}</option>`).join('')}</select></label>
         </div>
         <label class="field"><span>${T('training.description')}</span><textarea id="e_desc" rows="4">${UI.esc(exDesc(e))}</textarea></label>

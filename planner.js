@@ -47,30 +47,30 @@ Views.planner = function (mount) {
 
     const table = `
       <div class="table-wrap">
-        <table>
+        <table class="compact stack">
           <thead><tr>
-            <th>${T('planner.date')}</th><th>${T('planner.time')}</th><th>${T('planner.titleField')}</th>
-            <th>${T('planner.kind')}</th><th>${T('planner.place')}</th><th>${T('planner.who')}</th>
-            <th>${T('planner.status')}</th><th></th>
+            <th>${T('planner.date')}</th><th>${T('planner.titleField')}</th>
+            <th>${T('planner.kind')}</th><th>${T('planner.status')}</th>
+            <th>${T('planner.place')}</th><th>${T('planner.who')}</th>
+            <th></th>
           </tr></thead>
           <tbody>
             ${events.map(e => `
               <tr>
-                <td>${UI.fmtDate(e.date)}</td>
-                <td>${UI.esc(e.time || '—')}</td>
-                <td><strong>${UI.esc(e.title || '')}</strong> ${shareTag(e)}${e.notes ? `<div class="plan-note">${UI.esc(e.notes)}</div>` : ''}</td>
-                <td><span class="tag blue">${UI.esc(T('plannerKind.' + e.kind) !== 'plannerKind.' + e.kind ? T('plannerKind.' + e.kind) : e.kind)}</span></td>
-                <td>${UI.esc(e.place || '—')}</td>
-                <td>${UI.esc(e.who || '—')}</td>
-                <td><span class="tag ${e.status === 'done' ? 'green' : e.status === 'cancelled' ? 'warn' : 'amber'}">${UI.esc(T('plannerStatus.' + e.status) !== 'plannerStatus.' + e.status ? T('plannerStatus.' + e.status) : e.status)}</span></td>
-                <td style="text-align:right">
-                  <div class="row-acts">
-                    <button class="btn sm" data-show="${e.id}">${T('common.show')}</button>
-                    <button class="btn sm" data-edit="${e.id}">${T('common.edit')}</button>
-                    <button class="btn sm danger" data-del="${e.id}">${T('common.delete')}</button>
+                <td data-label="${UI.esc(T('planner.date'))}" class="head pl-when">${UI.fmtDate(e.date)}${e.time ? ' · ' + UI.esc(e.time) : ''}</td>
+                <td data-label="${UI.esc(T('planner.titleField'))}" class="wide no-label"><strong>${UI.esc(e.title || '')}</strong> ${shareTag(e)}${e.notes ? `<div class="plan-note">${UI.esc(e.notes)}</div>` : ''}</td>
+                <td data-label="${UI.esc(T('planner.kind'))}"><span class="tag blue">${UI.esc(T('plannerKind.' + e.kind) !== 'plannerKind.' + e.kind ? T('plannerKind.' + e.kind) : e.kind)}</span></td>
+                <td data-label="${UI.esc(T('planner.status'))}"><span class="tag ${e.status === 'done' ? 'green' : e.status === 'cancelled' ? 'warn' : 'amber'}">${UI.esc(T('plannerStatus.' + e.status) !== 'plannerStatus.' + e.status ? T('plannerStatus.' + e.status) : e.status)}</span></td>
+                <td data-label="${UI.esc(T('planner.place'))}" class="wide">${UI.esc(e.place || '—')}</td>
+                <td data-label="${UI.esc(T('planner.who'))}">${UI.esc(e.who || '—')}</td>
+                <td class="acts-cell">
+                  <div class="row-acts icons">
+                    <button class="btn sm" data-show="${e.id}" title="${UI.esc(T('common.show'))}" aria-label="${UI.esc(T('common.show'))}">👁</button>
+                    <button class="btn sm" data-edit="${e.id}" title="${UI.esc(T('common.edit'))}" aria-label="${UI.esc(T('common.edit'))}">✎</button>
+                    <button class="btn sm danger" data-del="${e.id}" title="${UI.esc(T('common.delete'))}" aria-label="${UI.esc(T('common.delete'))}">${UI.icon('trash', 14)}</button>
                   </div>
                 </td>
-              </tr>`).join('') || `<tr><td colspan="8" class="empty">${T('common.noData')}</td></tr>`}
+              </tr>`).join('') || `<tr><td colspan="7" class="empty">${T('common.noData')}</td></tr>`}
           </tbody>
         </table>
       </div>
@@ -217,18 +217,16 @@ Views.planner = function (mount) {
       title: ev.id ? T('planner.editEvent') : T('planner.newEvent'),
       width: 620,
       body: `
-        <label class="field"><span>${T('planner.titleField')}</span><input id="p_title" maxlength="80" value="${UI.esc(ev.title || '')}" placeholder="${UI.esc(T('planner.titlePh'))}"></label>
-        <div class="row">
+        <div class="form-grid">
+          <label class="field wide"><span>${T('planner.titleField')}</span><input id="p_title" maxlength="80" value="${UI.esc(ev.title || '')}" placeholder="${UI.esc(T('planner.titlePh'))}"></label>
           <label class="field"><span>${T('planner.date')}</span><input id="p_date" type="date" value="${dstr}"></label>
           <label class="field"><span>${T('planner.time')}</span><input id="p_time" type="time" value="${UI.esc(ev.time || '')}"></label>
           <label class="field"><span>${T('planner.kind')}</span><select id="p_kind">${PLANNER_KINDS.map(k => `<option value="${k}" ${k === (ev.kind || 'training') ? 'selected' : ''}>${T('plannerKind.' + k)}</option>`).join('')}</select></label>
-        </div>
-        <div class="row">
+          <label class="field"><span>${T('planner.status')}</span><select id="p_status">${PLANNER_STATUS.map(s => `<option value="${s}" ${s === (ev.status || 'planned') ? 'selected' : ''}>${T('plannerStatus.' + s)}</option>`).join('')}</select></label>
           <label class="field"><span>${T('planner.place')}</span><input id="p_place" maxlength="80" value="${UI.esc(ev.place || '')}" placeholder="${UI.esc(T('planner.placePh'))}"></label>
           <label class="field"><span>${T('planner.who')}</span><input id="p_who" maxlength="80" value="${UI.esc(ev.who || '')}" placeholder="${UI.esc(T('planner.whoPh'))}"></label>
-          <label class="field"><span>${T('planner.status')}</span><select id="p_status">${PLANNER_STATUS.map(s => `<option value="${s}" ${s === (ev.status || 'planned') ? 'selected' : ''}>${T('plannerStatus.' + s)}</option>`).join('')}</select></label>
+          <label class="field wide"><span>${T('planner.notes')}</span><textarea id="p_notes" rows="3" maxlength="600">${UI.esc(ev.notes || '')}</textarea></label>
         </div>
-        <label class="field"><span>${T('planner.notes')}</span><textarea id="p_notes" rows="3" maxlength="600">${UI.esc(ev.notes || '')}</textarea></label>
         <h4 style="margin:14px 0 4px">${UI.esc(T('planner.access'))}</h4>
         <p class="hint" style="margin:0">${UI.esc(T('planner.accessHint'))}</p>
         <label class="check-row"><input type="checkbox" id="p_all" ${ev.allTeams ? 'checked' : ''}>

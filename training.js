@@ -643,7 +643,7 @@ Views.training = function (mount) {
     if (!solo() && !players.length) return UI.toast(T('personal.noPlayers'), 'error');
     const whoField = solo()
       ? `<label class="field"><span>${T('personal.athlete')}</span><input id="p_name" maxlength="60" value="${UI.esc(r.playerName || athleteName())}"></label>`
-      : `<label class="field"><span>${T('personal.player')}</span><select id="p_player">${players.map(p => `<option value="${p.id}" ${p.id === r.playerId ? 'selected' : ''}>#${p.number} ${UI.esc(p.lastName || p.firstName)}</option>`).join('')}</select></label>`;
+      : `<label class="field"><span>${T('personal.player')}</span><select id="p_player">${players.map(p => `<option value="${p.id}" ${p.id === r.playerId ? 'selected' : ''}>#${UI.esc(p.number)} ${UI.esc(p.lastName || p.firstName)}</option>`).join('')}</select></label>`;
     UI.modal({
       title: r.id ? T('personal.edit') : T('personal.new'),
       width: 700,
@@ -728,7 +728,7 @@ Views.training = function (mount) {
     if (!solo() && !players.length) return UI.toast(T('personal.noPlayers'), 'error');
     const whoField = solo()
       ? `<label class="field"><span>${T('personal.athlete')}</span><input id="mx_name" maxlength="60" value="${UI.esc(name || athleteName())}"></label>`
-      : `<label class="field"><span>${T('personal.player')}</span><select id="mx_player">${players.map(p => `<option value="${p.id}" ${p.id === playerId ? 'selected' : ''}>#${p.number} ${UI.esc(p.lastName || p.firstName)}</option>`).join('')}</select></label>`;
+      : `<label class="field"><span>${T('personal.player')}</span><select id="mx_player">${players.map(p => `<option value="${p.id}" ${p.id === playerId ? 'selected' : ''}>#${UI.esc(p.number)} ${UI.esc(p.lastName || p.firstName)}</option>`).join('')}</select></label>`;
     UI.modal({
       title: T('personal.aiMax'),
       width: 620,

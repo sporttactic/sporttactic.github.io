@@ -10,6 +10,9 @@ const App = (() => {
   // The coach picks which modules to see; Settings can never be hidden, or the
   // list could not be reached again. Cached because applyNav/go are synchronous.
   const ALWAYS_ON = ['settings'];
+  // Modules holding work a re-render would destroy: a running match clock, an
+  // unsaved play, a video with telestration on it, an open chat.
+  const LIVE_ROUTES = ['scouting', 'tactics', 'video', 'messenger'];
   let menuHidden = [];
   const menuOff = r => ALWAYS_ON.indexOf(r) < 0 && menuHidden.indexOf(r) >= 0;
   // A copy made with a team code shows what the coach left in its profile, on
@@ -336,7 +339,20 @@ const App = (() => {
     Store.onChange(syncMemberMode);
     // The profile arrives with the shared file, so a sync can turn read mode on
     // (or off) while the app is open.
-    if (window.TeamCloud) TeamCloud.onChange(() => { refreshLockBadge(); applyMemberMode(); });
+    if (window.TeamCloud) TeamCloud.onChange(info => {
+      refreshLockBadge();
+      applyMemberMode();
+      // Rows landed from a background pull, so the view on screen was built
+      // from the old ones. Redraw it — but not over a dialog, and not over the
+      // modules that hold live work a redraw would throw away: a running match
+      // clock, an unsaved play, a video with drawings on it.
+      if (!info || !info.pulled) return;
+      UI.toast(T('cloud.freshened').replace('{0}', info.pulled), 'success');
+      const host = document.getElementById('modalHost');
+      if (host && !host.classList.contains('hidden')) return;
+      if (LIVE_ROUTES.indexOf(currentRoute) >= 0) return;
+      render();
+    });
     startAutosave();
     if (window.AUTOBK) AUTOBK.start();   // unattended backups, if the coach turned them on
     if (window.TeamCloud) TeamCloud.start();   // shared team database, if one is linked

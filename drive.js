@@ -127,6 +127,61 @@ const Drive = (() => {
 
   function esc(v) { return String(v).replace(/\\/g, '\\\\').replace(/'/g, "\\'"); }
 
+  // ---- Guarded download --------------------------------------------------
+  // A team code is a file id somebody handed out, so the file on the other end
+  // is not necessarily the one the coach meant. Reading it straight into
+  // res.json() lets a wrong — or hostile — id hang the app for ever or pull a
+  // multi-gigabyte body into memory until the tab dies. So every read of a
+  // shared file is bounded three ways: a deadline, a declared-size check and a
+  // hard cap while the body streams in.
+  const MAX_JSON_BYTES = 48 * 1024 * 1024;   // a very large club still fits
+  const FETCH_TIMEOUT = 45000;
+
+  async function fetchJson(url, opts) {
+    const ctl = typeof AbortController === 'function' ? new AbortController() : null;
+    const timer = setTimeout(() => { if (ctl) ctl.abort(); }, FETCH_TIMEOUT);
+    let res;
+    try {
+      res = await fetch(url, Object.assign({}, opts, ctl ? { signal: ctl.signal } : null));
+    } catch (e) {
+      clearTimeout(timer);
+      throw new Error(e && e.name === 'AbortError' ? 'timeout' : String((e && e.message) || e));
+    }
+    try {
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const len = +res.headers.get('content-length');
+      if (len > MAX_JSON_BYTES) throw new Error('file too large');
+      const text = await readCapped(res);
+      const doc = JSON.parse(text);
+      if (!doc || typeof doc !== 'object') throw new Error('not a team file');
+      return doc;
+    } finally { clearTimeout(timer); }
+  }
+
+  // Content-Length is optional and can lie, so the body is also counted as it
+  // arrives and the connection dropped the moment it goes over. Decoded in
+  // place rather than through a Blob: Blob.arrayBuffer() only landed in Safari
+  // 14, and this has to work on the phones the app still supports.
+  async function readCapped(res) {
+    if (!res.body || typeof res.body.getReader !== 'function') {
+      const text = await res.text();
+      if (text.length > MAX_JSON_BYTES) throw new Error('file too large');
+      return text;
+    }
+    const reader = res.body.getReader();
+    const dec = new TextDecoder();
+    let text = '';
+    let seen = 0;
+    for (;;) {
+      const step = await reader.read();
+      if (step.done) break;
+      seen += step.value.byteLength;
+      if (seen > MAX_JSON_BYTES) { try { reader.cancel(); } catch (e) { /* already gone */ } throw new Error('file too large'); }
+      text += dec.decode(step.value, { stream: true });
+    }
+    return text + dec.decode();
+  }
+
   async function listFiles(q, spaces) {
     const qs = 'q=' + encodeURIComponent(q) +
       '&spaces=' + (spaces || 'drive') +
@@ -169,11 +224,9 @@ const Drive = (() => {
 
   async function downloadJson(fileId) {
     const at = await ensureToken();
-    const res = await fetch('https://www.googleapis.com/drive/v3/files/' + fileId + '?alt=media', {
+    return fetchJson('https://www.googleapis.com/drive/v3/files/' + encodeURIComponent(fileId) + '?alt=media', {
       headers: { Authorization: 'Bearer ' + at }
     });
-    if (!res.ok) throw new Error('Download failed: ' + res.status);
-    return res.json();
   }
 
   async function ensureFolder(name, parent) {
@@ -225,10 +278,8 @@ const Drive = (() => {
   // API key — no OAuth, so a player can pull the squad on a device that has
   // never seen a Google sign-in screen.
   async function publicDownload(fileId, apiKey) {
-    const res = await fetch('https://www.googleapis.com/drive/v3/files/' + encodeURIComponent(fileId) +
+    return fetchJson('https://www.googleapis.com/drive/v3/files/' + encodeURIComponent(fileId) +
       '?alt=media&key=' + encodeURIComponent(apiKey));
-    if (!res.ok) throw new Error('Drive ' + res.status);
-    return res.json();
   }
 
   // ---- Backup / restore (private appDataFolder) ----

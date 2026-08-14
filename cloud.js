@@ -27,6 +27,10 @@ const TeamCloud = (() => {
   // that decide what a joining device may be. The readable words never travel.
   const SHARED_SETTINGS = ['accessMembers', 'memberProfile', 'roleKeys'];
   const AUTO_MINUTES = [0, 5, 15, 30, 60, 180];
+  const MAX_ROWS_PER_STORE = 50000;
+  // What a device gets when it joins with a code. The coach's own copy keeps
+  // whatever they chose.
+  const MEMBER_AUTO_MIN = 15;
 
   let timer = null;
   let busy = false;
@@ -63,7 +67,7 @@ const TeamCloud = (() => {
   }
   const isLinked = () => !!cfg().fileId;
   function onChange(fn) { listeners.add(fn); return () => listeners.delete(fn); }
-  function emit() { listeners.forEach(fn => { try { fn(); } catch (e) { /* a dead view must not stop the sync */ } }); }
+  function emit(info) { listeners.forEach(fn => { try { fn(info); } catch (e) { /* a dead view must not stop the sync */ } }); }
 
   // ---- Team code ---------------------------------------------------------
   // Short enough to send in a text message, and it carries everything a member
@@ -158,6 +162,16 @@ const TeamCloud = (() => {
     });
     return [...map.values()];
   }
+  // How much of what came down is actually news. Counting everything received
+  // would report the whole club on every routine pull and announce an update
+  // that changed nothing.
+  function countNew(mine, theirs) {
+    const map = new Map((mine || []).map(r => [r && r.id, r]));
+    return (theirs || []).filter(r => {
+      const cur = r && map.get(r.id);
+      return !cur || (+r.updatedAt || 0) > (+cur.updatedAt || 0);
+    }).length;
+  }
 
   // ---- Transport ---------------------------------------------------------
   const signedIn = () => !!(window.Drive && Drive.isConnected());
@@ -197,6 +211,9 @@ const TeamCloud = (() => {
     let n = 0;
     for (const s of syncStores()) {
       if (!Array.isArray(doc.data[s])) continue;
+      // Whoever wrote the shared file chooses how many rows it carries. A
+      // device that follows a code must not let that fill its storage.
+      if (doc.data[s].length > MAX_ROWS_PER_STORE) throw new Error('shared file too large');
       const theirs = Store.unpack(doc.data[s]).filter(r => r && typeof r.id === 'string');
       const mine = await DB.getAll(s);
       const keep = guarded[s] || [];
@@ -213,7 +230,7 @@ const TeamCloud = (() => {
       const rows = replace ? theirs : mergeRows(mine, theirs);
       if (replace) await DB.clear(s);
       if (rows.length) await DB.bulkPut(s, rows);
-      n += theirs.length;
+      n += replace ? theirs.length : countNew(mine, theirs);
     }
     if (Array.isArray(doc.data.settings)) {
       const theirs = Store.unpack(doc.data.settings).filter(r => r && SHARED_SETTINGS.indexOf(r.id) >= 0);
@@ -223,7 +240,7 @@ const TeamCloud = (() => {
       // back to the previous set and the word handed out stopped working.
       const mine = (await DB.getAll('settings')).filter(r => SHARED_SETTINGS.indexOf(r.id) >= 0);
       const rows = replace ? theirs : mergeRows(mine, theirs);
-      if (rows.length) { await DB.bulkPut('settings', rows); n += rows.length; }
+      if (rows.length) { await DB.bulkPut('settings', rows); n += replace ? theirs.length : countNew(mine, theirs); }
     }
     await Store.loadAll();
     // The planner, the matches and everything else a squad owns are read through
@@ -237,14 +254,15 @@ const TeamCloud = (() => {
   async function pull(mode) {
     if (busy) throw new Error('busy');
     busy = true;
+    let got = 0;
     try {
-      const n = await applyDoc(await readRemote(), mode);
+      got = await applyDoc(await readRemote(), mode);
       await setCfg({ lastPullAt: Date.now(), lastErr: '' });
-      return n;
+      return got;
     } catch (e) {
       await setCfg({ lastErr: msg(e) });
       throw e;
-    } finally { busy = false; emit(); }
+    } finally { busy = false; emit({ pulled: got }); }
   }
   async function push(mode) {
     if (!Access.can('cloud.write')) throw new Error('not-allowed');
@@ -338,6 +356,11 @@ const TeamCloud = (() => {
     if (!t) throw new Error('bad-code');
     await setCfg({ fileId: t.fileId, apiKey: t.apiKey || cfg().apiKey, teamName: t.teamName || cfg().teamName, owner: false });
     const n = await pull('merge');
+    // A player who pasted a code wants the squad, the fixtures and the training
+    // plan to stay right — not to go looking for a sync setting. So following a
+    // file turns the timer on by itself; the coach's own copy is left alone,
+    // because when to publish is their decision.
+    if (!cfg().autoMin) await setAuto(MEMBER_AUTO_MIN);
     // The file is the authority on the role passwords; the set carried in the
     // code is the fallback for a club whose file has not been synced since the
     // words were made.
@@ -353,7 +376,13 @@ const TeamCloud = (() => {
   function start() {
     stop();
     const c = cfg();
-    if (!c.fileId || !c.autoMin) return;
+    if (!c.fileId) return;
+    // A copy that follows somebody else's file is only as fresh as its last
+    // pull. Opening the app is itself a reason to refresh — without this a
+    // player reads yesterday's team sheet until the first timer tick, and with
+    // the timer off they would never see a change at all.
+    if (!c.owner && canSyncQuietly()) pull('merge').catch(() => { /* offline; the timer retries */ });
+    if (!c.autoMin) return;
     timer = setInterval(() => {
       if (!canSyncQuietly()) return;
       sync().catch(() => { /* offline; the next tick tries again */ });

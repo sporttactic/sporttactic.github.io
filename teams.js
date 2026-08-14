@@ -318,10 +318,10 @@ Views.teams = function (mount) {
       body: `
         <div class="row"><label class="field"><span>${T('teams.firstName')}</span><input id="f_first" value="${UI.esc(p.firstName || '')}"></label>
         <label class="field"><span>${T('teams.lastName')}</span><input id="f_last" value="${UI.esc(p.lastName || '')}"></label></div>
-        <div class="row"><label class="field"><span>${T('teams.number')}</span><input id="f_num" type="number" value="${p.number || ''}"></label>
+        <div class="row"><label class="field"><span>${T('teams.number')}</span><input id="f_num" type="number" value="${UI.esc(p.number || '')}"></label>
         <label class="field"><span>${T('teams.position')}</span><select id="f_pos">${positions.map(x => `<option value="${x}" ${x === p.position ? 'selected' : ''}>${UI.esc(SPORTS.posBadge(sportId, x).ab)} \u2013 ${UI.esc(tt('pos', x))}</option>`).join('')}</select></label></div>
-        <div class="row"><label class="field"><span>${T('teams.height')} (cm)</span><input id="f_h" type="number" value="${p.height || ''}"></label>
-        <label class="field"><span>${T('teams.weight')} (kg)</span><input id="f_w" type="number" value="${p.weight || ''}"></label>
+        <div class="row"><label class="field"><span>${T('teams.height')} (cm)</span><input id="f_h" type="number" value="${UI.esc(p.height || '')}"></label>
+        <label class="field"><span>${T('teams.weight')} (kg)</span><input id="f_w" type="number" value="${UI.esc(p.weight || '')}"></label>
         <label class="field"><span>${T('teams.status')}</span><select id="f_st"><option value="active" ${p.status === 'active' ? 'selected' : ''}>${UI.esc(tt('status', 'active'))}</option><option value="injured" ${p.status === 'injured' ? 'selected' : ''}>${UI.esc(tt('status', 'injured'))}</option><option value="suspended" ${p.status === 'suspended' ? 'selected' : ''}>${UI.esc(tt('status', 'suspended'))}</option></select></label></div>
         <label class="field"><span>${T('teams.phone')}</span><input id="f_ph" type="tel" value="${UI.esc(p.phone || '')}" placeholder="+45 12 34 56 78">
           <span class="hint">${T('teams.phoneHint')}</span></label>
@@ -451,13 +451,13 @@ Views.teams = function (mount) {
         <span><b>${UI.esc((p.firstName + ' ' + p.lastName).trim())}</b></span></label>
       <div class="draft-meta">
         <label class="field" style="max-width:88px"><span>${T('teams.number')}</span>
-          <input type="number" data-f="number" data-i="${i}" min="1" max="99" value="${p.number}"></label>
+          <input type="number" data-f="number" data-i="${i}" min="1" max="99" value="${UI.esc(p.number)}"></label>
         <label class="field" style="max-width:200px"><span>${T('teams.position')}</span>
           <select data-f="position" data-i="${i}">${positions.map(x => `<option value="${UI.esc(x)}" ${x === p.position ? 'selected' : ''}>${UI.esc(SPORTS.posBadge(sportId, x).ab)} \u2013 ${UI.esc(tt('pos', x))}</option>`).join('')}</select></label>
         <label class="field" style="max-width:96px"><span>${T('teams.height')}</span>
-          <input type="number" data-f="height" data-i="${i}" value="${p.height || ''}"></label>
+          <input type="number" data-f="height" data-i="${i}" value="${UI.esc(p.height || '')}"></label>
         <label class="field" style="max-width:96px"><span>${T('teams.weight')}</span>
-          <input type="number" data-f="weight" data-i="${i}" value="${p.weight || ''}"></label>
+          <input type="number" data-f="weight" data-i="${i}" value="${UI.esc(p.weight || '')}"></label>
       </div>
     </div>`;
     UI.modal({

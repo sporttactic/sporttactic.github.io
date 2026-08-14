@@ -32,26 +32,26 @@ Views.statistics = function (mount) {
   // ratings and profiles are the coach's business, so the board is not built.
   const board = Access.readMode() ? '' : `
     <div class="table-wrap">
-      <table>
-        <thead><tr><th>${T('stat.player')}</th><th>${T('stat.pos')}</th><th>${T('teams.weight')}</th><th>${T('stat.goals')}</th><th>${T('stat.attempts')}</th><th>${T('stat.shotPct')}</th><th>${T('stat.assists')}</th><th>${T('stat.to')}</th><th>${T('stat.saves')}</th><th>${T('stat.rating')}</th><th></th></tr></thead>
+      <table class="compact stack">
+        <thead><tr><th>${T('stat.player')}</th><th>${T('stat.pos')}</th><th>${T('stat.rating')}</th><th>${T('stat.goals')}</th><th>${T('stat.attempts')}</th><th>${T('stat.shotPct')}</th><th>${T('stat.assists')}</th><th>${T('stat.to')}</th><th>${T('stat.saves')}</th><th>${T('teams.weight')}</th><th></th></tr></thead>
         <tbody>
           ${rows.map(({ p, s }) => `
             <tr>
-              <td><div style="display:flex;align-items:center;gap:8px"><span class="avatar">${UI.initials(p.firstName, p.lastName)}</span>${UI.esc([p.firstName, p.lastName].filter(Boolean).join(' ').trim())}</div></td>
-              <td>${UI.esc(tt('pos', p.position))}</td>
-              <td>${p.weight ? p.weight + ' kg' : '—'}</td>
-              <td><strong>${s.goals}</strong></td>
-              <td>${s.attempts}</td>
-              <td><div class="bar-track"><div class="bar-fill" style="width:${s.shotPct}%"></div></div>${s.shotPct}%</td>
-              <td>${s.assists}</td>
-              <td>${s.turnovers}</td>
-              <td>${s.saves}</td>
-              <td><span class="tag ${s.rating >= 7 ? 'green' : s.rating >= 5 ? 'amber' : 'red'}">${s.rating}</span></td>
-              <td>
-                <div class="row-acts">
-                  <button class="btn sm" data-pdf="${p.id}" title="${UI.esc(T('stats.playerPdf'))}">⬇ ${T('reports.pdf')}</button>
-                  <button class="btn sm" data-chat="${p.id}" title="${UI.esc(T('chat.title'))}">💬 ${T('chat.chat')}</button>
-                  <button class="btn sm" data-aip="${p.id}" title="${UI.esc(T('stats.aiPlayer'))}">🤖 ${T('stats.aiTrain')}</button>
+              <td data-label="${UI.esc(T('stat.player'))}" class="wide no-label"><div class="sq-who"><span class="avatar">${UI.initials(p.firstName, p.lastName)}</span><span class="sq-nm">${UI.esc([p.firstName, p.lastName].filter(Boolean).join(' ').trim())}</span></div></td>
+              <td data-label="${UI.esc(T('stat.pos'))}">${UI.esc(tt('pos', p.position))}</td>
+              <td data-label="${UI.esc(T('stat.rating'))}"><span class="tag ${s.rating >= 7 ? 'green' : s.rating >= 5 ? 'amber' : 'red'}">${s.rating}</span></td>
+              <td data-label="${UI.esc(T('stat.goals'))}"><strong>${s.goals}</strong></td>
+              <td data-label="${UI.esc(T('stat.attempts'))}">${s.attempts}</td>
+              <td data-label="${UI.esc(T('stat.shotPct'))}" class="wide"><div class="bar-track"><div class="bar-fill" style="width:${s.shotPct}%"></div></div>${s.shotPct}%</td>
+              <td data-label="${UI.esc(T('stat.assists'))}">${s.assists}</td>
+              <td data-label="${UI.esc(T('stat.to'))}">${s.turnovers}</td>
+              <td data-label="${UI.esc(T('stat.saves'))}">${s.saves}</td>
+              <td data-label="${UI.esc(T('teams.weight'))}">${p.weight ? p.weight + ' kg' : '—'}</td>
+              <td class="acts-cell">
+                <div class="row-acts icons">
+                  <button class="btn sm" data-pdf="${p.id}" title="${UI.esc(T('stats.playerPdf'))}" aria-label="${UI.esc(T('stats.playerPdf'))}">⬇</button>
+                  <button class="btn sm" data-chat="${p.id}" title="${UI.esc(T('chat.title'))}" aria-label="${UI.esc(T('chat.title'))}">💬</button>
+                  <button class="btn sm" data-aip="${p.id}" title="${UI.esc(T('stats.aiPlayer'))}" aria-label="${UI.esc(T('stats.aiPlayer'))}">🤖</button>
                 </div>
               </td>
             </tr>`).join('') || `<tr><td colspan="11" class="empty">${T('common.noData')}</td></tr>`}

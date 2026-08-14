@@ -29,7 +29,7 @@ Views.dashboard = function (mount) {
       </div>
       <div class="card">
         <h3>${T('dash.lastResult')}</h3>
-        ${last ? `<p style="font-size:22px;font-weight:800">${last.homeScore} : ${last.awayScore}</p>
+        ${last ? `<p style="font-size:22px;font-weight:800">${UI.esc(last.homeScore)} : ${UI.esc(last.awayScore)}</p>
           <p style="color:var(--muted)">${UI.esc(last.home ? T('common.vs') : T('common.at'))} ${UI.esc(last.opponent)} · ${UI.fmtDate(last.date)}</p>` : `<p style="color:var(--muted)">${T('dash.noPlayed')}</p>`}
       </div>
     </div>`;

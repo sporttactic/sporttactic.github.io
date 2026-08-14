@@ -377,15 +377,23 @@ const Store = (() => {
     for (const k of Object.keys(v)) out[k] = await pack(v[k]);
     return out;
   }
+  // Keys that are not data. JSON.parse happily produces an own "__proto__"
+  // property, and copying it onto a plain object with = or Object.assign runs
+  // the inherited setter instead — which is how a shared file or a mailed
+  // backup gets to choose the prototype of every row it brings with it.
+  const UNSAFE_KEY = k => k === '__proto__' || k === 'constructor' || k === 'prototype';
   function unpack(v) {
     if (v == null || typeof v !== 'object') return v;
     if (v.__blob) return b64ToBlob(v.data || '', v.type);
     if (v.__date) return new Date(v.iso);
     if (Array.isArray(v)) return v.map(unpack);
     const out = {};
-    for (const k of Object.keys(v)) out[k] = unpack(v[k]);
+    for (const k of Object.keys(v)) { if (!UNSAFE_KEY(k)) out[k] = unpack(v[k]); }
     return out;
   }
+  // A file that arrives from outside decides how many rows it hands over, so
+  // the ceiling is set here rather than by whoever wrote the file.
+  const MAX_ROWS_PER_STORE = 50000;
   // A training plan is useless without the drills it points at, so it takes both.
   const PACK_STORES = {
     exercises: ['exercises'], training: ['training', 'exercises'], tactics: ['tactics'],
@@ -435,6 +443,7 @@ const Store = (() => {
     let n = 0;
     for (const s of stores) {
       if (!Array.isArray(data[s])) continue;
+      if (data[s].length > MAX_ROWS_PER_STORE) throw new Error('file too large');
       let rows = unpack(data[s]).filter(r => r && typeof r === 'object' && typeof r.id === 'string');
       if (teamId && SELF_TEAM.indexOf(kind) < 0 && TEAM_SCOPED.indexOf(s) >= 0) rows = rows.map(r => Object.assign({}, r, { teamId }));
       if (!rows.length) continue;

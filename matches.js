@@ -28,7 +28,7 @@ Views.matches = function (mount) {
               </td>
               <td data-label="${UI.esc(T('matches.venue'))}" class="wide">${UI.esc(m.venue || '—')}</td>
               <td data-label="${UI.esc(T('matches.squad'))}"><span class="tag ${line ? 'green' : ''}">${line ? line.length + '/' + squad.length : T('matches.allPlayers')}</span></td>
-              <td data-label="${UI.esc(T('matches.score'))}">${m.status === 'finished' ? `<strong>${m.homeScore} : ${m.awayScore}</strong>` : '—'}</td>
+              <td data-label="${UI.esc(T('matches.score'))}">${m.status === 'finished' ? `<strong>${UI.esc(m.homeScore)} : ${UI.esc(m.awayScore)}</strong>` : '—'}</td>
               <td data-label="${UI.esc(T('matches.status'))}"><span class="tag ${m.status === 'finished' ? 'green' : 'amber'}">${UI.esc(m.status === 'finished' ? T('matches.finished') : m.status === 'live' ? T('matches.live') : T('matches.scheduled'))}</span></td>
               <td class="acts-cell">
                 <div class="row-acts icons">
@@ -63,22 +63,16 @@ Views.matches = function (mount) {
       title: mt.id ? T('matches.editMatch') : T('matches.newMatch'),
       width: 660,
       body: `
-        <label class="field"><span>${T('matches.opponent')}</span><input id="m_opp" value="${UI.esc(mt.opponent || '')}"></label>
-        <div class="row">
+        <div class="form-grid">
+          <label class="field wide"><span>${T('matches.opponent')}</span><input id="m_opp" value="${UI.esc(mt.opponent || '')}"></label>
           <label class="field"><span>${T('matches.date')}</span><input id="m_date" type="date" value="${dstr}"></label>
           <label class="field"><span>${T('matches.type')}</span><select id="m_type">${['Friendly', 'League', 'Cup', 'Tournament'].map(x => `<option value="${x}" ${x === mt.type ? 'selected' : ''}>${T('matchType.' + x)}</option>`).join('')}</select></label>
-        </div>
-        <div class="row">
           <label class="field"><span>${T('matches.sport')}</span><select id="m_sport">${SPORTS.LIST.map(s => `<option value="${s.id}" ${s.id === (mt.sport || (window.App && App.getSport && App.getSport())) ? 'selected' : ''}>${SPORTS.name(s.id, I18N.getLang())}</option>`).join('')}</select></label>
           <label class="field"><span>${T('matches.venue')}</span><input id="m_venue" value="${UI.esc(mt.venue || (mt.id ? '' : (team && team.venue) || ''))}"></label>
-        </div>
-        <div class="row">
           <label class="field"><span>${T('matches.home')}/${T('matches.away')}</span><select id="m_home"><option value="1" ${mt.home ? 'selected' : ''}>${T('matches.home')}</option><option value="0" ${mt.home === false ? 'selected' : ''}>${T('matches.away')}</option></select></label>
-        </div>
-        <div class="row">
-          <label class="field"><span>${T('matches.home')} ${T('matches.score')}</span><input id="m_hs" type="number" value="${mt.homeScore || 0}"></label>
-          <label class="field"><span>${T('matches.away')} ${T('matches.score')}</span><input id="m_as" type="number" value="${mt.awayScore || 0}"></label>
           <label class="field"><span>${T('matches.status')}</span><select id="m_status">${['scheduled', 'live', 'finished'].map(x => `<option value="${x}" ${x === mt.status ? 'selected' : ''}>${T('matches.' + x)}</option>`).join('')}</select></label>
+          <label class="field"><span>${T('matches.home')} ${T('matches.score')}</span><input id="m_hs" type="number" value="${UI.esc(mt.homeScore || 0)}"></label>
+          <label class="field"><span>${T('matches.away')} ${T('matches.score')}</span><input id="m_as" type="number" value="${UI.esc(mt.awayScore || 0)}"></label>
         </div>
         ${squadPickerHtml(picked)}`,
       footer: `<button class="btn ghost" data-close2>${T('common.cancel')}</button><button class="btn primary" data-save>${T('common.save')}</button>`,

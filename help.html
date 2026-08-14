@@ -2,6 +2,20 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
+  <!-- Static page: analytics is the only third party it needs. Must stay the
+       first element in <head> — a meta policy only governs later loads. -->
+  <meta http-equiv="Content-Security-Policy" content="
+    default-src 'self';
+    script-src 'self' 'unsafe-inline' https://www.googletagmanager.com;
+    connect-src 'self' https://*.google-analytics.com https://*.analytics.google.com https://*.googletagmanager.com;
+    img-src 'self' data: https:;
+    style-src 'self' 'unsafe-inline';
+    font-src 'self' data:;
+    object-src 'none';
+    base-uri 'self';
+    form-action 'none';
+    upgrade-insecure-requests" />
+  <meta name="referrer" content="strict-origin-when-cross-origin" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SportTactic — Help &amp; Tutorials</title>
   <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('ht_help_theme')||'dark');}catch(e){}</script>

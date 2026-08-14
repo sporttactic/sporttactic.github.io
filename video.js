@@ -139,11 +139,12 @@ Views.video = function (mount) {
 
   const playerPanel = `
     <div class="video-panel" id="videoPanel">
-      <div class="video-head">
+      <div class="video-head" id="videoHead">
         <h3 style="margin:0">${T('video.title')}</h3>
         <span class="tool-group">
           <label class="field vsize"><span>${T('video.size')}</span>
             <select id="vSize">${VIDEO_SIZES.map(s => `<option value="${s}" ${s === vSize ? 'selected' : ''}>${T('video.size' + s)}</option>`).join('')}</select></label>
+          <button class="btn sm" id="videoMove" title="${T('video.move')}">✥ ${T('video.move')}</button>
           <button class="btn sm" id="videoFs" title="${T('video.fullscreen')}">⛶ ${T('video.fullscreen')}</button>
         </span>
       </div>
@@ -593,6 +594,61 @@ Views.video = function (mount) {
   document.addEventListener('fullscreenchange', onVideoFsChange);
   const vfsBtn = mount.querySelector('#videoFs');
   if (vfsBtn) vfsBtn.onclick = toggleVideoFullscreen;
+
+  // ---- Move mode ---------------------------------------------------------
+  // Analysing a clip means reading the bookmark list and the picture at the
+  // same time, and on a phone the player covers whichever one you are not
+  // looking at. Move mode lifts the panel out of the flow so it can be dragged
+  // anywhere on screen — by its header, with a pointer or a thumb — and it
+  // stays where it was put between visits.
+  const POS_KEY = 'stx_video_pos';
+  const panel = mount.querySelector('#videoPanel');
+  const head = mount.querySelector('#videoHead');
+  const moveBtn = mount.querySelector('#videoMove');
+  let drag = null;
+
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  function place(x, y) {
+    const w = panel.offsetWidth, h = panel.offsetHeight;
+    // Keep a grabbable strip on screen however small the window gets.
+    panel.style.left = clamp(x, 24 - w, window.innerWidth - 48) + 'px';
+    panel.style.top = clamp(y, 0, Math.max(0, window.innerHeight - 44)) + 'px';
+  }
+  function savePos() {
+    try { localStorage.setItem(POS_KEY, JSON.stringify({ x: parseInt(panel.style.left, 10) || 0, y: parseInt(panel.style.top, 10) || 0 })); }
+    catch (e) { /* private mode */ }
+  }
+  function setFloat(on) {
+    panel.classList.toggle('float', on);
+    if (moveBtn) {
+      moveBtn.classList.toggle('primary', on);
+      moveBtn.innerHTML = '✥ ' + T(on ? 'video.moveDock' : 'video.move');
+    }
+    if (!on) { panel.style.left = panel.style.top = ''; return; }
+    let p = null;
+    try { p = JSON.parse(localStorage.getItem(POS_KEY) || 'null'); } catch (e) { /* ignore */ }
+    const r = panel.getBoundingClientRect();
+    place(p ? p.x : Math.round(r.left), p ? p.y : Math.round(r.top));
+    setTimeout(sizeOverlay, 60);
+  }
+  if (moveBtn) moveBtn.onclick = () => setFloat(!panel.classList.contains('float'));
+  if (head) head.addEventListener('pointerdown', e => {
+    if (!panel.classList.contains('float')) return;
+    if (e.target.closest('button, select, input, label')) return;   // the controls keep working
+    const r = panel.getBoundingClientRect();
+    drag = { dx: e.clientX - r.left, dy: e.clientY - r.top };
+    head.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  });
+  if (head) head.addEventListener('pointermove', e => {
+    if (!drag) return;
+    place(e.clientX - drag.dx, e.clientY - drag.dy);
+  });
+  const endDrag = () => { if (drag) { drag = null; savePos(); } };
+  if (head) { head.addEventListener('pointerup', endDrag); head.addEventListener('pointercancel', endDrag); }
+  // A rotated phone can leave the panel off screen entirely.
+  const keepOnScreen = () => { if (panel.classList.contains('float')) place(parseInt(panel.style.left, 10) || 0, parseInt(panel.style.top, 10) || 0); };
+  window.addEventListener('resize', keepOnScreen);
   const sizeSel = mount.querySelector('#vSize');
   if (sizeSel) sizeSel.onchange = () => {
     vSize = sizeSel.value;
@@ -891,6 +947,7 @@ Views.video = function (mount) {
   return () => {
     document.removeEventListener('fullscreenchange', onVideoFsChange);
     window.removeEventListener('resize', onVResize);
+    window.removeEventListener('resize', keepOnScreen);
     if (sizeWatch) { sizeWatch.disconnect(); sizeWatch = null; }
   };
 };

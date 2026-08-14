@@ -262,7 +262,7 @@ Views.scouting = function (mount, params) {
   function logHtml(events) {
     return events.map(e => {
       const p = Store.find('players', e.playerId);
-      return `<div class="log-item"><span><span class="log-time">${UI.fmtClock((e.minute || 0) * 60)}</span> ${UI.esc(evLabel(e.type))} ${e.result === 'goal' ? '&#9917;' : ''} — ${p ? '#' + p.number + ' ' + UI.esc(p.lastName) : ''}</span><button class="btn sm danger" data-rmev="${e.id}">${T('scout.remove')}</button></div>`;
+      return `<div class="log-item"><span><span class="log-time">${UI.fmtClock((e.minute || 0) * 60)}</span> ${UI.esc(evLabel(e.type))} ${e.result === 'goal' ? '&#9917;' : ''} — ${p ? '#' + UI.esc(p.number) + ' ' + UI.esc(p.lastName) : ''}</span><button class="btn sm danger" data-rmev="${e.id}">${T('scout.remove')}</button></div>`;
     }).join('') || `<p style="color:var(--muted)">${T('scout.noEvents')}</p>`;
   }
   function bindLog() {
