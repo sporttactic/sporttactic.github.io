@@ -886,13 +886,14 @@ function sharePolicyDialog(onDone) {
   const groupRow = g => {
     const r = pol.groups[g.id];
     const n = count(g);
+    const off = !pol.contribute;
     return `<div class="pol-row" data-grp="${g.id}">
       <span class="pol-name">${UI.esc(T('pol.g' + g.id))}
         <span class="share-n">${n} ${UI.esc(T('settings.shareRecords'))}</span></span>
       <span class="pol-opts">
         <label class="pol-chk"><input type="checkbox" data-p="share" ${r.share ? 'checked' : ''}> ${UI.esc(T('pol.share'))}</label>
-        <label class="pol-chk"><input type="checkbox" data-p="edit" ${r.edit ? 'checked' : ''} ${r.share ? '' : 'disabled'}> ${UI.esc(T('pol.edit'))}</label>
-        <label class="pol-chk"><input type="checkbox" data-p="del" ${r.del ? 'checked' : ''} ${r.share && r.edit ? '' : 'disabled'}> ${UI.esc(T('pol.del'))}</label>
+        <label class="pol-chk"><input type="checkbox" data-p="edit" ${r.edit ? 'checked' : ''} ${r.share && !off ? '' : 'disabled'}> ${UI.esc(T('pol.edit'))}</label>
+        <label class="pol-chk"><input type="checkbox" data-p="del" ${r.del ? 'checked' : ''} ${r.share && r.edit && !off ? '' : 'disabled'}> ${UI.esc(T('pol.del'))}</label>
       </span>
     </div>`;
   };
@@ -920,6 +921,11 @@ function sharePolicyDialog(onDone) {
     width: 720,
     body: `<p>${UI.esc(T('pol.intro'))}</p>
       <div class="callout-warn">${UI.esc(T('pol.warn'))}</div>
+      <h4 class="pol-h">${UI.esc(T('pol.twoWay'))}</h4>
+      <label class="check-row"><input type="checkbox" id="polContrib" ${pol.contribute ? 'checked' : ''}>
+        <span>${UI.esc(T('pol.contribute'))}</span></label>
+      <p class="hint">${UI.esc(T('pol.contributeHint'))}</p>
+      <p class="hint">${UI.esc(T('pol.contributeNeeds'))}</p>
       <h4 class="pol-h">${UI.esc(T('pol.blocks'))}</h4>
       <p class="hint">${UI.esc(T('pol.blocksHint'))}</p>
       ${Privacy.GROUPS.map(groupRow).join('')}
@@ -946,12 +952,24 @@ function sharePolicyDialog(onDone) {
           if (!pol.groups[g].share) { pol.groups[g].edit = false; pol.groups[g].del = false; }
           if (!pol.groups[g].edit) pol.groups[g].del = false;
           row.querySelector('[data-p="edit"]').checked = pol.groups[g].edit;
-          row.querySelector('[data-p="edit"]').disabled = !pol.groups[g].share;
+          row.querySelector('[data-p="edit"]').disabled = !pol.groups[g].share || !pol.contribute;
           row.querySelector('[data-p="del"]').checked = pol.groups[g].del;
-          row.querySelector('[data-p="del"]').disabled = !pol.groups[g].edit;
+          row.querySelector('[data-p="del"]').disabled = !pol.groups[g].edit || !pol.contribute;
           sum();
         });
       });
+      // Nothing may come back at all until this is on, so the per-block Edit and
+      // Delete ticks are meaningless without it and are shown as such.
+      const contrib = m.querySelector('#polContrib');
+      const syncContrib = () => {
+        pol.contribute = contrib.checked;
+        m.querySelectorAll('[data-grp]').forEach(row => {
+          const g = pol.groups[row.dataset.grp];
+          row.querySelector('[data-p="edit"]').disabled = !g.share || !pol.contribute;
+          row.querySelector('[data-p="del"]').disabled = !g.edit || !pol.contribute;
+        });
+      };
+      contrib.onchange = syncContrib;
       m.querySelectorAll('[data-fld]').forEach(row => {
         const f = Privacy.FIELDS.find(x => x.id === row.dataset.fld);
         const sel = row.querySelector('[data-mode]');
@@ -1713,7 +1731,10 @@ Views.settings = async function (mount) {
         <label class="field" style="max-width:220px"><span>${T('cloud.autoEvery')}</span>
           <select id="clAuto">${TeamCloud.AUTO_MINUTES.map(m => `<option value="${m}" ${m === c.autoMin ? 'selected' : ''}>${everyLabel(m)}</option>`).join('')}</select></label>
       </div>
-      ${c.owner ? '' : `<p class="hint">${UI.esc(T('cloud.memberFresh'))}</p>`}
+      ${c.owner ? '' : `<p class="hint">${UI.esc(T('cloud.memberFresh'))}</p>
+      <p class="hint">${UI.esc(TeamCloud.mayContribute()
+        ? (online ? T('cloud.contribOn') : T('cloud.contribNeedsGoogle'))
+        : T('cloud.contribOff'))}</p>`}
       ${mayWrite ? '' : `<p class="hint mail-note">${UI.esc(T('cloud.readOnlyRole'))}</p>`}`;
 
     return UI.acc('setCloud', T('cloud.title'), `

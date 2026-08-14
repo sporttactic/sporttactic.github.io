@@ -52,7 +52,16 @@ const Access = (() => {
   const isAdmin = r => tier(r) === 'admin';
   // "Admin or coach" — the gate the access panel and the cloud setup use.
   const isStaff = r => ['admin', 'coach'].indexOf(tier(r)) >= 0;
-  function driveRole(r) { return DRIVE_ROLE[tier(r)] || 'reader'; }
+  // Drive decides who may write the file, so an invitation has to match what the
+  // policy promised: with contributions on, everybody invited arrives as an
+  // editor — otherwise a player is handed a code that says "contribute" and a
+  // file Google will not let them save to.
+  function driveRole(r) {
+    const base = DRIVE_ROLE[tier(r)] || 'reader';
+    if (base === 'writer') return base;
+    const pol = window.Privacy ? Privacy.policy() : null;
+    return (pol && Privacy.contributes(pol)) ? 'writer' : base;
+  }
   function label(r) {
     const v = normRole(r);
     const t = window.T ? T('role.' + v) : v;
@@ -192,7 +201,20 @@ const Access = (() => {
   function moduleOpen(route) {
     return !readMode() || (!unclaimed() && profile().training && OPEN_ROUTES.indexOf(route) >= 0);
   }
-  const openStores = () => (!unclaimed() && profile().training ? OPEN_STORES : []);
+  const openStores = () => {
+    const base = (!unclaimed() && profile().training) ? OPEN_STORES : [];
+    // Whatever the club opened for contributions has to be writable here too,
+    // or a member would have nothing to send back. Still only their own rows —
+    // blocks() keeps the club's records the club's.
+    if (unclaimed() || !window.Privacy) return base;
+    const pol = Privacy.policy();
+    if (!Privacy.contributes(pol)) return base;
+    // DB is a top-level const, so it is a global binding but NOT a property of
+    // window — testing window.DB would silently leave this list empty.
+    const all = typeof DB === 'undefined' ? [] : DB.STORES;
+    const open = all.filter(s => s !== 'settings' && Privacy.mayEdit(pol, s));
+    return base.concat(open.filter(s => base.indexOf(s) < 0));
+  };
   // The write gate. A read-only member may add to the modules the coach left
   // open and change what they added there; the club's own rows and everything
   // else are refused. `row` is the record on its way in, or the stored one on a

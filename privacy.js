@@ -48,7 +48,9 @@ const Privacy = (() => {
 
   function defaults() {
     // teams: null is every squad, including one added tomorrow.
-    const p = { groups: {}, fields: {}, teams: null };
+    // contribute: may the people holding the code send their own work back, or
+    // is the file something they only read. Off until the coach says otherwise.
+    const p = { groups: {}, fields: {}, teams: null, contribute: false };
     GROUPS.forEach(g => { p.groups[g.id] = Object.assign({}, g.def); });
     FIELDS.forEach(f => { p.fields[f.id] = f.def; });
     return p;
@@ -57,6 +59,7 @@ const Privacy = (() => {
     const rec = Store.find('settings', KEY);
     const saved = (rec && rec.value && typeof rec.value === 'object') ? rec.value : {};
     const p = defaults();
+    p.contribute = !!saved.contribute;
     if (Array.isArray(saved.teams)) p.teams = saved.teams.filter(t => typeof t === 'string');
     GROUPS.forEach(g => {
       const s = saved.groups && saved.groups[g.id];
@@ -82,7 +85,11 @@ const Privacy = (() => {
     return (pol && pol.groups && pol.groups[g.id]) || g.def;
   }
   const mayShare = (pol, store) => !!rights(pol, store).share;
-  const mayEdit = (pol, store) => !!(rights(pol, store).share && rights(pol, store).edit);
+  // One switch decides whether anything may come back at all; the per-block
+  // ticks then decide what. With contributions off the file is read-only to
+  // everybody holding the code, whatever those ticks say.
+  const contributes = pol => !!(pol || policy()).contribute;
+  const mayEdit = (pol, store) => !!(contributes(pol) && rights(pol, store).share && rights(pol, store).edit);
   const mayDelete = (pol, store) => !!(mayEdit(pol, store) && rights(pol, store).del);
 
   // ---- Which squads travel -----------------------------------------------
@@ -202,7 +209,7 @@ const Privacy = (() => {
   return {
     GROUPS, FIELDS, MODES, MASK, SECRET_FIELDS,
     defaults, policy, save, reset,
-    groupOf, rights, mayShare, mayEdit, mayDelete,
+    groupOf, rights, mayShare, mayEdit, mayDelete, contributes,
     sharedTeams, keepTeams,
     redactRows, redactValue, protectedPaths, summary, seedOf
   };

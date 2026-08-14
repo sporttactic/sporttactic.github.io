@@ -242,6 +242,14 @@ const TeamCloud = (() => {
       const rows = replace ? theirs : mergeRows(mine, theirs);
       if (rows.length) { await DB.bulkPut('settings', rows); n += replace ? theirs.length : countNew(mine, theirs); }
     }
+    // The club's policy is the club's to set, so a copy that follows the file
+    // takes it as it stands. It is what decides here whether this device may
+    // send anything back, and it is on the fixed list, so the copy cannot
+    // quietly grant itself more than the coach gave it. Written straight to the
+    // database because that same list blocks it going through the store.
+    if (!cfg().owner && doc.policy && typeof doc.policy === 'object') {
+      await DB.bulkPut('settings', [{ id: 'sharePolicy', value: doc.policy, updatedAt: Date.now() }]);
+    }
     await Store.loadAll();
     // The planner, the matches and everything else a squad owns are read through
     // Store.scoped(), so a row that arrived without one has to be given a squad
@@ -265,7 +273,7 @@ const TeamCloud = (() => {
     } finally { busy = false; emit({ pulled: got }); }
   }
   async function push(mode) {
-    if (!Access.can('cloud.write')) throw new Error('not-allowed');
+    if (!Access.can('cloud.write') && !mayContribute()) throw new Error('not-allowed');
     if (busy) throw new Error('busy');
     busy = true;
     try {
@@ -312,8 +320,18 @@ const TeamCloud = (() => {
   // new from the file, then put everything new of ours back.
   async function sync() {
     const got = await pull('merge');
-    if (Access.can('cloud.write') && signedIn()) await push('merge');
+    if ((Access.can('cloud.write') || mayContribute()) && signedIn()) await push('merge');
     return got;
+  }
+  // A copy that follows somebody else's file may still send its own work up,
+  // when the owner turned contributions on and left at least one block open.
+  // Google decides the rest: writing to the file needs a signed-in account the
+  // owner invited as an editor, which no API key can stand in for.
+  function mayContribute() {
+    const c = cfg();
+    if (!c.fileId || c.owner) return false;
+    if (!window.Privacy || !Privacy.contributes(Privacy.policy())) return false;
+    return syncStores().some(s => Privacy.mayEdit(Privacy.policy(), s));
   }
   const msg = e => String((e && e.message) || e || '').slice(0, 200);
 
@@ -395,7 +413,7 @@ const TeamCloud = (() => {
 
   return {
     AUTO_MINUTES, FILE_NAME,
-    cfg, setCfg, forget, isLinked, onChange, signedIn, canSyncQuietly,
+    cfg, setCfg, forget, isLinked, onChange, signedIn, canSyncQuietly, mayContribute,
     makeCode, readCode, parseTarget,
     snapshot, pull, push, sync,
     createShared, inviteMembers, join,
