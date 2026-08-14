@@ -310,6 +310,32 @@ const App = (() => {
       : () => { if (window.Backup && Backup.unlock) Backup.unlock(); };
   }
 
+  // The one button a player needs: everybody who follows a shared file gets it
+  // in the topbar, next to the language switch.
+  function refreshSyncBtn() {
+    const b = document.getElementById('topSync');
+    if (!b) return;
+    const on = !!(window.TeamCloud && TeamCloud.cfg().fileId);
+    b.classList.toggle('hidden', !on);
+    if (!on) return;
+    b.title = T('cloud.syncNow');
+    b.setAttribute('aria-label', T('cloud.syncNow'));
+  }
+  async function runTopSync() {
+    const b = document.getElementById('topSync');
+    if (!b || b.classList.contains('busy')) return;
+    b.classList.add('busy');
+    try {
+      // Anything that came down is announced by the onChange handler above, so
+      // this only speaks up when there was nothing to say.
+      const got = await TeamCloud.sync();
+      if (!got) UI.toast(T('cloud.upToDate'), 'success');
+    } catch (e) {
+      UI.toast(e && e.oversize ? T(TeamCloud.cfg().owner ? 'cloud.oversizeOwner' : 'cloud.oversize')
+        : T('cloud.syncFail') + ' — ' + ((e && e.message) || e), 'error');
+    } finally { b.classList.remove('busy'); }
+  }
+
   async function boot() {
     await Store.loadAll();
     await Store.purgeDemoPlayers();
@@ -337,11 +363,15 @@ const App = (() => {
     refreshLockBadge();
     Store.onChange(refreshLockBadge);
     Store.onChange(syncMemberMode);
+    refreshSyncBtn();
+    const sb = document.getElementById('topSync');
+    if (sb) sb.onclick = runTopSync;
     // The profile arrives with the shared file, so a sync can turn read mode on
     // (or off) while the app is open.
     if (window.TeamCloud) TeamCloud.onChange(info => {
       refreshLockBadge();
       applyMemberMode();
+      refreshSyncBtn();
       // Rows landed from a background pull, so the view on screen was built
       // from the old ones. Redraw it — but not over a dialog, and not over the
       // modules that hold live work a redraw would throw away: a running match

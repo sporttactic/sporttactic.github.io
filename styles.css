@@ -362,6 +362,9 @@ body {
 }
 .icon-btn:hover { background: var(--surface-2); }
 .icon-btn.muted { color: var(--danger); }
+.icon-btn.busy { pointer-events: none; opacity: .6; }
+.icon-btn.busy svg { animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
 #menuToggle { display: none; }
 .search-box { position: relative; flex: 1; max-width: 480px; }
 .search-box input {
