@@ -25,13 +25,12 @@ Views.teams = function (mount) {
 
   // A copy that follows somebody else's shared team database filed nothing
   // itself, so an animation that arrived with the club file and carries no squad
-  // of its own still belongs to the squad the team code opened. A copy tied to
-  // ONE squad by its own word is the exception: it sees what was sent there and
-  // nothing else, exactly like the board's list.
+  // of its own still belongs to the squad the team code opened. A per-squad word
+  // narrows which squads the device sees, but an unfiled animation is the club's
+  // rather than another squad's, so it stays.
   function clubAnimations() {
     const c = (window.TeamCloud && TeamCloud.cfg) ? TeamCloud.cfg() : null;
-    const lock = (window.Access && Access.teamLock) ? Access.teamLock() : '';
-    return !!(c && c.fileId && !c.owner) && !lock;
+    return !!(c && c.fileId && !c.owner);
   }
   // Animations a coach filed under this squad on the tactical board.
   function teamAnimations(team) {

@@ -331,6 +331,9 @@ Views.tactics = function (mount, params) {
     if (saveTimer) clearTimeout(saveTimer);
     saveTimer = setTimeout(async () => {
       saveTimer = null;
+      // A look-only copy cannot keep the working board, and asking anyway raises
+      // the read-only warning at a player who is only watching an animation.
+      if (window.Access && Access.blocks && Access.blocks('tactics', current)) return;
       try {
         const nameInput = mount.querySelector('#playName');
         current.name = (nameInput && nameInput.value.trim()) || current.name || 'Untitled Play';
@@ -1798,10 +1801,12 @@ Views.tactics = function (mount, params) {
 
   // ---- Saved animations: the coach's own `tactics` records tagged `kind:'system'` ----
   function userSystems() {
-    // A player copy tied to one squad only ever sees what was sent to that squad.
+    // A copy tied to one squad stays out of the club's OTHER squads. An animation
+    // filed under no squad belongs to the club, so it still shows — without this
+    // a player sees an empty list, because saving one files it nowhere.
     const lock = (window.Access && Access.teamLock) ? Access.teamLock() : '';
     return Store.all('tactics').filter(t => t.kind === 'system' && (t.sport || 'handball') === sportId
-      && (!lock || t.teamId === lock));
+      && (!lock || !t.teamId || t.teamId === lock));
   }
   // Mirror of the saved systems, docked under the Save Animation button.
   function renderAnimList() {
@@ -1815,6 +1820,9 @@ Views.tactics = function (mount, params) {
       ? mine.map(s => `<option value="${UI.esc(s.id)}"${systemClips(s).length ? ' data-vid="1"' : ''}>${systemClips(s).length ? '▶ ' : '★ '}${UI.esc(s.name)}</option>`).join('')
       : `<option value="" disabled>${T('tactics.noSavedAnims')}</option>`;
     if (mine.some(s => s.id === keep)) box.value = keep;
+    // Nothing picked leaves Load and play greyed out, which reads as broken on a
+    // player's phone where this list is the whole point of the screen.
+    else if (mine.length) box.selectedIndex = 0;
     else box.selectedIndex = -1;
     syncAnimActions();
     fitCanvas();
