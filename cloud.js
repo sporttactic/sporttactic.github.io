@@ -27,7 +27,10 @@ const TeamCloud = (() => {
   // that decide what a joining device may be. The readable words never travel.
   const SHARED_SETTINGS = ['accessMembers', 'memberProfile', 'roleKeys'];
   const AUTO_MINUTES = [0, 5, 15, 30, 60, 180];
-  const MAX_ROWS_PER_STORE = 50000;
+  // Only a storage-exhaustion guard now that the file is split by size: a real
+  // club never comes near it, and what a hostile file may carry is bounded by
+  // the byte ceiling on every part long before this.
+  const MAX_ROWS_PER_STORE = 200000;
   // What a device gets when it joins with a code. The coach's own copy keeps
   // whatever they chose.
   const MEMBER_AUTO_MIN = 15;
@@ -51,6 +54,7 @@ const TeamCloud = (() => {
       autoMin: +v.autoMin || 0,
       lastPullAt: +v.lastPullAt || 0,
       lastPushAt: +v.lastPushAt || 0,
+      lastSkipped: +v.lastSkipped || 0,
       lastErr: String(v.lastErr || '')
     };
   }
@@ -132,9 +136,17 @@ const TeamCloud = (() => {
     const data = {};
     for (const s of syncStores()) {
       if (!Privacy.mayShare(pol, s)) continue;
-      data[s] = await Store.pack(Privacy.redactRows(s, await DB.getAll(s), pol));
+      const rows = await DB.getAll(s);
+      // A store nobody has put anything in is not news. Sending the empty array
+      // only makes the file bigger and gives the other side something to merge
+      // that cannot change anything.
+      if (!rows.length) continue;
+      data[s] = await Store.pack(Privacy.redactRows(s, rows, pol));
     }
     const out = Privacy.keepTeams(data, pol);
+    // keepTeams can filter a store down to nothing when the club shares one
+    // squad out of several.
+    Object.keys(out).forEach(s => { if (Array.isArray(out[s]) && !out[s].length) delete out[s]; });
     const shared = (await DB.getAll('settings')).filter(r => SHARED_SETTINGS.indexOf(r.id) >= 0);
     if (shared.length) out.settings = await Store.pack(shared);
     return {
@@ -209,14 +221,18 @@ const TeamCloud = (() => {
     }
     return out;
   }
-  // Cut one store's rows into pieces no bigger than PART_BYTES. A single row
-  // over the limit still goes on its own rather than being dropped.
-  function chunkRows(rows) {
+  // Cut one store's rows into pieces no bigger than PART_BYTES. A row too big to
+  // share a piece gets one to itself, up to ROW_BYTES — past that the part it
+  // made would be unreadable for everybody, for ever, so it stays on this device
+  // and is counted instead. In practice that is only ever a recorded clip.
+  const ROW_BYTES = 32 * 1024 * 1024;
+  function chunkRows(rows, skipped) {
     const out = [];
     let cur = [];
     let size = 0;
     (rows || []).forEach(r => {
       const n = jsonBytes(r) + 1;
+      if (n > ROW_BYTES) { skipped.push(r); return; }
       if (cur.length && size + n > PART_BYTES) { out.push(cur); cur = []; size = 0; }
       cur.push(r);
       size += n;
@@ -277,8 +293,9 @@ const TeamCloud = (() => {
     });
     const folder = await Drive.ensureFolder('SportTactic', null);
     const parts = [];
+    const skipped = [];
     for (const s of stores) {
-      const chunks = chunkRows(doc.data[s]);
+      const chunks = chunkRows(doc.data[s], skipped);
       const reuse = (slots.get(s) || []).slice().sort((a, b) => (a.seq || 0) - (b.seq || 0));
       for (let i = 0; i < chunks.length; i++) {
         const cur = reuse[i];
@@ -300,6 +317,7 @@ const TeamCloud = (() => {
       delete doc.data[s];
     }
     doc.parts = parts;
+    await setCfg({ lastSkipped: skipped.length });
     return Drive.uploadJson('', doc, { fileId: c.fileId });
   }
 
@@ -324,7 +342,7 @@ const TeamCloud = (() => {
       if (!Array.isArray(doc.data[s])) continue;
       // Whoever wrote the shared file chooses how many rows it carries. A
       // device that follows a code must not let that fill its storage.
-      if (doc.data[s].length > MAX_ROWS_PER_STORE) throw new Error('shared file too large');
+      if (doc.data[s].length > MAX_ROWS_PER_STORE) throw new Error('too many records in ' + s);
       const theirs = Store.unpack(doc.data[s]).filter(r => r && typeof r.id === 'string');
       const mine = await DB.getAll(s);
       const keep = guarded[s] || [];

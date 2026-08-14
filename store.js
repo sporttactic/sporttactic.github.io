@@ -367,6 +367,14 @@ const Store = (() => {
     for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
     return new Blob([u8], { type: type || 'application/octet-stream' });
   }
+  // A blank carries no information but still costs its key on every row, and a
+  // squad has a lot of optional fields nobody filled in. Dropping them makes a
+  // shared file markedly smaller for free: a key that is not there reads back as
+  // undefined, which is what an empty one meant anyway, and merging replaces
+  // whole rows by id so clearing a field still travels.
+  // false and 0 are answers, not blanks — those stay.
+  const isBlank = v => v === undefined || v === null || v === ''
+    || (Array.isArray(v) && !v.length);
   async function pack(v) {
     if (v == null || typeof v !== 'object') return v;
     if (v instanceof Blob) return { __blob: 1, type: v.type, size: v.size, data: await blobToB64(v) };
@@ -374,7 +382,7 @@ const Store = (() => {
     if (v instanceof Date) return { __date: 1, iso: v.toISOString() };
     if (Array.isArray(v)) { const out = []; for (const x of v) out.push(await pack(x)); return out; }
     const out = {};
-    for (const k of Object.keys(v)) out[k] = await pack(v[k]);
+    for (const k of Object.keys(v)) { if (!isBlank(v[k])) out[k] = await pack(v[k]); }
     return out;
   }
   // Keys that are not data. JSON.parse happily produces an own "__proto__"
@@ -393,7 +401,7 @@ const Store = (() => {
   }
   // A file that arrives from outside decides how many rows it hands over, so
   // the ceiling is set here rather than by whoever wrote the file.
-  const MAX_ROWS_PER_STORE = 50000;
+  const MAX_ROWS_PER_STORE = 200000;
   // A training plan is useless without the drills it points at, so it takes both.
   const PACK_STORES = {
     exercises: ['exercises'], training: ['training', 'exercises'], tactics: ['tactics'],
@@ -443,7 +451,7 @@ const Store = (() => {
     let n = 0;
     for (const s of stores) {
       if (!Array.isArray(data[s])) continue;
-      if (data[s].length > MAX_ROWS_PER_STORE) throw new Error('file too large');
+      if (data[s].length > MAX_ROWS_PER_STORE) throw new Error('too many records in ' + s);
       let rows = unpack(data[s]).filter(r => r && typeof r === 'object' && typeof r.id === 'string');
       if (teamId && SELF_TEAM.indexOf(kind) < 0 && TEAM_SCOPED.indexOf(s) >= 0) rows = rows.map(r => Object.assign({}, r, { teamId }));
       if (!rows.length) continue;

@@ -1714,6 +1714,7 @@ Views.settings = async function (mount) {
       <div class="cloud-facts">
         <span class="tag">${UI.esc(T('cloud.lastPull'))}: ${UI.esc(fmtWhen(c.lastPullAt))}</span>
         <span class="tag">${UI.esc(T('cloud.lastPush'))}: ${UI.esc(fmtWhen(c.lastPushAt))}</span>
+        ${c.lastSkipped ? `<span class="tag warn">${UI.esc(T('cloud.skipped').replace('{0}', c.lastSkipped))}</span>` : ''}
         ${c.lastErr ? `<span class="tag warn">${UI.esc(c.lastErr)}</span>` : ''}
       </div>
       <div class="row" style="flex:0;margin-top:10px;flex-wrap:wrap">
