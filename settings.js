@@ -457,7 +457,7 @@ function fmtWhen(ts) {
 
 // Sync stores a token rather than a sentence, so the wording follows the
 // language the coach is reading in right now.
-const CLOUD_ERR = { 'oversize': 'cloud.oversize', 'oversize-owner': 'cloud.oversizeOwner' };
+const CLOUD_ERR = { 'oversize': 'cloud.oversize', 'oversize-owner': 'cloud.oversizeOwner', 'signin': 'cloud.signinNeeded' };
 function cloudErrText(err) {
   return CLOUD_ERR[err] ? T(CLOUD_ERR[err]) : err;
 }
@@ -1445,10 +1445,31 @@ function cloudJoinDialog(onDone) {
           const squad = await attachJoinedSquad();
           if (squad) UI.toast(T('cloud.squadAttached').replace('{0}', squad.name || ''), 'success');
           if (onDone) onDone();
+          offerDriveConnect();
         } catch (e) {
           state.textContent = T('cloud.joinFailed') + ' ' + String((e && e.message) || e).slice(0, 180);
         } finally { go.disabled = false; }
       };
+    }
+  });
+}
+
+// Reading the club file needs no Google account — the code carries its own key.
+// Sending anything back does, so whoever the word let in as staff, or as a
+// player the club takes work from, is offered the sign-in once, here, while the
+// click that opened the popup is still theirs.
+async function offerDriveConnect() {
+  if (!window.Drive || Drive.isConnected()) return;
+  if (!(await Drive.isConfigured())) return;
+  const mayWrite = Access.can('cloud.write') || (window.TeamCloud && TeamCloud.mayContribute());
+  if (!mayWrite) return;
+  UI.confirm(T('cloud.connectAsk'), async () => {
+    try {
+      await Drive.connect();
+      UI.toast(T('cloud.connected'), 'success');
+      if (window.TeamCloud) TeamCloud.start();
+    } catch (e) {
+      UI.toast(T('cloud.connectFailed') + ' — ' + String((e && e.message) || e).slice(0, 160), 'error');
     }
   });
 }
@@ -2014,6 +2035,7 @@ Views.settings = async function (mount) {
     if (squad) UI.toast(T('cloud.squadAttached').replace('{0}', squad.name || ''), 'success');
     App.applyMemberMode();
     App.render();
+    offerDriveConnect();
   });
   const openMsg = mount.querySelector('#openMessenger');
   if (openMsg) openMsg.onclick = () => App.go('messenger');

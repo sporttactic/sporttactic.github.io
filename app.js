@@ -331,8 +331,9 @@ const App = (() => {
       const got = await TeamCloud.sync();
       if (!got) UI.toast(T('cloud.upToDate'), 'success');
     } catch (e) {
-      UI.toast(e && e.oversize ? T(TeamCloud.cfg().owner ? 'cloud.oversizeOwner' : 'cloud.oversize')
-        : T('cloud.syncFail') + ' — ' + ((e && e.message) || e), 'error');
+      const key = e && e.oversize ? (TeamCloud.cfg().owner ? 'cloud.oversizeOwner' : 'cloud.oversize')
+        : (e && e.message === 'signin') ? 'cloud.signinNeeded' : '';
+      UI.toast(key ? T(key) : T('cloud.syncFail') + ' — ' + ((e && e.message) || e), 'error');
     } finally { b.classList.remove('busy'); }
   }
 

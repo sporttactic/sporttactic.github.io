@@ -98,6 +98,12 @@ const TeamCloud = (() => {
     // even if the file has not caught up yet. Only hashes travel, never a word.
     const keys = (window.Access && Access.roleKeys) ? Access.roleKeys() : null;
     if (keys) payload.r = keys;
+    // Without the club's OAuth client id a joining device cannot sign in to
+    // Drive at all, and no player is going to open the Google Cloud Console. It
+    // is public by design — what guards the account is the login and the origin
+    // list, never the id itself.
+    const cid = Store.find('settings', 'driveClientId');
+    if (cid && cid.value) payload.c = String(cid.value);
     return 'STX1-' + utf8b64(JSON.stringify(payload))
       .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
   }
@@ -111,6 +117,7 @@ const TeamCloud = (() => {
       if (!o || !o.i) return null;
       const out = { fileId: String(o.i), apiKey: String(o.k || ''), teamName: String(o.n || '') };
       if (o.r && typeof o.r === 'object' && o.r.salt && o.r.roles) out.roleKeys = o.r;
+      if (o.c) out.clientId = String(o.c);
       return out;
     } catch (e) { return null; }
   }
@@ -478,7 +485,11 @@ const TeamCloud = (() => {
       await push('replace');
       return 0;
     }
-    if ((Access.can('cloud.write') || mayContribute()) && signedIn()) await push('merge');
+    const mayWrite = Access.can('cloud.write') || mayContribute();
+    // Skipping the upload without a word is how a coach ends up certain they
+    // shared something that never left the device.
+    if (mayWrite && !signedIn()) { await setCfg({ lastErr: 'signin' }); throw new Error('signin'); }
+    if (mayWrite) await push('merge');
     return got;
   }
   // A copy that follows somebody else's file may still send its own work up,
@@ -535,6 +546,11 @@ const TeamCloud = (() => {
   async function join(text) {
     const t = parseTarget(text);
     if (!t) throw new Error('bad-code');
+    // Taken before the first read: this is what lets the device offer a Drive
+    // sign-in, which is the only way it will ever send anything back.
+    if (t.clientId && window.Drive && !(await Drive.getClientId())) {
+      try { await Drive.setClientId(t.clientId); } catch (e) { /* a bad id is not worth failing the join */ }
+    }
     await setCfg({ fileId: t.fileId, apiKey: t.apiKey || cfg().apiKey, teamName: t.teamName || cfg().teamName, owner: false });
     const n = await pull('merge');
     // A player who pasted a code wants the squad, the fixtures and the training
