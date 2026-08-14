@@ -21,6 +21,7 @@ Views.teams = function (mount) {
     const b = SPORTS.posBadge(sportId, pos);
     return `<span class="pos-badge role-${b.role}" style="--pos:${b.color}" title="${UI.esc(tt('pos', pos || ''))}">${UI.esc(b.ab)}</span>`;
   };
+  const nameInitials = n => { const s = String(n || '').trim().split(/\s+/); return UI.initials(s[0], s[1]); };
 
   // A copy that follows somebody else's shared team database filed nothing
   // itself, so an animation that arrived with the club file and carries no squad
@@ -50,22 +51,20 @@ Views.teams = function (mount) {
 
     const readRow = p => `
       <tr data-p="${p.id}">
-        <td><strong>${p.number}</strong></td>
-        <td><div style="display:flex;align-items:center;gap:10px"><span class="avatar">${UI.initials(p.firstName, p.lastName)}</span>${UI.esc(p.firstName)} ${UI.esc(p.lastName)}</div></td>
-        <td>${posBadgeHtml(p.position)}${UI.esc(tt('pos', p.position))}</td>
-        <td>${p.height || '—'} cm</td>
-        <td>${p.weight || '—'} kg</td>
-        <td><div class="contact-cell"><span>${UI.esc(p.phone || '—')}</span><span class="contact-mail">${UI.esc(p.email || '—')}</span></div></td>
-        <td>
+        <td data-label="${UI.esc(T('teams.name'))}" class="wide no-label"><div class="sq-who"><span class="avatar">${UI.initials(p.firstName, p.lastName)}</span><span class="sq-no">#${UI.esc(p.number || '?')}</span><span class="sq-nm">${UI.esc(p.firstName)} ${UI.esc(p.lastName)}</span></div></td>
+        <td data-label="${UI.esc(T('teams.position'))}"><span class="sq-val">${posBadgeHtml(p.position)}<span class="sq-pos">${UI.esc(tt('pos', p.position))}</span></span></td>
+        <td data-label="${UI.esc(T('teams.size'))}" class="sq-num">${p.height || '—'} / ${p.weight || '—'}</td>
+        <td data-label="${UI.esc(T('teams.status'))}">
           <span class="tag ${p.status === 'injured' ? 'red' : p.status === 'suspended' ? 'amber' : 'green'}">${UI.esc(tt('status', p.status || 'active'))}</span>
-          <button class="btn sm danger" data-del="${p.id}" title="${T('common.delete')}">${UI.icon('trash', 14)}</button>
           ${p.status === 'injured' && p.injuryNote ? `<div class="injury-note">${UI.esc(p.injuryNote)}</div>` : ''}
         </td>
-        <td style="text-align:right">
-          <div class="row-acts">
-            <button class="btn sm" data-mail="${p.id}">✉ ${T('mail.mail')}</button>
-            <button class="btn sm" data-chat="${p.id}">💬 ${T('teams.chat')}</button>
-            <button class="btn sm" data-edit="${p.id}">${T('common.edit')}</button>
+        <td data-label="${UI.esc(T('teams.contact'))}" class="wide"><div class="contact-cell"><span>${UI.esc(p.phone || '—')}</span><span class="contact-mail">${UI.esc(p.email || '—')}</span></div></td>
+        <td class="acts-cell">
+          <div class="row-acts icons">
+            <button class="btn sm" data-mail="${p.id}" title="${UI.esc(T('mail.mail'))}" aria-label="${UI.esc(T('mail.mail'))}">✉</button>
+            <button class="btn sm" data-chat="${p.id}" title="${UI.esc(T('teams.chat'))}" aria-label="${UI.esc(T('teams.chat'))}">💬</button>
+            <button class="btn sm" data-edit="${p.id}" title="${UI.esc(T('common.edit'))}" aria-label="${UI.esc(T('common.edit'))}">✎</button>
+            <button class="btn sm danger" data-del="${p.id}" title="${UI.esc(T('common.delete'))}" aria-label="${UI.esc(T('common.delete'))}">${UI.icon('trash', 14)}</button>
           </div>
         </td>
       </tr>`;
@@ -73,19 +72,20 @@ Views.teams = function (mount) {
     // Inline editing: every cell of the squad is a field, saved in one go.
     const editRow = p => `
       <tr data-p="${p.id}" class="row-edit">
-        <td><input class="cell" type="number" data-f="number" value="${UI.esc(p.number || '')}"></td>
-        <td><div class="cell-pair">
+        <td data-label="${UI.esc(T('teams.name'))}" class="wide"><div class="cell-pair">
+          <input class="cell cell-no" type="number" data-f="number" value="${UI.esc(p.number || '')}" placeholder="#" aria-label="${UI.esc(T('teams.number'))}">
           <input class="cell" data-f="firstName" value="${UI.esc(p.firstName || '')}" placeholder="${UI.esc(T('teams.firstName'))}">
           <input class="cell" data-f="lastName" value="${UI.esc(p.lastName || '')}" placeholder="${UI.esc(T('teams.lastName'))}"></div></td>
-        <td><select class="cell" data-f="position">${positions.map(x => `<option value="${UI.esc(x)}" ${x === p.position ? 'selected' : ''}>${UI.esc(SPORTS.posBadge(sportId, x).ab)} \u2013 ${UI.esc(tt('pos', x))}</option>`).join('')}</select></td>
-        <td><input class="cell" type="number" data-f="height" value="${UI.esc(p.height || '')}"></td>
-        <td><input class="cell" type="number" data-f="weight" value="${UI.esc(p.weight || '')}"></td>
-        <td><div class="cell-pair">
+        <td data-label="${UI.esc(T('teams.position'))}"><select class="cell" data-f="position">${positions.map(x => `<option value="${UI.esc(x)}" ${x === p.position ? 'selected' : ''}>${UI.esc(SPORTS.posBadge(sportId, x).ab)} \u2013 ${UI.esc(tt('pos', x))}</option>`).join('')}</select></td>
+        <td data-label="${UI.esc(T('teams.size'))}"><div class="cell-pair">
+          <input class="cell" type="number" data-f="height" value="${UI.esc(p.height || '')}" placeholder="${UI.esc(T('teams.height'))}">
+          <input class="cell" type="number" data-f="weight" value="${UI.esc(p.weight || '')}" placeholder="${UI.esc(T('teams.weight'))}"></div></td>
+        <td data-label="${UI.esc(T('teams.status'))}"><select class="cell" data-f="status">
+          ${['active', 'injured', 'suspended'].map(s => `<option value="${s}" ${p.status === s ? 'selected' : ''}>${UI.esc(tt('status', s))}</option>`).join('')}</select></td>
+        <td data-label="${UI.esc(T('teams.contact'))}" class="wide"><div class="cell-pair">
           <input class="cell" type="tel" data-f="phone" value="${UI.esc(p.phone || '')}" placeholder="+45…">
           <input class="cell" type="email" data-f="email" value="${UI.esc(p.email || '')}" placeholder="${UI.esc(T('teams.email'))}"></div></td>
-        <td><select class="cell" data-f="status">
-          ${['active', 'injured', 'suspended'].map(s => `<option value="${s}" ${p.status === s ? 'selected' : ''}>${UI.esc(tt('status', s))}</option>`).join('')}</select></td>
-        <td style="text-align:right"><button class="btn sm danger" data-del="${p.id}" title="${T('common.delete')}">${UI.icon('trash', 14)}</button></td>
+        <td class="acts-cell"><div class="row-acts icons"><button class="btn sm danger" data-del="${p.id}" title="${UI.esc(T('common.delete'))}" aria-label="${UI.esc(T('common.delete'))}">${UI.icon('trash', 14)}</button></div></td>
       </tr>`;
 
     const squadTable = `
@@ -97,22 +97,23 @@ Views.teams = function (mount) {
       </div>
       ${editing ? `<p class="hint">${T('teams.editHint')}</p>` : ''}
       <div class="table-wrap">
-        <table class="${editing ? 'squad-edit' : ''}">
-          <thead><tr><th>${T('teams.number')}</th><th>${T('teams.name')}</th><th>${T('teams.position')}</th><th>${T('teams.height')}</th><th>${T('teams.weight')}</th><th>${T('teams.contact')}</th><th>${T('teams.status')}</th><th></th></tr></thead>
+        <table class="compact stack${editing ? ' squad-edit' : ''}">
+          <thead><tr><th>${T('teams.name')}</th><th>${T('teams.position')}</th><th>${T('teams.size')}</th><th>${T('teams.status')}</th><th>${T('teams.contact')}</th><th></th></tr></thead>
           <tbody>
-            ${players.map(p => editing ? editRow(p) : readRow(p)).join('') || `<tr><td colspan="8" class="empty">${T('common.noData')}</td></tr>`}
+            ${players.map(p => editing ? editRow(p) : readRow(p)).join('') || `<tr><td colspan="6" class="empty">${T('common.noData')}</td></tr>`}
           </tbody>
         </table>
       </div>`;
 
     const staffList = coaches.map(c => `
       <div class="staff-row">
+        <span class="avatar">${nameInitials(c.name)}</span>
         <span class="staff-name">${UI.esc(c.name)}${c.email ? `<span class="staff-mail">${UI.esc(c.email)}</span>` : ''}</span>
         <span class="tag blue">${UI.esc(tt('coachRole', c.role))}</span>
         <span class="staff-actions">
-          <button class="btn sm" data-staffchat="${c.id}">💬 ${T('teams.chat')}</button>
-          <button class="btn sm" data-editstaff="${c.id}">${T('common.edit')}</button>
-          <button class="btn sm danger" data-delstaff="${c.id}" title="${T('common.delete')}">${UI.icon('trash', 14)}</button>
+          <button class="btn sm" data-staffchat="${c.id}" title="${UI.esc(T('teams.chat'))}" aria-label="${UI.esc(T('teams.chat'))}">💬</button>
+          <button class="btn sm" data-editstaff="${c.id}" title="${UI.esc(T('common.edit'))}" aria-label="${UI.esc(T('common.edit'))}">✎</button>
+          <button class="btn sm danger" data-delstaff="${c.id}" title="${UI.esc(T('common.delete'))}" aria-label="${UI.esc(T('common.delete'))}">${UI.icon('trash', 14)}</button>
         </span>
       </div>`).join('') || `<p style="color:var(--muted)">${T('common.noData')}</p>`;
 

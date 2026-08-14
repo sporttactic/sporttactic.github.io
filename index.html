@@ -44,7 +44,7 @@ Show focus areas
 Produce video clips.">
   <link rel="apple-touch-icon" href="logo.svg?v=6" />
   <title>SportTactic</title>
-  <link rel="stylesheet" href="styles.css?v=104" />
+  <link rel="stylesheet" href="styles.css?v=107" />
   <link rel="manifest" href="manifest.webmanifest?v=2" />
   <style>
     /* Boot splash — inline so it paints before styles.css / the app scripts run.
@@ -216,7 +216,10 @@ Produce video clips.">
   <div id="toastHost" class="toast-host"></div>
 
   <script src="db.js?v=14"></script>
-  <script src="i18n.js?v=131"></script>
+  <!-- Loads first: beforeinstallprompt can fire the moment the page is
+       interactive, and an event that is not caught cannot be asked for again. -->
+  <script src="install.js?v=1"></script>
+  <script src="i18n.js?v=133"></script>
   <script src="sports.js?v=20"></script>
   <script src="playbook.js?v=12"></script>
   <script src="store.js?v=32"></script>
@@ -228,10 +231,10 @@ Produce video clips.">
   <script src="mail.js?v=12"></script>
   <script src="ai.js?v=12"></script>
   <script src="dashboard.js?v=17"></script>
-  <script src="teams.js?v=40"></script>
-  <script src="matches.js?v=22"></script>
+  <script src="teams.js?v=41"></script>
+  <script src="matches.js?v=23"></script>
   <script src="planner.js?v=9"></script>
-  <script src="scouting.js?v=28"></script>
+  <script src="scouting.js?v=30"></script>
   <script src="statistics.js?v=26"></script>
   <script src="chess.js?v=13"></script>
   <script src="bridge.js?v=13"></script>
@@ -244,13 +247,13 @@ Produce video clips.">
   <script src="exercises.js?v=32"></script>
   <script src="opponents.js?v=20"></script>
   <script src="reports.js?v=22"></script>
-  <script src="settings.js?v=77"></script>
+  <script src="settings.js?v=78"></script>
   <script src="backup.js?v=2"></script>
   <script src="messenger.js?v=18"></script>
   <script src="app.js?v=33"></script>
   <!-- Phone layout. Loads last: it reads the sidebar App has already wired and
        drives App.go, so both must exist before it runs. -->
-  <script src="mobile.js?v=1"></script>
+  <script src="mobile.js?v=3"></script>
   <script>
     // PWA: offline app shell (sw.js) + Chrome's install prompt.
     (function () {
@@ -287,33 +290,6 @@ Produce video clips.">
           }).catch(function () { /* no offline shell; the app still runs online */ });
         });
       }
-
-      var btn = document.getElementById('installApp');
-      var deferred = null;
-      // Settings > Offline offers the same button, so the event is kept where
-      // both can reach it instead of only on the sidebar.
-      window.STXInstall = {
-        available: function () { return !!deferred; },
-        prompt: function () {
-          if (!deferred) return Promise.resolve(false);
-          var e = deferred;
-          deferred = null;
-          if (btn) btn.classList.add('hidden');
-          e.prompt();
-          return e.userChoice.then(function (c) { return !!(c && c.outcome === 'accepted'); }, function () { return false; });
-        }
-      };
-      window.addEventListener('beforeinstallprompt', function (e) {
-        e.preventDefault();
-        deferred = e;
-        if (btn) btn.classList.remove('hidden');
-      });
-      if (btn) btn.addEventListener('click', function () { window.STXInstall.prompt(); });
-      window.addEventListener('appinstalled', function () {
-        deferred = null;
-        if (btn) btn.classList.add('hidden');
-        say('footer.installed', 'App installed — it now works offline');
-      });
     })();
   </script>
   <script>

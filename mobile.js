@@ -270,6 +270,7 @@ const Mobile = (() => {
       closeDrawer();
       if (b.id === 'mobJoin') join();
       else if (b.id === 'mobSync') syncNow();
+      else if (b.id === 'mobInstall') STXInstall.guide();
     });
     refreshActions();
   }
@@ -277,9 +278,13 @@ const Mobile = (() => {
     const box = $('mobActions');
     if (!box) return;
     const linked = !!(window.TeamCloud && TeamCloud.isLinked());
+    // A phone is where the home-screen icon matters most, so the offer sits in
+    // the drawer until it has been taken up.
+    const canAdd = !!(window.STXInstall && STXInstall.canInstall());
     box.innerHTML =
       '<button type="button" class="btn primary block" id="mobJoin">' + esc(tr('cloud.joinBtn', 'Join with a team code')) + '</button>'
-      + (linked ? '<button type="button" class="btn block" id="mobSync">' + esc(tr('cloud.syncNow', 'Sync now')) + '</button>' : '');
+      + (linked ? '<button type="button" class="btn block" id="mobSync">' + esc(tr('cloud.syncNow', 'Sync now')) + '</button>' : '')
+      + (canAdd ? '<button type="button" class="btn block" id="mobInstall">⬇ ' + esc(tr('ins.title', 'Add to Home Screen')) + '</button>' : '');
   }
 
   // Reuses the one join dialog in settings.js so there is a single code path for
@@ -370,9 +375,11 @@ const Mobile = (() => {
       return;
     }
     if (!on || ls.get(WELCOME_KEY)) return;
-    const noTeams = !window.Store || !Store.teams || Store.teams().length === 0;
+    // Store is a top-level const, so it is a global binding but NOT a property
+    // of window — testing window.Store would report "empty device" every time.
+    const noData = typeof Store === 'undefined' || !Store.all('teams').length;
     const unlinked = !window.TeamCloud || !TeamCloud.isLinked();
-    if (noTeams && unlinked) welcome();
+    if (noData && unlinked) welcome();
   }
 
   function init() {

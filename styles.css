@@ -454,6 +454,22 @@ th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--bo
 th { font-size: 12px; text-transform: uppercase; color: var(--muted); font-weight: 600; }
 tr:hover td { background: var(--surface-2); }
 .table-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
+/* A list of people or fixtures is scanned, not read — tighter rows fit a whole
+   squad on one screen instead of three. */
+table.compact th, table.compact td { padding: 7px 10px; vertical-align: middle; }
+table.compact td { font-size: 13px; }
+table.compact .acts-cell { width: 1%; white-space: nowrap; text-align: right; }
+.sq-who { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.sq-who .avatar { width: 28px; height: 28px; font-size: 11px; }
+.sq-no { font-weight: 800; color: var(--muted); font-variant-numeric: tabular-nums; }
+.sq-val { display: inline-flex; align-items: center; min-width: 0; }
+.sq-nm { min-width: 0; overflow-wrap: anywhere; }
+.sq-pos { color: var(--text-soft); min-width: 0; }
+.sq-num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.cell-no { flex: 0 0 62px; }
+.mt-when { white-space: nowrap; }
+.mt-meta { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; }
+.mt-meta .tag { font-size: 10px; padding: 1px 6px; }
 /* Read-only detail table inside a dialog: label column left, value right. */
 .show-table { width: 100%; }
 .show-table th { width: 38%; vertical-align: top; }
@@ -490,6 +506,11 @@ body[data-member="read"] #modalHost [data-mail] { display: none !important; }
 /* Row actions: one button per line, so a long label never squeezes the column. */
 .row-acts { display: flex; flex-direction: column; align-items: stretch; gap: 6px; min-width: 108px; }
 .row-acts > .btn { width: 100%; }
+/* Icon-only variant for the long lists (squad, fixtures): the labels live in
+   the tooltip so four actions cost one line instead of four. */
+.row-acts.icons { flex-direction: row; flex-wrap: nowrap; justify-content: flex-end; gap: 4px; min-width: 0; }
+.row-acts.icons > .btn { width: auto; min-width: 32px; padding: 6px 8px; font-size: 13px; line-height: 1.2; }
+.row-acts.icons > .btn svg { display: block; }
 
 .tag { display: inline-flex; align-items: center; justify-content: center; padding: 2px 8px; border-radius: 12px; font-size: 11px; line-height: 1.45; background: var(--surface-2); border: 1px solid var(--border); white-space: normal; overflow-wrap: break-word; text-align: center; max-width: 100%; }
 .tag.green { color: var(--accent); border-color: var(--accent); }
@@ -513,11 +534,13 @@ input:focus, select:focus, textarea:focus { border-color: var(--primary); }
 .row > .btn, .row > label.btn { flex: 0 0 auto; min-width: 0; }
 
 /* Staff list (Teams & Players) */
-.staff-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.staff-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--border); }
 .staff-row:last-child { border-bottom: 0; }
-.staff-name { flex: 1; min-width: 0; }
+.staff-row .avatar { width: 28px; height: 28px; font-size: 11px; }
+.staff-name { flex: 1 1 140px; min-width: 0; font-size: 13px; line-height: 1.3; }
 .staff-mail { display: block; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
-.staff-actions { display: flex; gap: 6px; white-space: nowrap; }
+.staff-actions { display: flex; gap: 4px; margin-left: auto; white-space: nowrap; }
+.staff-actions .btn { min-width: 32px; padding: 6px 8px; }
 
 /* Scroll-to-top button */
 .to-top {
@@ -561,6 +584,9 @@ input:focus, select:focus, textarea:focus { border-color: var(--primary); }
 
 /* Scouting */
 .scout-grid { display: grid; grid-template-columns: 1fr 320px; gap: 16px; }
+/* Grid columns default to min-content; without this the sticky player strip
+   widens the whole column and pushes the panels off the right edge. */
+.scout-grid > * { min-width: 0; }
 @media (max-width: 900px) { .scout-grid { grid-template-columns: 1fr; } }
 .event-buttons { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px,1fr)); grid-auto-rows: 1fr; gap: 8px; }
 .event-btn { display: flex; align-items: center; justify-content: center; min-height: 52px; height: 100%; padding: 12px 8px; text-align: center; border-radius: 10px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text); cursor: pointer; font-weight: 600; font-size: 13px; line-height: 1.25; overflow-wrap: anywhere; }
@@ -589,6 +615,52 @@ input:focus, select:focus, textarea:focus { border-color: var(--primary); }
 .event-log { max-height: 420px; overflow-y: auto; color: var(--text); }
 .event-log .log-item { display: flex; justify-content: space-between; padding: 8px 10px; border-bottom: 1px solid var(--border); font-size: 13px; }
 .event-log .log-time { color: var(--muted); font-variant-numeric: tabular-nums; }
+
+/* ---- Quick panel (live scouting) ----
+   Pick the player once at the top, then every category is on screen at the same
+   time — no tab hop between an attack and the foul that follows it. The box
+   sticks so the whole squad is still reachable after scrolling down to the
+   goalkeeper panel. */
+.qs-bar {
+  position: sticky; top: 0; z-index: 6;
+  display: flex; align-items: flex-start;
+  margin-bottom: 12px; padding: 6px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+}
+/* A box, not a scrolling strip: every number is in reach at a glance. Nobody
+   swipes sideways hunting for a shirt number while the match is running. */
+.qs-players {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+  grid-auto-rows: 1fr; gap: 4px; flex: 1 1 auto; min-width: 0;
+}
+.qs-bar > .btn { flex: 0 0 auto; margin-left: 6px; }
+.qs-none { color: var(--muted); font-size: 13px; padding: 6px 4px; }
+.qs-player {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: center;
+  min-width: 0; padding: 3px 4px 4px;
+  border-radius: 9px; border: 1px solid var(--border);
+  background: var(--surface-2); color: var(--text);
+  font: inherit; font-size: 12px; font-weight: 600; line-height: 1.15;
+  cursor: pointer; touch-action: manipulation;
+}
+/* Small enough that the badge and the number always share the first line — a
+   wrapped pair would make that one tile a row taller than its neighbours. */
+.qs-player .pos-badge { min-width: 20px; height: 16px; margin: 0 3px 0 0; padding: 0 3px; font-size: 9px; }
+.qs-num { font-weight: 800; color: var(--muted); font-variant-numeric: tabular-nums; }
+/* Full-width basis puts the surname on its own line under the number. */
+.qs-name { flex: 0 0 100%; margin-top: 1px; font-size: 11px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.qs-player.active { background: var(--primary); color: var(--on-primary); border-color: var(--primary); }
+.qs-player.active .qs-num { color: var(--on-primary); }
+.qs-panels { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; align-items: start; }
+.qs-panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px; }
+.qs-panel > h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin-bottom: 8px; }
+.qs-panel.off { opacity: .5; }
+.qs-off-note { margin: 8px 0 0; }
+.qs-acts { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); grid-auto-rows: 1fr; gap: 6px; }
+.qs-acts .event-btn { min-height: 46px; padding: 8px 6px; font-size: 12.5px; }
+.qs-acts .event-btn:disabled { cursor: not-allowed; transform: none; }
+/* One flash confirms the tap landed without waiting for the toast to arrive. */
+.event-btn.hit { background: var(--primary); color: var(--on-primary); border-color: var(--primary); }
 
 /* Tactical board */
 .board-wrap { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 16px; align-items: start; }
@@ -1167,6 +1239,20 @@ td.col-num .cell, td.col-h .cell, td.col-w .cell { max-width: 92px; }
 
 .mail-note { border-left: 3px solid var(--warning); background: var(--surface-2); padding: 8px 10px; border-radius: 6px; margin: 0 0 10px; }
 
+/* ---- Add to Home Screen guide (install.js) ---- */
+.ins-steps { margin: 14px 0 0; padding-left: 22px; font-size: 14px; line-height: 1.6; }
+.ins-steps li { margin-bottom: 12px; }
+.ins-steps li:last-child { margin-bottom: 0; }
+/* The icon is quoted inside the sentence, so it has to sit on the text baseline
+   the way the button does on the device. */
+.ins-ico {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; margin: 0 3px; vertical-align: -8px;
+  border: 1px solid var(--border); border-radius: 7px;
+  background: var(--surface-2); color: var(--primary);
+}
+.ins-ok { color: var(--accent); font-weight: 600; }
+
 /* ---- Send to Coach picker (settings.js) ---- */
 .tag.warn { color: var(--warning); border-color: var(--warning); }
 .share-row { align-items: flex-start; margin: 8px 0; }
@@ -1302,6 +1388,10 @@ body[data-mobile="1"] .page-head { flex-direction: column; align-items: stretch;
 body[data-mobile="1"] .page-head h1 { font-size: 18px; }
 body[data-mobile="1"] .head-acts .btn { flex: 1 1 45%; justify-content: center; }
 body[data-mobile="1"] .grid { gap: 12px; }
+/* Four counters stacked one per row push the list they belong to off screen. */
+body[data-mobile="1"] .grid.cols-3, body[data-mobile="1"] .grid.cols-4 { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+body[data-mobile="1"] .grid.cols-4 .stat-card { padding: 10px; }
+body[data-mobile="1"] .stat-card .val { font-size: 22px; }
 body[data-mobile="1"] .card { padding: 13px; }
 body[data-mobile="1"] .btn { padding: 11px 14px; }
 body[data-mobile="1"] .btn.sm { padding: 9px 12px; font-size: 13px; }
@@ -1315,6 +1405,59 @@ body[data-mobile="1"] .cell { font-size: 16px; }
 body[data-mobile="1"] .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 body[data-mobile="1"] .table-wrap table { width: auto; min-width: 100%; }
 body[data-mobile="1"] th, body[data-mobile="1"] td { white-space: nowrap; }
+/* …except the people lists, which carry too many columns for any phone. Those
+   fold into one card per row, each cell labelled by its own column header. */
+body[data-mobile="1"] .table-wrap table.stack { width: 100%; min-width: 0; }
+body[data-mobile="1"] table.stack thead { display: none; }
+body[data-mobile="1"] table.stack tbody, body[data-mobile="1"] table.stack td { display: block; }
+/* Two short fields per line; the name, the contact and the buttons take a whole
+   one. A phone card is then five lines instead of one per column. */
+body[data-mobile="1"] table.stack tr { display: grid; grid-template-columns: 1fr 1fr; padding: 8px 0; border-bottom: 1px solid var(--border); }
+body[data-mobile="1"] table.stack tr > .wide,
+body[data-mobile="1"] table.stack tr > .head,
+body[data-mobile="1"] table.stack tr > .acts-cell,
+body[data-mobile="1"] table.stack tr.row-edit > td,
+body[data-mobile="1"] table.stack tr > .empty { grid-column: 1 / -1; }
+body[data-mobile="1"] table.stack tr:last-child { border-bottom: 0; }
+body[data-mobile="1"] table.stack tr:hover td { background: transparent; }
+body[data-mobile="1"] table.stack td {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 3px 12px; border: 0; white-space: normal; text-align: left; min-width: 0;
+}
+/* The card title and the line under it are headings, not labelled fields. */
+body[data-mobile="1"] table.stack td.head, body[data-mobile="1"] table.stack td.no-label { display: block; }
+body[data-mobile="1"] table.stack td.head::before, body[data-mobile="1"] table.stack td.no-label::before { content: none; }
+body[data-mobile="1"] table.stack td.head { padding-bottom: 2px; font-size: 12px; color: var(--muted); }
+body[data-mobile="1"] table.stack td::before {
+  content: attr(data-label);
+  flex: 0 0 auto; margin-right: 12px;
+  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--muted);
+}
+body[data-mobile="1"] table.stack td:not([data-label])::before { content: none; }
+/* Half-width cells must be able to shrink, or a long value runs straight over
+   the label of the cell beside it. */
+body[data-mobile="1"] table.stack td > * { min-width: 0; }
+body[data-mobile="1"] table.stack td .pos-badge { flex: 0 0 auto; }
+body[data-mobile="1"] table.stack .sq-pos { text-align: right; }
+body[data-mobile="1"] table.stack .acts-cell { width: auto; padding-top: 7px; }
+body[data-mobile="1"] table.stack .row-acts.icons { flex: 1 1 auto; }
+body[data-mobile="1"] table.stack .row-acts.icons > .btn { flex: 1 1 auto; }
+body[data-mobile="1"] table.stack .cell-pair { flex: 1 1 auto; min-width: 0; }
+body[data-mobile="1"] table.stack .contact-cell { min-width: 0; text-align: right; overflow-wrap: anywhere; }
+body[data-mobile="1"] table.stack .empty { display: block; }
+
+/* Live scouting on a phone: the box clears the topbar, the panels stack. */
+body[data-mobile="1"] .qs-panels { grid-template-columns: 1fr; }
+body[data-mobile="1"] .qs-acts { grid-template-columns: repeat(auto-fit, minmax(94px, 1fr)); }
+body[data-mobile="1"] .qs-bar { margin: -12px -12px 12px; border-radius: 0; border-width: 0 0 1px; }
+body[data-mobile="1"] .qs-players { grid-template-columns: repeat(auto-fill, minmax(60px, 1fr)); }
+/* Undo keeps its arrow only — the label would cost the box a whole column. */
+body[data-mobile="1"] .qs-undo-lbl { display: none; }
+body[data-mobile="1"] .qs-bar > .btn { padding: 8px 9px; }
+body[data-mobile="1"] .scoreboard { padding: 10px; margin-bottom: 12px; }
+body[data-mobile="1"] .scoreboard .score { font-size: 28px; }
+body[data-mobile="1"] .scoreboard .clock { font-size: 18px; }
+
 body[data-mobile="1"] .to-top {
   right: 12px;
   bottom: 84px;

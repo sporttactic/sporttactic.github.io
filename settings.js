@@ -1908,14 +1908,11 @@ Views.settings = async function (mount) {
     }
     state();
     if (install) {
-      // Chrome fires beforeinstallprompt whenever it likes, often after this
-      // panel is built, so the button stays live and explains itself instead.
+      // Chrome fires beforeinstallprompt whenever it likes, and Safari never
+      // fires it at all — so this opens the guide, which offers the real button
+      // where one exists and the exact taps where it does not.
       install.disabled = standalone;
-      install.onclick = async () => {
-        const done = window.STXInstall && await STXInstall.prompt();
-        if (!done) UI.toast(T('offline.installManual'));
-        state();
-      };
+      install.onclick = () => { STXInstall.guide(); state(); };
     }
     const cacheBtn = mount.querySelector('#offCache');
     if (cacheBtn) cacheBtn.disabled = !swOk;

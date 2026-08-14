@@ -138,6 +138,23 @@ Views.scouting = function (mount, params) {
   const curCat = () => shownCats().find(c => c.id === activeCat) || shownCats()[0];
   const curEvs = () => evsOf(curCat());
 
+  // ---- Quick panel --------------------------------------------------------
+  // Registering during a match is done one-handed at the side of the court, so
+  // the default is: pick the player once at the top, then every category —
+  // attack, defense, fouls, turnovers, goalkeeper — is a single tap away with
+  // no tab switching in between. "By player" keeps the old grid for anyone who
+  // works the other way round.
+  const MODE_KEY = 'stx_scout_mode';
+  let mode = 'quick';
+  try { if (localStorage.getItem(MODE_KEY) === 'grid') mode = 'grid'; } catch { /* private mode */ }
+  function setMode(m) {
+    mode = m;
+    try { localStorage.setItem(MODE_KEY, m); } catch { /* private mode */ }
+    render();
+  }
+  let activePlayer = '';
+  const isKeeper = id => { const p = players.find(x => x.id === id); return !!p && p.position === 'Goalkeeper'; };
+
   let clock = 0, timer = null, activeCat = shownCats()[0].id;
 
   function render() {
@@ -152,11 +169,52 @@ Views.scouting = function (mount, params) {
     const playing = lineup ? players.filter(p => lineup.indexOf(p.id) >= 0) : players;
     // The Goalkeeper tab only registers on keepers.
     const rows = activeCat === 'keeper' ? playing.filter(p => p.position === 'Goalkeeper') : playing;
+    if (!playing.some(p => p.id === activePlayer)) activePlayer = playing[0] ? playing[0].id : '';
+    const quick = mode === 'quick';
+
+    const playerChip = p => `<button type="button" class="qs-player${p.id === activePlayer ? ' active' : ''}" data-qp="${p.id}">
+      ${posBadgeHtml(p.position)}<span class="qs-num">#${UI.esc(p.number || '?')}</span><span class="qs-name">${UI.esc(p.lastName || p.firstName || '')}</span></button>`;
+
+    const quickBody = `
+      <div class="qs-bar">
+        <div class="qs-players">
+          ${playing.map(playerChip).join('') || `<span class="qs-none">${T('scout.noPlayers')}</span>`}
+        </div>
+        <button type="button" class="btn sm" id="qsUndo" title="${UI.esc(T('scout.undo'))}" ${events.length ? '' : 'disabled'}>↶<span class="qs-undo-lbl"> ${T('scout.undo')}</span></button>
+      </div>
+      <div class="qs-panels">
+        ${tabs.map(c => {
+      const off = c.id === 'keeper' && !isKeeper(activePlayer);
+      return `<section class="qs-panel${off ? ' off' : ''}" data-qcat="${UI.esc(c.id)}">
+            <h3>${UI.esc(catLabel(c))}</h3>
+            <div class="qs-acts">
+              ${evsOf(c).map((e, i) => `<button type="button" class="event-btn ${e[3] || 'neutral'}" data-qcat="${UI.esc(c.id)}" data-qev="${i}" ${off ? 'disabled' : ''}>${UI.esc(evName(e))}</button>`).join('')}
+            </div>
+            <p class="hint qs-off-note${off ? '' : ' hidden'}">${T('scout.keeperOnly')}</p>
+          </section>`;
+    }).join('')}
+      </div>`;
+
+    const gridBody = `
+      <div class="pill-row">
+        ${tabs.map(c => `<span class="pill ${c.id === activeCat ? 'active' : ''}" data-cat="${c.id}">${UI.esc(catLabel(c))}</span>`).join('')}
+      </div>
+      <div class="player-events">
+        ${rows.length ? rows.map(p => `
+          <div class="player-row">
+            <span class="player-tag">${posBadgeHtml(p.position)}<span class="pt-name"><span class="pt-num">#${UI.esc(p.number || '?')}</span>${UI.esc(p.lastName || p.firstName || '')}</span></span>
+            <div class="pev">
+              ${evs.map((e, i) => `<button class="event-btn ${e[3] || 'neutral'}" data-ev="${i}" data-player="${p.id}">${UI.esc(evName(e))}</button>`).join('')}
+            </div>
+          </div>`).join('') : `<p style="color:var(--muted)">${activeCat === 'keeper' ? T('scout.noKeepers') : T('scout.noPlayers')}</p>`}
+      </div>`;
+
     mount.innerHTML = `
       <div class="page-head">
         <div><h1>${T('scout.title')}</h1><p>${T('scout.subtitle')} · ${UI.esc(SPORTS.name(sport, I18N.getLang()))}</p></div>
         <div class="head-acts">
           <select id="matchSel" style="max-width:280px">${matches.length ? matches.map(m => `<option value="${m.id}" ${m.id === matchId ? 'selected' : ''}>${UI.esc(m.home ? T('common.vs') : T('common.at'))} ${UI.esc(m.opponent)} · ${SPORTS.name(m.sport || 'handball', I18N.getLang())} · ${UI.fmtDate(m.date)}</option>`).join('') : `<option value="">${T('scout.noMatches')}</option>`}</select>
+          <button class="btn" id="modeBtn">${quick ? '▦ ' + T('scout.gridMode') : '\u26a1 ' + T('scout.quickMode')}</button>
           <button class="btn" id="focusBtn">🎯 ${T('scout.focus')} (${tabs.length}/${cats.length})</button>
           ${lineup ? `<span class="tag green" title="${UI.esc(T('matches.squadHint'))}">👥 ${playing.length}/${players.length}</span>` : ''}
         </div>
@@ -167,44 +225,97 @@ Views.scouting = function (mount, params) {
         <div style="text-align:center"><div style="color:var(--muted);font-size:12px">${UI.esc(match ? match.opponent : T('scout.opponent'))}</div><div class="score">${match ? (match.home ? match.awayScore : match.homeScore) : 0}</div></div>
       </div>
       <div class="scout-grid">
-        <div>
-          <div class="pill-row">
-            ${tabs.map(c => `<span class="pill ${c.id === activeCat ? 'active' : ''}" data-cat="${c.id}">${UI.esc(catLabel(c))}</span>`).join('')}
-          </div>
-          <div class="player-events">
-            ${rows.length ? rows.map(p => `
-              <div class="player-row">
-                <span class="player-tag">${posBadgeHtml(p.position)}<span class="pt-name"><span class="pt-num">#${UI.esc(p.number || '?')}</span>${UI.esc(p.lastName || p.firstName || '')}</span></span>
-                <div class="pev">
-                  ${evs.map((e, i) => `<button class="event-btn ${e[3] || 'neutral'}" data-ev="${i}" data-player="${p.id}">${UI.esc(evName(e))}</button>`).join('')}
-                </div>
-              </div>`).join('') : `<p style="color:var(--muted)">${activeCat === 'keeper' ? T('scout.noKeepers') : T('scout.noPlayers')}</p>`}
-          </div>
-        </div>
-        ${UI.acc('scoutLog', T('scout.eventLog'), `
-          <div class="event-log">
-            ${events.map(e => {
-      const p = Store.find('players', e.playerId);
-      return `<div class="log-item"><span><span class="log-time">${UI.fmtClock((e.minute || 0) * 60)}</span> ${UI.esc(evLabel(e.type))} ${e.result === 'goal' ? '&#9917;' : ''} — ${p ? '#' + p.number + ' ' + UI.esc(p.lastName) : ''}</span><button class="btn sm danger" data-rmev="${e.id}">${T('scout.remove')}</button></div>`;
-    }).join('') || `<p style="color:var(--muted)">${T('scout.noEvents')}</p>`}
-          </div>`, {
+        <div>${quick ? quickBody : gridBody}</div>
+        ${UI.acc('scoutLog', T('scout.eventLog'), `<div class="event-log">${logHtml(events)}</div>`, {
       sub: events.length + ' ' + T('scout.events'),
       actions: UI.shareBar('matches', { exportLabel: T('scout.exportBtn'), importLabel: T('scout.importBtn') })
-        + (events.length ? `<button class="btn sm danger" id="clearLog">🗑 ${T('scout.clearLog')}</button>` : '')
+        + `<button class="btn sm danger" id="clearLog" ${events.length ? '' : 'disabled'}>🗑 ${T('scout.clearLog')}</button>`
     })}
       </div>`;
 
     UI.bindAcc(mount);
     UI.bindShare(mount, 'matches', render, { scoped: true });
     mount.querySelector('#matchSel').onchange = e => { matchId = e.target.value; render(); };
+    mount.querySelector('#modeBtn').onclick = () => setMode(quick ? 'grid' : 'quick');
     mount.querySelector('#focusBtn').onclick = focusDialog;
     mount.querySelector('#startBtn').onclick = toggleClock;
     mount.querySelector('#resetBtn').onclick = () => { clock = 0; stopClock(); mount.querySelector('#clock').textContent = UI.fmtClock(0); };
-    mount.querySelectorAll('[data-cat]').forEach(b => b.onclick = () => { activeCat = b.dataset.cat; render(); });
-    mount.querySelectorAll('[data-ev]').forEach(b => b.onclick = () => logEvent(evs[+b.dataset.ev], b.dataset.player));
-    mount.querySelectorAll('[data-rmev]').forEach(b => b.onclick = async () => { await Store.remove('events', b.dataset.rmev); render(); });
-    const clearBtn = mount.querySelector('#clearLog');
-    if (clearBtn) clearBtn.onclick = () => clearLog(events);
+    if (quick) {
+      mount.querySelectorAll('[data-qp]').forEach(b => b.onclick = () => selectPlayer(b.dataset.qp));
+      mount.querySelectorAll('[data-qev]').forEach(b => b.onclick = () => {
+        if (!activePlayer) return UI.toast(T('scout.pickPlayer'), 'error');
+        const c = tabs.find(x => x.id === b.dataset.qcat);
+        if (!c) return;
+        b.classList.add('hit');
+        setTimeout(() => b.classList.remove('hit'), 350);
+        logEvent(evsOf(c)[+b.dataset.qev], activePlayer, c.id);
+      });
+      mount.querySelector('#qsUndo').onclick = undoLast;
+    } else {
+      mount.querySelectorAll('[data-cat]').forEach(b => b.onclick = () => { activeCat = b.dataset.cat; render(); });
+      mount.querySelectorAll('[data-ev]').forEach(b => b.onclick = () => logEvent(evs[+b.dataset.ev], b.dataset.player, activeCat));
+    }
+    bindLog();
+    mount.querySelector('#clearLog').onclick = () => clearLog(Store.matchEvents(matchId));
+  }
+
+  function logHtml(events) {
+    return events.map(e => {
+      const p = Store.find('players', e.playerId);
+      return `<div class="log-item"><span><span class="log-time">${UI.fmtClock((e.minute || 0) * 60)}</span> ${UI.esc(evLabel(e.type))} ${e.result === 'goal' ? '&#9917;' : ''} — ${p ? '#' + p.number + ' ' + UI.esc(p.lastName) : ''}</span><button class="btn sm danger" data-rmev="${e.id}">${T('scout.remove')}</button></div>`;
+    }).join('') || `<p style="color:var(--muted)">${T('scout.noEvents')}</p>`;
+  }
+  function bindLog() {
+    mount.querySelectorAll('[data-rmev]').forEach(b => b.onclick = () => removeEvent(Store.find('events', b.dataset.rmev)));
+  }
+
+  // Switching player must not rebuild the panels — during a match that would
+  // throw away the scroll position between two taps.
+  function selectPlayer(id) {
+    activePlayer = id;
+    mount.querySelectorAll('.qs-player').forEach(b => b.classList.toggle('active', b.dataset.qp === id));
+    const off = !isKeeper(id);
+    mount.querySelectorAll('.qs-panel[data-qcat="keeper"]').forEach(sec => {
+      sec.classList.toggle('off', off);
+      sec.querySelectorAll('.event-btn').forEach(b => { b.disabled = off; });
+      const note = sec.querySelector('.qs-off-note');
+      if (note) note.classList.toggle('hidden', !off);
+    });
+  }
+
+  // Only the score and the log move when an event is registered, so a tap costs
+  // one paint instead of a full re-render of every button on screen.
+  function refreshLive() {
+    const events = Store.matchEvents(matchId).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    const score = mount.querySelector('#ourScore');
+    if (score) score.textContent = events.filter(e => e.result === 'goal').length;
+    const log = mount.querySelector('.event-log');
+    if (log) { log.innerHTML = logHtml(events); bindLog(); }
+    const sub = mount.querySelector('[data-acc="scoutLog"] .acc-sub');
+    if (sub) sub.textContent = events.length + ' ' + T('scout.events');
+    ['#clearLog', '#qsUndo'].forEach(sel => { const b = mount.querySelector(sel); if (b) b.disabled = !events.length; });
+  }
+
+  async function removeEvent(evt) {
+    if (!evt) return;
+    await Store.remove('events', evt.id);
+    // A goal bumped the match record on the way in, so it has to come back off
+    // again — otherwise a mis-tap leaves the result permanently one too high.
+    if (evt.result === 'goal') {
+      const m = Store.find('matches', matchId);
+      if (m) {
+        const f = m.home ? 'homeScore' : 'awayScore';
+        await Store.save('matches', Object.assign({}, m, { [f]: Math.max(0, (+m[f] || 0) - 1) }));
+      }
+    }
+    refreshLive();
+  }
+
+  async function undoLast() {
+    const last = Store.matchEvents(matchId).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))[0];
+    if (!last) return;
+    await removeEvent(last);
+    UI.toast(T('scout.undone'), 'success');
   }
 
   // Wipe every event of THIS match only — the other fixtures keep their log.
@@ -281,10 +392,10 @@ Views.scouting = function (mount, params) {
     });
   }
 
-  async function logEvent(def, playerId) {
+  async function logEvent(def, playerId, catId) {
     const evt = {
       matchId, playerId,
-      category: activeCat, type: def[0], result: def[2],
+      category: catId || activeCat, type: def[0], result: def[2],
       minute: Math.floor(clock / 60), createdAt: Date.now()
     };
     await Store.save('events', evt);
@@ -293,7 +404,7 @@ Views.scouting = function (mount, params) {
       if (m) { if (m.home) m.homeScore++; else m.awayScore++; await Store.save('matches', m); }
     }
     UI.toast(evLabel(def[0]) + ' ' + T('scout.logged'), 'success');
-    render();
+    refreshLive();
   }
 
   function toggleClock() {

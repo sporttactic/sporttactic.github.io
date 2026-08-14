@@ -13,31 +13,33 @@ Views.matches = function (mount) {
 
   const table = `
     <div class="table-wrap">
-      <table>
-        <thead><tr><th>${T('matches.date')}</th><th>${T('matches.opponent')}</th><th>${T('matches.sport')}</th><th>${T('matches.type')}</th><th>${T('matches.venue')}</th><th>${T('matches.squad')}</th><th>${T('matches.score')}</th><th>${T('matches.status')}</th><th></th></tr></thead>
+      <table class="compact stack">
+        <thead><tr><th>${T('matches.date')}</th><th>${T('matches.opponent')}</th><th>${T('matches.venue')}</th><th>${T('matches.squad')}</th><th>${T('matches.score')}</th><th>${T('matches.status')}</th><th></th></tr></thead>
         <tbody>
           ${matches.map(m => {
     const line = lineupOf(m);
+    const type = T('matchType.' + m.type) !== 'matchType.' + m.type ? T('matchType.' + m.type) : m.type;
     return `
             <tr>
-              <td>${UI.fmtDate(m.date)}</td>
-              <td><strong>${UI.esc(m.home ? T('common.vs') : T('common.at'))} ${UI.esc(m.opponent)}</strong></td>
-              <td><span class="tag blue">${UI.esc(SPORTS.name(m.sport || 'handball', I18N.getLang()))}</span></td>
-              <td><span class="tag">${UI.esc(T('matchType.' + m.type) !== 'matchType.' + m.type ? T('matchType.' + m.type) : m.type)}</span></td>
-              <td>${UI.esc(m.venue || '—')}</td>
-              <td><span class="tag ${line ? 'green' : ''}">${line ? line.length + '/' + squad.length : T('matches.allPlayers')}</span></td>
-              <td>${m.status === 'finished' ? `<strong>${m.homeScore} : ${m.awayScore}</strong>` : '—'}</td>
-              <td><span class="tag ${m.status === 'finished' ? 'green' : 'amber'}">${UI.esc(m.status === 'finished' ? T('matches.finished') : m.status === 'live' ? T('matches.live') : T('matches.scheduled'))}</span></td>
-              <td style="text-align:right">
-                <div class="row-acts">
-                  <button class="btn sm" data-squad="${m.id}">👥 ${T('matches.squad')}</button>
-                  <button class="btn sm" data-scout="${m.id}">${T('nav.scouting')}</button>
-                  <button class="btn sm" data-edit="${m.id}">${T('common.edit')}</button>
-                  <button class="btn sm danger" data-del="${m.id}">${T('common.delete')}</button>
+              <td data-label="${UI.esc(T('matches.date'))}" class="mt-when head">${UI.fmtDate(m.date)}</td>
+              <td data-label="${UI.esc(T('matches.opponent'))}" class="wide no-label">
+                <strong>${UI.esc(m.home ? T('common.vs') : T('common.at'))} ${UI.esc(m.opponent)}</strong>
+                <span class="mt-meta"><span class="tag blue">${UI.esc(SPORTS.name(m.sport || 'handball', I18N.getLang()))}</span><span class="tag">${UI.esc(type)}</span></span>
+              </td>
+              <td data-label="${UI.esc(T('matches.venue'))}" class="wide">${UI.esc(m.venue || '—')}</td>
+              <td data-label="${UI.esc(T('matches.squad'))}"><span class="tag ${line ? 'green' : ''}">${line ? line.length + '/' + squad.length : T('matches.allPlayers')}</span></td>
+              <td data-label="${UI.esc(T('matches.score'))}">${m.status === 'finished' ? `<strong>${m.homeScore} : ${m.awayScore}</strong>` : '—'}</td>
+              <td data-label="${UI.esc(T('matches.status'))}"><span class="tag ${m.status === 'finished' ? 'green' : 'amber'}">${UI.esc(m.status === 'finished' ? T('matches.finished') : m.status === 'live' ? T('matches.live') : T('matches.scheduled'))}</span></td>
+              <td class="acts-cell">
+                <div class="row-acts icons">
+                  <button class="btn sm" data-squad="${m.id}" title="${UI.esc(T('matches.squad'))}" aria-label="${UI.esc(T('matches.squad'))}">👥</button>
+                  <button class="btn sm" data-scout="${m.id}" title="${UI.esc(T('nav.scouting'))}" aria-label="${UI.esc(T('nav.scouting'))}">🎯</button>
+                  <button class="btn sm" data-edit="${m.id}" title="${UI.esc(T('common.edit'))}" aria-label="${UI.esc(T('common.edit'))}">✎</button>
+                  <button class="btn sm danger" data-del="${m.id}" title="${UI.esc(T('common.delete'))}" aria-label="${UI.esc(T('common.delete'))}">${UI.icon('trash', 14)}</button>
                 </div>
               </td>
             </tr>`;
-  }).join('') || `<tr><td colspan="9" class="empty">${T('common.noData')}</td></tr>`}
+  }).join('') || `<tr><td colspan="7" class="empty">${T('common.noData')}</td></tr>`}
         </tbody>
       </table>
     </div>`;
