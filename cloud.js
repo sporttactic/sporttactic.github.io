@@ -175,20 +175,131 @@ const TeamCloud = (() => {
 
   // ---- Transport ---------------------------------------------------------
   const signedIn = () => !!(window.Drive && Drive.isConnected());
-  async function readRemote() {
+  // ---- One head file, and a part file per heavy store ---------------------
+  // Recorded animations and video clips are base64 inside the JSON, so a club
+  // with a season of them grows a single file past what any device wants to
+  // fetch — and reading a fixture list would mean downloading the lot. So a
+  // store that outgrows PART_BYTES moves into its own file beside the head, and
+  // the head keeps only a pointer. A store too big even for one part is cut into
+  // several, numbered so they go back together in order.
+  //
+  // Nothing changes for a small club: no parts, one file, exactly as before.
+  // Only the owner can create files in their own Drive, so a contributing member
+  // writes the head and leaves every part exactly as it found them.
+  const PART_BYTES = 4 * 1024 * 1024;   // a store bigger than this gets its own file
+  const HEAD_BYTES = 6 * 1024 * 1024;   // what is left inline must stay small to fetch
+  const partName = (s, i) => 'sporttactic-team-' + s + (i ? '-' + (i + 1) : '') + '.json';
+
+  const jsonBytes = v => { try { return JSON.stringify(v).length; } catch (e) { return 0; } };
+
+  // Which stores have to leave the head: anything oversized on its own, then the
+  // next biggest until what is left fits.
+  function planParts(data) {
+    const sizes = Object.keys(data)
+      .filter(s => Array.isArray(data[s]) && data[s].length)
+      .map(s => ({ s, n: jsonBytes(data[s]) }))
+      .sort((a, b) => b.n - a.n);
+    const out = sizes.filter(x => x.n > PART_BYTES).map(x => x.s);
+    const rest = sizes.filter(x => out.indexOf(x.s) < 0);
+    let total = rest.reduce((n, x) => n + x.n, 0);
+    while (total > HEAD_BYTES && rest.length) {
+      const big = rest.shift();
+      out.push(big.s);
+      total -= big.n;
+    }
+    return out;
+  }
+  // Cut one store's rows into pieces no bigger than PART_BYTES. A single row
+  // over the limit still goes on its own rather than being dropped.
+  function chunkRows(rows) {
+    const out = [];
+    let cur = [];
+    let size = 0;
+    (rows || []).forEach(r => {
+      const n = jsonBytes(r) + 1;
+      if (cur.length && size + n > PART_BYTES) { out.push(cur); cur = []; size = 0; }
+      cur.push(r);
+      size += n;
+    });
+    if (cur.length || !out.length) out.push(cur);
+    return out;
+  }
+
+  async function readOne(fileId) {
     const c = cfg();
-    if (!c.fileId) throw new Error('not-linked');
     // The signed-in read is tried first: it is the only one that sees a file
     // shared with named people rather than with the link.
     if (window.Drive && (signedIn() || !c.apiKey)) {
-      try { return await Drive.downloadJson(c.fileId); }
+      try { return await Drive.downloadJson(fileId); }
       catch (e) { if (!c.apiKey) throw e; }
     }
-    return Drive.publicDownload(c.fileId, c.apiKey);
+    return Drive.publicDownload(fileId, c.apiKey);
+  }
+  async function readRemote() {
+    const c = cfg();
+    if (!c.fileId) throw new Error('not-linked');
+    const head = await readOne(c.fileId);
+    const parts = (head && Array.isArray(head.parts)) ? head.parts.filter(p => p && p.store && p.fileId) : [];
+    if (!parts.length) return head;
+    if (!head.data || typeof head.data !== 'object') head.data = {};
+    for (const p of parts) {
+      // A part that will not come down must stop the whole read. Carrying on
+      // would hand applyDoc an empty store, and a replace would then wipe the
+      // club's own copy of it.
+      const doc = await readOne(p.fileId);
+      const rows = (doc && Array.isArray(doc.rows)) ? doc.rows : null;
+      if (!rows) throw new Error('part-unreadable');
+      head.data[p.store] = (head.data[p.store] || []).concat(rows);
+    }
+    return head;
   }
   async function writeRemote(doc) {
     const c = cfg();
     if (!c.fileId) throw new Error('not-linked');
+    const known = (Array.isArray(doc.parts) ? doc.parts : []).filter(p => p && p.store && p.fileId);
+
+    if (!c.owner) {
+      // A member cannot make or rewrite the owner's part files, so those stores
+      // travel back untouched and are not re-inlined into the head.
+      known.forEach(p => { delete doc.data[p.store]; });
+      doc.parts = known;
+      return Drive.uploadJson('', doc, { fileId: c.fileId });
+    }
+
+    // Once a store is a part it stays one: shrinking back would orphan the file.
+    const stores = [...new Set(known.map(p => p.store).concat(planParts(doc.data)))];
+    if (!stores.length) { doc.parts = []; return Drive.uploadJson('', doc, { fileId: c.fileId }); }
+
+    const slots = new Map();
+    known.forEach(p => {
+      if (!slots.has(p.store)) slots.set(p.store, []);
+      slots.get(p.store).push(p);
+    });
+    const folder = await Drive.ensureFolder('SportTactic', null);
+    const parts = [];
+    for (const s of stores) {
+      const chunks = chunkRows(doc.data[s]);
+      const reuse = (slots.get(s) || []).slice().sort((a, b) => (a.seq || 0) - (b.seq || 0));
+      for (let i = 0; i < chunks.length; i++) {
+        const cur = reuse[i];
+        const body = { app: 'SportTactic', kind: 'team-part', format: FORMAT, store: s, seq: i, updatedAt: Date.now(), rows: chunks[i] };
+        const res = await Drive.uploadJson(cur ? '' : partName(s, i), body, cur ? { fileId: cur.fileId } : { parent: folder });
+        const fileId = (res && res.id) || (cur && cur.fileId);
+        if (!fileId) continue;
+        // A part has to be readable the same way the head is, or a team code
+        // would open the index and none of the contents.
+        if (!cur) { try { await Drive.shareAnyone(fileId, 'reader'); } catch (e) { /* named invites still work */ } }
+        parts.push({ store: s, seq: i, fileId });
+      }
+      // A part that is no longer needed is emptied rather than deleted, so a
+      // device still holding the old head does not read a file that is gone.
+      for (let i = chunks.length; i < reuse.length; i++) {
+        try { await Drive.uploadJson('', { app: 'SportTactic', kind: 'team-part', format: FORMAT, store: s, seq: i, updatedAt: Date.now(), rows: [] }, { fileId: reuse[i].fileId }); }
+        catch (e) { /* leave it; the head no longer points at it */ }
+      }
+      delete doc.data[s];
+    }
+    doc.parts = parts;
     return Drive.uploadJson('', doc, { fileId: c.fileId });
   }
 
@@ -281,15 +392,22 @@ const TeamCloud = (() => {
       let remote = null;
       try { remote = await readRemote(); } catch (e) { remote = null; }
       const owner = cfg().owner;
+      // Which part file holds which store is the file's own business, not this
+      // snapshot's. Losing it here would have writeRemote create a second set
+      // beside the first on every single push.
+      doc.parts = (remote && Array.isArray(remote.parts)) ? remote.parts : [];
       // The owner's policy is the one that counts, so a member sends back the
       // copy they found and only touches the blocks it lets them touch.
       if (!owner && isTeamDb(remote)) {
         const pol = (remote.policy && typeof remote.policy === 'object') ? remote.policy : Privacy.defaults();
         doc.policy = pol;
         doc.protected = Array.isArray(remote.protected) ? remote.protected : doc.protected;
+        // A store that lives in a part file is out of a member's reach whatever
+        // the policy says: only the owner's Drive account may rewrite those.
+        const parted = new Set(doc.parts.map(p => p && p.store));
         for (const s of syncStores()) {
           const theirs = Array.isArray(remote.data[s]) ? remote.data[s] : null;
-          if (!Privacy.mayEdit(pol, s)) { if (theirs) doc.data[s] = theirs; else delete doc.data[s]; continue; }
+          if (parted.has(s) || !Privacy.mayEdit(pol, s)) { if (theirs) doc.data[s] = theirs; else delete doc.data[s]; continue; }
           // Without delete rights a removal here must not remove it for everyone.
           if (!Privacy.mayDelete(pol, s) && theirs) doc.data[s] = mergeRows(theirs, doc.data[s] || []);
         }
@@ -344,13 +462,18 @@ const TeamCloud = (() => {
     const folder = await Drive.ensureFolder('SportTactic', null);
     const existing = await Drive.findFile(FILE_NAME, folder);
     await setCfg({ teamName: teamName || '', owner: true, apiKey: opts.apiKey || cfg().apiKey });
-    const doc = await snapshot();
+    // The head goes up empty first. It has to exist and be shared before the
+    // data follows, because a club big enough to need part files cannot send
+    // the whole thing as one upload at all.
+    const head = Object.assign({}, await snapshot(), { data: {}, parts: [] });
     const res = existing
-      ? await Drive.uploadJson('', doc, { fileId: existing.id })
-      : await Drive.uploadJson(FILE_NAME, doc, { parent: folder });
+      ? await Drive.uploadJson('', head, { fileId: existing.id })
+      : await Drive.uploadJson(FILE_NAME, head, { parent: folder });
     const fileId = (res && res.id) || (existing && existing.id);
     await setCfg({ fileId, lastPushAt: Date.now(), lastErr: '' });
     if (opts.linkShare !== false) { try { await Drive.shareAnyone(fileId, 'reader'); } catch (e) { /* the named invites still work */ } }
+    // Now fill it, splitting into parts if this club needs them.
+    await push('replace');
     return fileId;
   }
   // Invite the people on the access list: coaches and admins as editors,
