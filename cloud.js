@@ -254,7 +254,12 @@ const TeamCloud = (() => {
   async function readRemote() {
     const c = cfg();
     if (!c.fileId) throw new Error('not-linked');
-    const head = await readOne(c.fileId);
+    // A file written before the split existed can be past the read ceiling. It
+    // is marked here, on the head only, because rewriting the whole thing is
+    // the one way out and only the owner's device may do it.
+    let head;
+    try { head = await readOne(c.fileId); }
+    catch (e) { if (/too large/i.test(msg(e))) e.oversize = true; throw e; }
     const parts = (head && Array.isArray(head.parts)) ? head.parts.filter(p => p && p.store && p.fileId) : [];
     if (!parts.length) return head;
     if (!head.data || typeof head.data !== 'object') head.data = {};
@@ -397,7 +402,7 @@ const TeamCloud = (() => {
       await setCfg({ lastPullAt: Date.now(), lastErr: '' });
       return got;
     } catch (e) {
-      await setCfg({ lastErr: msg(e) });
+      await setCfg({ lastErr: e && e.oversize ? 'oversize' : msg(e) });
       throw e;
     } finally { busy = false; emit({ pulled: got }); }
   }
@@ -408,7 +413,15 @@ const TeamCloud = (() => {
     try {
       let doc = await snapshot();
       let remote = null;
-      try { remote = await readRemote(); } catch (e) { remote = null; }
+      try {
+        remote = await readRemote();
+      } catch (e) {
+        // Anything else — a dropped connection, a dead part — must stop here.
+        // Carrying on with no remote would write a fresh set of part files
+        // beside the real ones and push a partial copy over everyone's work.
+        if (!e || !e.oversize || !cfg().owner) throw e;
+        mode = 'replace';
+      }
       const owner = cfg().owner;
       // Which part file holds which store is the file's own business, not this
       // snapshot's. Losing it here would have writeRemote create a second set
@@ -448,14 +461,23 @@ const TeamCloud = (() => {
       await setCfg({ lastPushAt: Date.now(), lastErr: '' });
       return true;
     } catch (e) {
-      await setCfg({ lastErr: msg(e) });
+      await setCfg({ lastErr: e && e.oversize ? 'oversize' : msg(e) });
       throw e;
     } finally { busy = false; emit(); }
   }
   // What the automatic timer and the single Sync button do: take everything
   // new from the file, then put everything new of ours back.
   async function sync() {
-    const got = await pull('merge');
+    let got = 0;
+    try {
+      got = await pull('merge');
+    } catch (e) {
+      // The one repair for a file too big to read: the owner writes it again,
+      // and writing it again splits it.
+      if (!e || !e.oversize || !cfg().owner || !signedIn()) throw e;
+      await push('replace');
+      return 0;
+    }
     if ((Access.can('cloud.write') || mayContribute()) && signedIn()) await push('merge');
     return got;
   }
