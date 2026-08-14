@@ -8,7 +8,7 @@
 
    BUMP `VERSION` and the matching `?v=` entries in SHELL whenever an asset changes.
 */
-const VERSION = 'v191';
+const VERSION = 'v192';
 const CACHE = 'sporttactic-' + VERSION;
 
 const SHELL = [
@@ -51,7 +51,7 @@ const SHELL = [
   './exercises.js?v=33',
   './opponents.js?v=20',
   './reports.js?v=23',
-  './settings.js?v=84',
+  './settings.js?v=85',
   './backup.js?v=2',
   './messenger.js?v=18',
   './app.js?v=36',
@@ -116,7 +116,10 @@ self.addEventListener('fetch', e => {
   if (req.mode === 'navigate') {
     e.respondWith((async () => {
       try {
-        return await putIfOk(req, await fetch(req));
+        // Straight from the network, past the browser's own cache: this page
+        // carries the ?v= of every script, so a stale copy pins the whole app
+        // to the previous build no matter how often somebody reloads.
+        return await putIfOk(req, await fetch(req.url, { cache: 'reload', credentials: 'same-origin' }));
       } catch (err) {
         return (await caches.match(req, { ignoreSearch: true }))
           || (await caches.match('./index.html'))

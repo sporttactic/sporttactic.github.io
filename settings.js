@@ -1972,7 +1972,12 @@ Views.settings = async function (mount) {
         const reg = await navigator.serviceWorker.getRegistration();
         if (!reg) throw new Error('not registered');
         await reg.update();
+        // update() only fetches the new worker — the screen keeps running the
+        // code it booted with. Without the restart a coach presses Update, is
+        // told it worked, and still sees the old app.
+        if (reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' });
         UI.toast(T('offline.updated'), 'success');
+        setTimeout(() => location.reload(), 500);
       } catch (e) { UI.toast(T('offline.downloadFailed'), 'error'); }
       state();
     });
