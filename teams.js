@@ -23,22 +23,14 @@ Views.teams = function (mount) {
   };
   const nameInitials = n => { const s = String(n || '').trim().split(/\s+/); return UI.initials(s[0], s[1]); };
 
-  // A copy that follows somebody else's shared team database filed nothing
-  // itself, so an animation that arrived with the club file and carries no squad
-  // of its own still belongs to the squad the team code opened. A per-squad word
-  // narrows which squads the device sees, but an unfiled animation is the club's
-  // rather than another squad's, so it stays.
-  function clubAnimations() {
-    const c = (window.TeamCloud && TeamCloud.cfg) ? TeamCloud.cfg() : null;
-    return !!(c && c.fileId && !c.owner);
-  }
-  // Animations a coach filed under this squad on the tactical board.
+  // Animations a coach filed under this squad on the tactical board, plus the
+  // club's own. Saving one files it under no squad, so leaving those out showed
+  // a coach an empty panel for work their players could already see.
   function teamAnimations(team) {
     if (!team) return [];
-    const shared = clubAnimations();
     return Store.all('tactics').filter(t => t.kind === 'system'
       && (t.sport || 'handball') === sportId
-      && (t.teamId === team.id || (shared && !t.teamId)));
+      && (t.teamId === team.id || !t.teamId));
   }
 
   function render() {
