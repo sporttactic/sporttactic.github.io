@@ -23,6 +23,12 @@ Views.teams = function (mount) {
   };
   const nameInitials = n => { const s = String(n || '').trim().split(/\s+/); return UI.initials(s[0], s[1]); };
 
+  // The club shares a file, but not this block: whatever is listed here stays on
+  // this device, which is the one thing the panel has to say out loud.
+  function animShareOff() {
+    if (!window.TeamCloud || !TeamCloud.cfg().fileId || !window.Privacy) return false;
+    return !Privacy.mayShare(Privacy.policy(), 'tactics');
+  }
   // Animations a coach filed under this squad on the tactical board, plus the
   // club's own. Saving one files it under no squad, so leaving those out showed
   // a coach an empty panel for work their players could already see.
@@ -271,6 +277,7 @@ Views.teams = function (mount) {
       title: T('teams.anims') + (team ? ' — ' + team.name : ''),
       width: 620,
       body: `<p>${UI.esc(T('teams.animsIntro'))}</p>
+        ${animShareOff() ? `<p class="hint warn">${UI.esc(T('teams.animsOff'))}</p>` : ''}
         <div class="acc-people">${anims.length ? anims.map(row).join('') : `<p class="hint">${UI.esc(T('teams.animsNone'))}</p>`}</div>`,
       footer: `<button class="btn" data-board>${UI.esc(T('teams.animsBoard'))}</button>
         <button class="btn primary" data-close2>${T('common.close')}</button>`,

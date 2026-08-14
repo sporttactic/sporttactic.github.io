@@ -2058,8 +2058,22 @@ Views.tactics = function (mount, params) {
           close();
           UI.toast(T('tactics.animSent').replace('{0}', (team && team.name) || ''), 'success');
           renderAnimList();
+          offerAnimShare();
         };
       }
+    });
+  }
+  // Sending an animation to a squad says plainly what the coach wants, but the
+  // sharing rules decide whether it ever leaves the device. With that block off
+  // the send succeeds, nothing travels, and nobody is told why.
+  function offerAnimShare() {
+    if (!window.TeamCloud || !TeamCloud.cfg().fileId || !window.Privacy) return;
+    const pol = Privacy.policy();
+    if (Privacy.mayShare(pol, 'tactics')) return;
+    UI.confirm(T('tactics.animShareOff'), async () => {
+      pol.groups.tactics = Object.assign({}, pol.groups.tactics, { share: true });
+      await Privacy.save(pol);
+      UI.toast(T('tactics.animShareOn'), 'success');
     });
   }
   // Store the current frame sequence under a title so it can be replayed later.
