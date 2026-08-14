@@ -1635,6 +1635,7 @@ Views.settings = async function (mount) {
         <span class="tag">1–9</span> ${T('settings.switchModules')} · <span class="tag">/</span> ${T('settings.focusSearch')} · <span class="tag">Esc</span> ${T('settings.closeDialog')}
       </p>`)}
     ${offlineCard()}
+    ${layoutCard()}
     ${messengerCard()}`;
 
   // The sidebar is a long list and most coaches only live in three or four of
@@ -1748,6 +1749,19 @@ Views.settings = async function (mount) {
         ${TeamCloud.isLinked() ? `<button class="btn" id="accInvite">${T('cloud.inviteBtn')}</button>` : ''}
       </div>
       <p class="hint">${T('access.hint')}</p>`);
+  }
+
+  // ---- Screen layout ----
+  // mobile.js decides on its own, but a coach on a big phone may want the
+  // desktop shell anyway — and a tester on a laptop needs to see the phone one.
+  function layoutCard() {
+    if (!window.Mobile) return '';
+    const cur = Mobile.mode();
+    const opt = (v, k) => `<option value="${v}" ${v === cur ? 'selected' : ''}>${T(k)}</option>`;
+    return UI.acc('setLayout', T('mob.layoutCard'), `
+      <p style="color:var(--muted);font-size:13px">${T('mob.layoutHint')}</p>
+      <label class="field" style="max-width:260px"><span>${T('mob.layout')}</span>
+        <select id="s_layout">${opt('auto', 'mob.layoutAuto')}${opt('mobile', 'mob.layoutMobile')}${opt('desktop', 'mob.layoutDesktop')}</select></label>`);
   }
 
   // ---- Offline ----
@@ -1968,6 +1982,9 @@ Views.settings = async function (mount) {
   });
   const openMsg = mount.querySelector('#openMessenger');
   if (openMsg) openMsg.onclick = () => App.go('messenger');
+
+  const layoutSel = mount.querySelector('#s_layout');
+  if (layoutSel) layoutSel.onchange = e => Mobile.setMode(e.target.value);
 
   // ---- Mail ----
   const mailSrvState = mount.querySelector('#mailSrvState');

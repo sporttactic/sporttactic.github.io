@@ -27,7 +27,7 @@ Views.reports = function (mount) {
 
   mount.innerHTML = `
     <div class="page-head"><div><h1>${T('reports.title')}</h1><p>${T('reports.subtitle')}</p></div></div>
-    ${UI.acc('reportBuild', T('reports.build'), builders)}
+    ${UI.acc('reportBuild', T('reports.build'), builders, { open: true })}
     <div id="reportOut" style="margin-top:16px"></div>`;
 
   UI.bindAcc(mount);

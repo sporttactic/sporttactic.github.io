@@ -1192,3 +1192,157 @@ td.col-num .cell, td.col-h .cell, td.col-w .cell { max-width: 92px; }
   .ex-row { grid-template-columns: 1fr 1fr; }
   .pick-row { padding: 11px 8px; }
 }
+
+/* ============================================================================
+   PHONE LAYOUT  (mobile.js sets body[data-mobile="1"])
+
+   A media query cannot tell a 5" phone from a laptop window someone dragged
+   narrow, and the two want different chrome — a phone gets a bottom tab bar and
+   a drawer, a laptop keeps its sidebar. So the switch is an attribute, and every
+   rule below hangs off it. Nothing here applies until mobile.js turns it on.
+
+   Written for 2020-era browsers (iOS 13/14 Safari, Chrome 80 on Android):
+   · transform, not calc() on a var, for the drawer slide
+   · a plain px fallback declared before every calc(env(safe-area-inset-*))
+   · margins, not flex gap — flex gap only reached Safari in 14.1
+   ========================================================================== */
+.mob-tabs, .mob-backdrop, .mob-actions, .mob-title { display: none; }
+
+/* --- Shell. position:fixed follows the visual viewport on iOS, so the tab bar
+       stays put when Safari's toolbars slide away; 100vh does not. --- */
+body[data-mobile="1"] #app { position: fixed; top: 0; right: 0; bottom: 0; left: 0; height: auto; }
+
+/* --- Topbar: hamburger, module name, search --- */
+body[data-mobile="1"] .topbar {
+  flex-wrap: wrap; gap: 6px; min-height: 48px;
+  padding: 6px 8px;
+  padding-top: 6px;
+  padding-top: calc(6px + env(safe-area-inset-top));
+}
+body[data-mobile="1"] #menuToggle { display: inline-flex; align-items: center; padding: 6px; }
+body[data-mobile="1"] .mob-title {
+  display: block; flex: 1 1 auto; min-width: 0;
+  font-size: 15px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+body[data-mobile="1"] .topbar-actions { gap: 0; margin-left: auto; }
+body[data-mobile="1"] .topbar-actions > * + * { margin-left: 2px; }
+/* Language and theme move into the drawer, the rest is desk furniture. */
+body[data-mobile="1"] .autosave,
+body[data-mobile="1"] .role-badge,
+body[data-mobile="1"] #donateBtn,
+body[data-mobile="1"] #soundToggle,
+body[data-mobile="1"] #themeToggle { display: none; }
+body[data-mobile="1"] #lockBadge { font-size: 11px; padding: 4px 8px; }
+body[data-mobile="1"] #lockBadge span { display: none; }
+
+/* The search field folds out of its button instead of holding a row open. */
+body[data-mobile="1"] .search-box { display: none; order: 9; flex: 1 1 100%; max-width: none; }
+body[data-mobile="1"].mob-search .search-box { display: block; }
+body[data-mobile="1"] .search-results { top: 42px; max-height: 60vh; }
+
+/* --- Sidebar as a drawer --- */
+body[data-mobile="1"] .sidebar {
+  position: fixed; top: 0; bottom: 0; left: 0; z-index: 90;
+  width: 86%; max-width: 320px; margin-left: 0;
+  overflow-y: auto; -webkit-overflow-scrolling: touch;
+  transform: translateX(-102%);
+  transition: transform .25s ease;
+  padding-top: 0;
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: 0;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+body[data-mobile="1"] .sidebar.open { transform: translateX(0); }
+/* The drawer scrolls as one column, so the nav must not claim the leftover
+   height and scroll separately — on a landscape phone there is none to claim. */
+body[data-mobile="1"] .sidebar .nav { flex: 0 0 auto; overflow: visible; }
+body[data-mobile="1"] .sidebar .brand { padding: 14px; }
+body[data-mobile="1"] .sidebar .nav-controls .lang-switch { margin-bottom: 8px; }
+body[data-mobile="1"] .mob-backdrop {
+  display: block; position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 85;
+  background: rgba(0,0,0,.55);
+  opacity: 0; visibility: hidden;
+  transition: opacity .25s ease, visibility .25s ease;
+}
+body[data-mobile="1"] .mob-backdrop.show { opacity: 1; visibility: visible; }
+
+/* --- Team code: the first thing in the drawer, reachable with no data yet --- */
+body[data-mobile="1"] .mob-actions { display: block; padding: 12px 14px; border-bottom: 1px solid var(--border); }
+body[data-mobile="1"] .mob-actions .btn { width: 100%; justify-content: center; }
+body[data-mobile="1"] .mob-actions .btn + .btn { margin-top: 8px; }
+
+/* --- Bottom tab bar --- */
+body[data-mobile="1"] .mob-tabs {
+  display: flex; align-items: stretch;
+  position: fixed; right: 0; bottom: 0; left: 0; z-index: 80;
+  background: var(--surface); border-top: 1px solid var(--border);
+  box-shadow: 0 -2px 14px rgba(0,0,0,.3);
+  padding-bottom: 0;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.mob-tab {
+  flex: 1 1 0%; min-width: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+  padding: 8px 2px 7px; border: 0; border-top: 2px solid transparent; background: transparent;
+  color: var(--muted); font: inherit; font-size: 10px; font-weight: 600; line-height: 1.2;
+  cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+}
+.mob-tab-ico { display: block; height: 22px; }
+.mob-tab-ico svg { display: block; width: 22px; height: 22px; }
+.mob-tab-lbl { display: block; max-width: 100%; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mob-tab.active { color: var(--primary); border-top-color: var(--primary); }
+
+/* --- Content --- */
+body[data-mobile="1"] .view {
+  padding: 12px 12px 78px;
+  padding-bottom: calc(78px + env(safe-area-inset-bottom));
+}
+body[data-mobile="1"] .page-head { flex-direction: column; align-items: stretch; gap: 10px; margin-bottom: 14px; }
+body[data-mobile="1"] .page-head h1 { font-size: 18px; }
+body[data-mobile="1"] .head-acts .btn { flex: 1 1 45%; justify-content: center; }
+body[data-mobile="1"] .grid { gap: 12px; }
+body[data-mobile="1"] .card { padding: 13px; }
+body[data-mobile="1"] .btn { padding: 11px 14px; }
+body[data-mobile="1"] .btn.sm { padding: 9px 12px; font-size: 13px; }
+body[data-mobile="1"] .nav-item { padding: 13px 12px; }
+/* 16px or iOS zooms the page in the moment a field takes focus. */
+body[data-mobile="1"] input,
+body[data-mobile="1"] select,
+body[data-mobile="1"] textarea,
+body[data-mobile="1"] .cell { font-size: 16px; }
+/* A squeezed table is unreadable; let it keep its natural width and scroll. */
+body[data-mobile="1"] .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+body[data-mobile="1"] .table-wrap table { width: auto; min-width: 100%; }
+body[data-mobile="1"] th, body[data-mobile="1"] td { white-space: nowrap; }
+body[data-mobile="1"] .to-top {
+  right: 12px;
+  bottom: 84px;
+  bottom: calc(84px + env(safe-area-inset-bottom));
+}
+body[data-mobile="1"] .toast-host {
+  right: 10px; left: 10px;
+  bottom: 78px;
+  bottom: calc(78px + env(safe-area-inset-bottom));
+}
+body[data-mobile="1"] .toast { min-width: 0; }
+
+/* --- Dialogs become bottom sheets: the buttons land under the thumb and the
+       body scrolls on its own instead of the whole card. --- */
+body[data-mobile="1"] .modal-host { padding: 0; align-items: flex-end; }
+body[data-mobile="1"] .modal {
+  display: flex; flex-direction: column;
+  width: 100%; max-width: none !important; max-height: 92%;
+  border-radius: 16px 16px 0 0; overflow: hidden;
+}
+body[data-mobile="1"] .modal-head { flex: 0 0 auto; padding: 13px 14px; }
+body[data-mobile="1"] .modal-head h2 { font-size: 15px; }
+body[data-mobile="1"] .modal-body { flex: 1 1 auto; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 14px; }
+body[data-mobile="1"] .modal-foot {
+  flex: 0 0 auto; gap: 0; padding: 10px 14px;
+  padding-bottom: 10px;
+  padding-bottom: calc(10px + env(safe-area-inset-bottom));
+}
+body[data-mobile="1"] .modal-foot > * + * { margin-left: 10px; }
+body[data-mobile="1"] .modal-foot .btn { flex: 1 1 auto; justify-content: center; }
+body[data-mobile="1"] .modal.modal-fs { max-height: none; border-radius: 0; }

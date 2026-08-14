@@ -25,6 +25,7 @@ Views.opponents = function (mount) {
     ${AI.section('play')}
     <div class="page-head"><div><h1>${T('opponents.title')}</h1><p>${T('opponents.subtitle')}</p></div></div>
     ${UI.acc('opponents', T('opponents.scouted'), cards, {
+    open: true,
     sub: T('opponents.subtitle'),
     actions: `${UI.shareBar('opponents')}
         <button class="btn" id="pdfAll">⬇ ${T('opponents.pdfAll')}</button>
