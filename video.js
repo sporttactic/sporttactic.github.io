@@ -224,7 +224,7 @@ Views.video = function (mount) {
     mountOverlay();
   }
   function showEmbed(src) {
-    wrap.innerHTML = `<div class="embed-frame"><iframe src="${UI.esc(src)}" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen frameborder="0"></iframe></div>`;
+    wrap.innerHTML = `<div class="embed-frame"><iframe src="${UI.esc(src)}" referrerpolicy="strict-origin-when-cross-origin" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen frameborder="0"></iframe></div>`;
     v = null;
     overlay = null; octx = null;
     if (sizeWatch) { sizeWatch.disconnect(); sizeWatch = null; }

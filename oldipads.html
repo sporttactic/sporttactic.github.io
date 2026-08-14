@@ -2,6 +2,35 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<!-- Same policy as index.html, minus everything this build does not load. Must
+     stay the first element in <head>: a meta policy only governs later loads.
+     Old Safari ignores it entirely, which costs nothing — it is here for the
+     modern browsers that reach this page through ?classic=1. -->
+<meta http-equiv="Content-Security-Policy" content="
+  default-src 'self';
+  script-src 'self' 'unsafe-inline' https://www.googletagmanager.com;
+  connect-src 'self' https://*.google-analytics.com https://*.analytics.google.com https://*.googletagmanager.com;
+  img-src 'self' data: https:;
+  style-src 'self' 'unsafe-inline';
+  font-src 'self' data:;
+  object-src 'none';
+  base-uri 'self';
+  form-action 'none';
+  upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<!-- Transport and framing guard, ES3 so the oldest Safari here still runs it. -->
+<script>
+  (function () {
+    var l = window.location;
+    var dev = l.hostname === 'localhost' || l.hostname === '127.0.0.1' || l.protocol === 'file:';
+    if (window.top !== window.self && !dev) {
+      try { window.top.location.replace(l.href); } catch (e) { l.replace('about:blank'); }
+    }
+    if (l.protocol === 'http:' && !dev) {
+      l.replace('https://' + l.host + l.pathname + l.search + l.hash);
+    }
+  })();
+</script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">

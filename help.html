@@ -182,6 +182,7 @@
       <a href="#share"><span data-lang-en>Share Data</span><span data-lang-da>Del Data</span></a>
       <a href="#cloud"><span data-lang-en>Shared Team Database</span><span data-lang-da>Delt Holddatabase</span></a>
       <a href="#roles"><span data-lang-en>People &amp; Access</span><span data-lang-da>Personer &amp; Adgang</span></a>
+      <a href="#security"><span data-lang-en>Security &amp; Privacy</span><span data-lang-da>Sikkerhed &amp; Privatliv</span></a>
       <a href="#offline"><span data-lang-en>Offline &amp; Install</span><span data-lang-da>Offline &amp; Installation</span></a>
       <a href="#mail"><span data-lang-en>Send e-mail</span><span data-lang-da>Send e-mail</span></a>
       <a href="#messenger"><span data-lang-en>Secure Messenger</span><span data-lang-da>Sikre Beskeder</span></a>
@@ -1149,6 +1150,68 @@
       </ul>
       <div class="callout" data-lang-en><svg class="sym"><use href="#i-target"/></svg> The role in <b>Settings <svg class="sym"><use href="#i-right"/></svg> Role-based Access</b> is the role <b>this device</b> is using. Set a shared iPad in the changing room to <b>Player</b> and it can follow the team without being able to change anything.</div>
       <div class="callout" data-lang-da><svg class="sym"><use href="#i-target"/></svg> Rollen under <b>Indstillinger <svg class="sym"><use href="#i-right"/></svg> Rollebaseret Adgang</b> er den rolle, <b>denne enhed</b> bruger. Sæt en fælles iPad i omklædningsrummet til <b>Spiller</b>, så kan den følge holdet uden at kunne ændre noget.</div>
+    </details>
+
+    <!-- Security & privacy -->
+    <details class="card sec" id="security" open>
+      <summary class="sec-h"><h2><span class="num"><svg class="sym"><use href="#i-lock"/></svg></span> <span data-lang-en>Security &amp; Privacy</span><span data-lang-da>Sikkerhed &amp; Privatliv</span></h2></summary>
+      <p data-lang-en>The short version: <b>there is no SportTactic server</b>. Your squad lives in your browser’s own database on your own device. Nothing is uploaded anywhere unless you deliberately set up a shared team database, send an e-mail or ask the AI assistant a question.</p>
+      <p data-lang-da>Den korte version: <b>der findes ingen SportTactic-server</b>. Din trup ligger i din browsers egen database på din egen enhed. Intet sendes nogen steder hen, medmindre du bevidst sætter en delt holddatabase op, sender en e-mail eller stiller AI-assistenten et spørgsmål.</p>
+
+      <h3 data-lang-en>What leaves the device, and only then</h3>
+      <h3 data-lang-da>Hvad forlader enheden — og kun da</h3>
+      <ul>
+        <li data-lang-en><b>The shared team database</b> goes to <b>your own Google Drive</b>, not to us. What it contains is your decision: <span class="tag">Settings <svg class="sym"><use href="#i-right"/></svg> Share policy</span> switches whole blocks on and off, and blurs, masks or removes the personal fields — phone, e-mail, injury notes. Opponent scouting and personal training data are <b>off by default</b>.</li>
+        <li data-lang-da><b>Den delte holddatabase</b> lander i <b>dit eget Google Drev</b>, ikke hos os. Hvad den indeholder, er din beslutning: <span class="tag">Indstillinger <svg class="sym"><use href="#i-right"/></svg> Delingspolitik</span> slår hele blokke til og fra og slører, maskerer eller fjerner de personlige felter — telefon, e-mail, skadesnoter. Modstanderanalyse og personlige træningsdata er <b>slået fra som udgangspunkt</b>.</li>
+        <li data-lang-en><b>E-mail</b> goes through the mail service you set up yourself, with your own account.</li>
+        <li data-lang-da><b>E-mail</b> sendes gennem den mailtjeneste, du selv sætter op, med din egen konto.</li>
+        <li data-lang-en><b>The AI assistant</b> sends the squad, results, injuries and training data with every question — that is the whole point of it, but it is worth knowing. It stays switched off until you add your own OpenAI key.</li>
+        <li data-lang-da><b>AI-assistenten</b> sender trup, resultater, skader og træningsdata med hvert spørgsmål — det er hele pointen, men det er værd at vide. Den er slået fra, indtil du tilføjer din egen OpenAI-nøgle.</li>
+        <li data-lang-en><b>Nothing else.</b> The board, the video analysis, the statistics and the planner never touch the network at all.</li>
+        <li data-lang-da><b>Intet andet.</b> Tavlen, videoanalysen, statistikken og planlæggeren rører aldrig netværket overhovedet.</li>
+      </ul>
+
+      <h3 data-lang-en>Guarding the connection</h3>
+      <h3 data-lang-da>Beskyttelse af forbindelsen</h3>
+      <ul>
+        <li data-lang-en><b>Always over HTTPS.</b> Open the app on a plain <span class="tag">http://</span> address and it moves itself to the encrypted one before it shows you anything. On an open café or arena wi-fi, that is what stops somebody in the middle reading the squad — or quietly rewriting the app on its way to you.</li>
+        <li data-lang-da><b>Altid over HTTPS.</b> Åbner du appen på en almindelig <span class="tag">http://</span>-adresse, flytter den sig selv til den krypterede, før den viser dig noget som helst. På et åbent café- eller hal-wi-fi er det dét, der forhindrer nogen i midten i at læse truppen — eller stille og roligt omskrive appen på vejen til dig.</li>
+        <li data-lang-en><b>A locked-down content policy.</b> The app declares exactly which addresses it is allowed to load code from and send data to. Anything else is refused by the browser itself, so injected code cannot be fetched and your squad cannot be posted to an address that is not on the list.</li>
+        <li data-lang-da><b>En låst indholdspolitik.</b> Appen erklærer præcis, hvilke adresser den må hente kode fra og sende data til. Alt andet afvises af browseren selv, så indsprøjtet kode ikke kan hentes, og din trup ikke kan sendes til en adresse, der ikke står på listen.</li>
+        <li data-lang-en><b>It refuses to be framed.</b> If another site tries to load SportTactic inside itself — the usual way to trick somebody into clicking something they cannot see — the app breaks out or blanks itself.</li>
+        <li data-lang-da><b>Den nægter at blive indrammet.</b> Forsøger en anden side at indlejre SportTactic i sig selv — den sædvanlige måde at narre nogen til at klikke på noget, de ikke kan se — bryder appen ud eller tømmer sig selv.</li>
+        <li data-lang-en><b>The address is kept quiet.</b> A team code has been in it, so the app does not hand the address on to the sites it links out to, and clears the code out of the address bar the moment it has been used.</li>
+        <li data-lang-da><b>Adressen holdes for sig selv.</b> En holdkode har været i den, så appen giver ikke adressen videre til de sider, den linker til, og rydder koden ud af adresselinjen, så snart den er brugt.</li>
+      </ul>
+
+      <h3 data-lang-en>Standing up to a bad file</h3>
+      <h3 data-lang-da>Modstand mod en dårlig fil</h3>
+      <p data-lang-en>A team code is a file somebody handed you, and a backup arrives by mail or chat. Neither is trusted on sight:</p>
+      <p data-lang-da>En holdkode er en fil, nogen har givet dig, og en sikkerhedskopi kommer med mail eller chat. Ingen af dem stoles der på uden videre:</p>
+      <ul>
+        <li data-lang-en>Every download has a <b>time limit</b> and a <b>size limit</b>, counted as it arrives. A wrong or hostile file id cannot hang the app for ever or fill the memory until the tab dies.</li>
+        <li data-lang-da>Hver hentning har en <b>tidsgrænse</b> og en <b>størrelsesgrænse</b>, der tælles undervejs. Et forkert eller fjendtligt fil-id kan ikke få appen til at hænge i det uendelige eller fylde hukommelsen, til fanen dør.</li>
+        <li data-lang-en>There is a <b>ceiling on how many records</b> a shared file or a backup may bring, so it cannot quietly fill your device’s storage.</li>
+        <li data-lang-da>Der er et <b>loft over, hvor mange poster</b> en delt fil eller en sikkerhedskopi må medbringe, så den ikke stille kan fylde din enheds lager.</li>
+        <li data-lang-en>Text that arrives from outside is treated as text. A player name is shown as a name, never run as an instruction.</li>
+        <li data-lang-da>Tekst, der kommer udefra, behandles som tekst. Et spillernavn vises som et navn og køres aldrig som en instruktion.</li>
+        <li data-lang-en>A field the sender <b>blurred or removed</b> can never overwrite the real value on your own copy on the way back in.</li>
+        <li data-lang-da>Et felt, afsenderen har <b>sløret eller fjernet</b>, kan aldrig overskrive den rigtige værdi på din egen kopi på vejen tilbage.</li>
+      </ul>
+
+      <h3 data-lang-en>Passwords and keys</h3>
+      <h3 data-lang-da>Adgangskoder og nøgler</h3>
+      <ul>
+        <li data-lang-en><b>Role passwords never travel.</b> Only a salted PBKDF2 hash (310,000 rounds) goes into the shared file and the team code — the words themselves stay on the coach’s device.</li>
+        <li data-lang-da><b>Rolleadgangskoder rejser aldrig.</b> Kun et saltet PBKDF2-hash (310.000 runder) lægges i den delte fil og holdkoden — selve ordene bliver på trænerens enhed.</li>
+        <li data-lang-en><b>The Secure Messenger</b> derives its keys the same way, then encrypts every message and file with AES-GCM on top of the encryption WebRTC already gives it. Messages are encrypted on the device too, so a stolen database is useless. A private chat key never leaves the device, whatever the share policy says.</li>
+        <li data-lang-da><b>Sikre Beskeder</b> udleder sine nøgler på samme måde og krypterer derefter hver besked og fil med AES-GCM oven på den kryptering, WebRTC allerede giver. Beskeder krypteres også på enheden, så en stjålet database er ubrugelig. En privat chatnøgle forlader aldrig enheden, uanset hvad delingspolitikken siger.</li>
+        <li data-lang-en><b>A backup can be locked</b> with a pass key. Without it the file opens read-only: everything can be looked at, nothing can be changed.</li>
+        <li data-lang-da><b>En sikkerhedskopi kan låses</b> med en adgangsnøgle. Uden den åbner filen skrivebeskyttet: alt kan ses, intet kan ændres.</li>
+      </ul>
+
+      <div class="callout" data-lang-en><svg class="sym"><use href="#i-lock"/></svg> <b>The one thing to remember:</b> a team code is a key to the squad list. Anybody who has it can read whatever the coach chose to share. Send it the way you would send a door code — and if it gets out, press <b>Disconnect</b> on the Drive file and hand out a new one.</div>
+      <div class="callout" data-lang-da><svg class="sym"><use href="#i-lock"/></svg> <b>Det ene, du skal huske:</b> en holdkode er en nøgle til trupplisten. Alle, der har den, kan læse dét, træneren valgte at dele. Send den, som du ville sende en dørkode — og slipper den ud, så tryk <b>Afbryd</b> på Drev-filen og del en ny ud.</div>
     </details>
 
     <!-- Offline & install -->
