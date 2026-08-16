@@ -300,9 +300,16 @@ const App = (() => {
     const b = document.getElementById('lockBadge');
     if (!b) return;
     const locked = Store.locked();
+    const isSyncing = !!(window.TeamCloud && TeamCloud.isCoachSyncing && TeamCloud.isCoachSyncing());
     const member = !locked && window.Access && Access.readMode();
-    b.classList.toggle('hidden', !locked && !member);
-    if (!locked && !member) return;
+    b.classList.toggle('hidden', !locked && !member && !isSyncing);
+    if (!locked && !member && !isSyncing) return;
+    if (isSyncing) {
+      b.querySelector('span').textContent = '⏳ ' + T('cloud.syncNow');
+      b.title = T('cloud.coachSyncing');
+      b.onclick = () => UI.toast(T('cloud.coachSyncing'), 'info');
+      return;
+    }
     b.querySelector('span').textContent = T(member ? 'mem.badge' : 'lock.badge');
     b.title = T(member ? 'mem.blocked' : 'lock.cardHint');
     b.onclick = member
@@ -411,6 +418,15 @@ const App = (() => {
       applyMemberMode();
       refreshSyncBtn();
       refreshSignInBtn();
+      if (info && info.coachSyncing) {
+        UI.toast(T('cloud.coachSyncing'), 'info');
+        return;
+      }
+      if (info && info.coachSyncing === false) {
+        UI.toast(T('cloud.coachSyncDone'), 'success');
+        render();
+        return;
+      }
       if (info && info.revoked) { UI.toast(T('cloud.revoked'), 'error'); render(); return; }
       // Rows landed from a background pull, so the view on screen was built
       // from the old ones. Redraw it — but not over a dialog, and not over the

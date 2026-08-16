@@ -1,16 +1,16 @@
-/* cloud.js — one shared JSON database on Google Drive.
+/* cloud.js — shared modular database on Google Drive.
 
    The whole idea in two sentences: one person (an admin or a head coach) keeps
-   the team's database as a single JSON file in their own Google Drive, and
-   everybody else points their app at that file. Coaches you invite as editors
-   can write to it; players read it. Nobody has to run a server and nobody has
-   to understand Drive permissions — the coach presses one button and hands out
+   the team's database in a dedicated folder in their own Google Drive, split
+   into small modular area databases (squad, training, tactics, matches, etc.).
+   Coaches you invite as editors can write to it; players only retrieve/sync data.
+   Nobody has to run a server — the coach presses one button and hands out
    a short team code.
 
    Two ways in, so a player never has to sign in to anything:
-     · signed in  — the file is fetched with the member's own Google account,
-                    which is also the only way to write.
-     · team code  — the file is shared as "anyone with the link may view" and is
+     · signed in  — the files are fetched with the member's own Google account,
+                    which is also the only way for staff to write.
+     · team code  — the files are shared as "anyone with the link may view" and are
                     read with the team's Drive API key. No account, no sign-in.
 
    Merging is per record: whichever copy of a row has the newer updatedAt wins.
@@ -18,8 +18,26 @@
    when a coach wants their copy to simply be the truth. */
 const TeamCloud = (() => {
   const FILE_NAME = 'sporttactic-team-db.json';
+  const MANIFEST_NAME = 'sporttactic-team-manifest.json';
   const CFG_KEY = 'cloudCfg';
-  const FORMAT = 1;
+  const FORMAT = 2;
+
+  // Functional area definitions mapping to stores
+  const AREA_MAP = {
+    squad: ['clubs', 'teams', 'seasons', 'players', 'coaches'],
+    matches: ['matches', 'events'],
+    training: ['training', 'exercises'],
+    tactics: ['tactics'],
+    planner: ['planner'],
+    video: ['videos'],
+    opponents: ['opponents'],
+    reports: ['reports'],
+    personal: ['personal'],
+    settings: ['settings']
+  };
+
+  const areaFileName = area => 'sporttactic-area-' + area + '.json';
+
   // Device preferences (theme, language, the Google client id) are personal, so
   // the settings store stays out of the shared file — except the member list,
   // which every coach needs to see the same way, the player profile, which is
@@ -27,22 +45,47 @@ const TeamCloud = (() => {
   // that decide what a joining device may be. The readable words never travel.
   const SHARED_SETTINGS = ['accessMembers', 'memberProfile', 'roleKeys'];
   const AUTO_MINUTES = [0, 5, 15, 30, 60, 180];
-  // Only a storage-exhaustion guard now that the file is split by size: a real
-  // club never comes near it, and what a hostile file may carry is bounded by
-  // the byte ceiling on every part long before this.
   const MAX_ROWS_PER_STORE = 200000;
-  // What a device gets when it joins with a code. The coach's own copy keeps
-  // whatever they chose.
   const MEMBER_AUTO_MIN = 15;
 
   let timer = null;
-  let busy = false;
+  let activeSyncPromise = null;
+  let coachSyncingState = false;
   const listeners = new Set();
 
   function syncStores() { return DB.STORES.filter(s => s !== 'settings'); }
 
+  // ---- Concurrency & Lock Management -------------------------------------
+  // Instead of throwing 'busy' when multiple operations overlap (e.g. background
+  // auto-sync + user clicking sync), concurrent sync requests share the in-flight
+  // promise, returning the result smoothly without error.
+  function isBusy() { return !!activeSyncPromise; }
+  function isCoachSyncing() { return coachSyncingState; }
+
+  function runExclusive(fn) {
+    if (activeSyncPromise) {
+      return activeSyncPromise;
+    }
+    const p = (async () => {
+      try {
+        return await fn();
+      } finally {
+        activeSyncPromise = null;
+      }
+    })();
+    activeSyncPromise = p;
+    return p;
+  }
+
+  // Remote lock check: coach holds lock while actively publishing updates
+  function isRemoteLocked(doc) {
+    if (!doc || !doc.syncLock || !doc.syncLock.locked) return false;
+    // Lock expires after 3 minutes (180,000 ms) as safety guard against abandoned writes
+    return (Date.now() - (+doc.syncLock.at || 0)) < 180000;
+  }
+
   // ---- Configuration -----------------------------------------------------
-  // { fileId, apiKey, teamName, owner, autoMin, lastPullAt, lastPushAt, lastErr }
+  // { fileId, apiKey, teamName, owner, autoMin, lastPullAt, lastPushAt, lastErr, folderId }
   function cfg() {
     const rec = Store.find('settings', CFG_KEY);
     const v = (rec && rec.value && typeof rec.value === 'object') ? rec.value : {};
@@ -55,7 +98,8 @@ const TeamCloud = (() => {
       lastPullAt: +v.lastPullAt || 0,
       lastPushAt: +v.lastPushAt || 0,
       lastSkipped: +v.lastSkipped || 0,
-      lastErr: String(v.lastErr || '')
+      lastErr: String(v.lastErr || ''),
+      folderId: String(v.folderId || '')
     };
   }
   async function setCfg(patch) {
@@ -74,8 +118,6 @@ const TeamCloud = (() => {
   function emit(info) { listeners.forEach(fn => { try { fn(info); } catch (e) { /* a dead view must not stop the sync */ } }); }
 
   // ---- Team code ---------------------------------------------------------
-  // Short enough to send in a text message, and it carries everything a member
-  // needs: which file, which key, and what the team is called.
   function utf8b64(s) {
     const u8 = new TextEncoder().encode(s);
     let bin = '';
@@ -91,17 +133,10 @@ const TeamCloud = (() => {
   function makeCode() {
     const c = cfg();
     if (!c.fileId) return '';
-    const payload = { v: 1, i: c.fileId, n: c.teamName || '' };
+    const payload = { v: 2, i: c.fileId, n: c.teamName || '' };
     if (c.apiKey) payload.k = c.apiKey;
-    // The role password hashes ride along, so a player who pastes the code can
-    // be checked against their word straight away — before the first sync, and
-    // even if the file has not caught up yet. Only hashes travel, never a word.
     const keys = (window.Access && Access.roleKeys) ? Access.roleKeys() : null;
     if (keys) payload.r = keys;
-    // Without the club's OAuth client id a joining device cannot sign in to
-    // Drive at all, and no player is going to open the Google Cloud Console. It
-    // is public by design — what guards the account is the login and the origin
-    // list, never the id itself.
     const cid = Store.find('settings', 'driveClientId');
     if (cid && cid.value) payload.c = String(cid.value);
     return 'STX1-' + utf8b64(JSON.stringify(payload))
@@ -121,8 +156,6 @@ const TeamCloud = (() => {
       return out;
     } catch (e) { return null; }
   }
-  // A coach will paste whatever they have: the code, the whole Drive address
-  // out of the browser bar, or the bare id. All three are accepted.
   function parseTarget(text) {
     const code = readCode(text);
     if (code) return code;
@@ -134,30 +167,23 @@ const TeamCloud = (() => {
   }
 
   // ---- The document ------------------------------------------------------
-  // What actually leaves the device: only the blocks the policy shares, only
-  // the squads it names, with the personal fields treated the way the coach
-  // chose. The policy travels with it so the other side knows what it may
-  // change.
   async function snapshot() {
     const pol = Privacy.policy();
     const data = {};
     for (const s of syncStores()) {
       if (!Privacy.mayShare(pol, s)) continue;
       const rows = await DB.getAll(s);
-      // A store nobody has put anything in is not news. Sending the empty array
-      // only makes the file bigger and gives the other side something to merge
-      // that cannot change anything.
       if (!rows.length) continue;
       data[s] = await Store.pack(Privacy.redactRows(s, rows, pol));
     }
     const out = Privacy.keepTeams(data, pol);
-    // keepTeams can filter a store down to nothing when the club shares one
-    // squad out of several.
     Object.keys(out).forEach(s => { if (Array.isArray(out[s]) && !out[s].length) delete out[s]; });
     const shared = (await DB.getAll('settings')).filter(r => SHARED_SETTINGS.indexOf(r.id) >= 0);
     if (shared.length) out.settings = await Store.pack(shared);
     return {
-      app: 'SportTactic', kind: 'team-db', format: FORMAT,
+      app: 'SportTactic',
+      kind: 'team-manifest',
+      format: FORMAT,
       updatedAt: Date.now(),
       team: cfg().teamName || (Store.activeTeam() ? Store.activeTeam().name : ''),
       by: Access.role(),
@@ -167,10 +193,8 @@ const TeamCloud = (() => {
     };
   }
   function isTeamDb(doc) {
-    return !!(doc && typeof doc === 'object' && doc.data && typeof doc.data === 'object');
+    return !!(doc && typeof doc === 'object' && (doc.data || doc.areas || doc.parts));
   }
-  // Row-level merge: the newer updatedAt wins, and a row only one side knows
-  // about is simply kept.
   function mergeRows(mine, theirs) {
     const map = new Map();
     (mine || []).forEach(r => { if (r && typeof r.id === 'string') map.set(r.id, r); });
@@ -181,9 +205,6 @@ const TeamCloud = (() => {
     });
     return [...map.values()];
   }
-  // How much of what came down is actually news. Counting everything received
-  // would report the whole club on every routine pull and announce an update
-  // that changed nothing.
   function countNew(mine, theirs) {
     const map = new Map((mine || []).map(r => [r && r.id, r]));
     return (theirs || []).filter(r => {
@@ -194,86 +215,63 @@ const TeamCloud = (() => {
 
   // ---- Transport ---------------------------------------------------------
   const signedIn = () => !!(window.Drive && Drive.isConnected());
-  // ---- One head file, and a part file per heavy store ---------------------
-  // Recorded animations and video clips are base64 inside the JSON, so a club
-  // with a season of them grows a single file past what any device wants to
-  // fetch — and reading a fixture list would mean downloading the lot. So a
-  // store that outgrows PART_BYTES moves into its own file beside the head, and
-  // the head keeps only a pointer. A store too big even for one part is cut into
-  // several, numbered so they go back together in order.
-  //
-  // Nothing changes for a small club: no parts, one file, exactly as before.
-  // Only the owner can create files in their own Drive, so a contributing member
-  // writes the head and leaves every part exactly as it found them.
-  const PART_BYTES = 4 * 1024 * 1024;   // a store bigger than this gets its own file
-  const HEAD_BYTES = 6 * 1024 * 1024;   // what is left inline must stay small to fetch
-  const partName = (s, i) => 'sporttactic-team-' + s + (i ? '-' + (i + 1) : '') + '.json';
-
-  const jsonBytes = v => { try { return JSON.stringify(v).length; } catch (e) { return 0; } };
-
-  // Which stores have to leave the head: anything oversized on its own, then the
-  // next biggest until what is left fits.
-  function planParts(data) {
-    const sizes = Object.keys(data)
-      .filter(s => Array.isArray(data[s]) && data[s].length)
-      .map(s => ({ s, n: jsonBytes(data[s]) }))
-      .sort((a, b) => b.n - a.n);
-    const out = sizes.filter(x => x.n > PART_BYTES).map(x => x.s);
-    const rest = sizes.filter(x => out.indexOf(x.s) < 0);
-    let total = rest.reduce((n, x) => n + x.n, 0);
-    while (total > HEAD_BYTES && rest.length) {
-      const big = rest.shift();
-      out.push(big.s);
-      total -= big.n;
-    }
-    return out;
-  }
-  // Cut one store's rows into pieces no bigger than PART_BYTES. A row too big to
-  // share a piece gets one to itself, up to ROW_BYTES — past that the part it
-  // made would be unreadable for everybody, for ever, so it stays on this device
-  // and is counted instead. In practice that is only ever a recorded clip.
-  const ROW_BYTES = 32 * 1024 * 1024;
-  function chunkRows(rows, skipped) {
-    const out = [];
-    let cur = [];
-    let size = 0;
-    (rows || []).forEach(r => {
-      const n = jsonBytes(r) + 1;
-      if (n > ROW_BYTES) { skipped.push(r); return; }
-      if (cur.length && size + n > PART_BYTES) { out.push(cur); cur = []; size = 0; }
-      cur.push(r);
-      size += n;
-    });
-    if (cur.length || !out.length) out.push(cur);
-    return out;
-  }
 
   async function readOne(fileId) {
     const c = cfg();
-    // The signed-in read is tried first: it is the only one that sees a file
-    // shared with named people rather than with the link.
     if (window.Drive && (signedIn() || !c.apiKey)) {
       try { return await Drive.downloadJson(fileId); }
       catch (e) { if (!c.apiKey) throw e; }
     }
     return Drive.publicDownload(fileId, c.apiKey);
   }
+
+  // Reads remote database — supports both new multi-area modular databases in a folder
+  // and legacy single-file / part-based team databases.
+  // When coach is actively synchronizing, connected devices lock and wait until finished.
   async function readRemote() {
     const c = cfg();
     if (!c.fileId) throw new Error('not-linked');
-    // A file written before the split existed can be past the read ceiling. It
-    // is marked here, on the head only, because rewriting the whole thing is
-    // the one way out and only the owner's device may do it.
     let head;
     try { head = await readOne(c.fileId); }
     catch (e) { if (/too large/i.test(msg(e))) e.oversize = true; throw e; }
+    if (!head || typeof head !== 'object') throw new Error('not-a-team-file');
+
+    // If coach is currently syncing, lock and wait until finished
+    if (!c.owner && isRemoteLocked(head)) {
+      coachSyncingState = true;
+      emit({ coachSyncing: true, by: (head.syncLock && head.syncLock.by) || 'Coach' });
+      const startWait = Date.now();
+      while (isRemoteLocked(head) && (Date.now() - startWait < 60000)) {
+        await new Promise(r => setTimeout(r, 2500));
+        try { head = await readOne(c.fileId); } catch (e) { break; }
+      }
+      coachSyncingState = false;
+      emit({ coachSyncing: false });
+    }
+
+    if (!head.data || typeof head.data !== 'object') head.data = {};
+
+    // 1. Modular Multi-Area Database (format 2)
+    if (head.areas && typeof head.areas === 'object') {
+      const areas = head.areas;
+      for (const [areaKey, info] of Object.entries(areas)) {
+        if (!info || !info.fileId) continue;
+        try {
+          const areaDoc = await readOne(info.fileId);
+          if (areaDoc && areaDoc.data && typeof areaDoc.data === 'object') {
+            Object.assign(head.data, areaDoc.data);
+          }
+        } catch (err) {
+          if (!c.apiKey && !signedIn()) throw err;
+        }
+      }
+      return head;
+    }
+
+    // 2. Legacy part files (format 1 backward compatibility)
     const parts = (head && Array.isArray(head.parts)) ? head.parts.filter(p => p && p.store && p.fileId) : [];
     if (!parts.length) return head;
-    if (!head.data || typeof head.data !== 'object') head.data = {};
     for (const p of parts) {
-      // A part that will not come down must stop the whole read. Carrying on
-      // would hand applyDoc an empty store, and a replace would then wipe the
-      // club's own copy of it.
       const doc = await readOne(p.fileId);
       const rows = (doc && Array.isArray(doc.rows)) ? doc.rows : null;
       if (!rows) throw new Error('part-unreadable');
@@ -281,67 +279,104 @@ const TeamCloud = (() => {
     }
     return head;
   }
+
+  // Writes modular area database files to the coach's team folder on Google Drive.
+  // When coach starts push, remote manifest is locked so players/coaches connected
+  // by team code wait and are locked until upload finishes.
   async function writeRemote(doc) {
     const c = cfg();
     if (!c.fileId) throw new Error('not-linked');
-    const known = (Array.isArray(doc.parts) ? doc.parts : []).filter(p => p && p.store && p.fileId);
 
-    if (!c.owner) {
-      // A member cannot make or rewrite the owner's part files, so those stores
-      // travel back untouched and are not re-inlined into the head.
-      known.forEach(p => { delete doc.data[p.store]; });
-      doc.parts = known;
-      return Drive.uploadJson('', doc, { fileId: c.fileId });
+    const rootFolder = await Drive.ensureFolder('SportTactic', null);
+    const safeName = (c.teamName || (Store.activeTeam() ? Store.activeTeam().name : '') || 'Team').trim().replace(/[/\\?%*:|"<>]/g, '-');
+    const teamFolder = c.folderId ? c.folderId : await Drive.ensureFolder(safeName, rootFolder);
+    if (!c.folderId) await setCfg({ folderId: teamFolder });
+
+    const existingAreas = (doc.areas && typeof doc.areas === 'object') ? doc.areas : {};
+    const updatedAreas = Object.assign({}, existingAreas);
+
+    // 1. If owner/coach, lock manifest before uploading area files
+    if (c.owner) {
+      try {
+        const lockManifest = {
+          app: 'SportTactic',
+          kind: 'team-manifest',
+          format: FORMAT,
+          team: doc.team || c.teamName || '',
+          updatedAt: Date.now(),
+          by: Access.role() || 'Coach',
+          syncLock: { locked: true, by: Access.role() || 'Coach', at: Date.now() },
+          areas: existingAreas,
+          parts: []
+        };
+        await Drive.uploadJson('', lockManifest, { fileId: c.fileId });
+      } catch (e) { /* ignore pre-lock network issues */ }
     }
 
-    // Once a store is a part it stays one: shrinking back would orphan the file.
-    const stores = [...new Set(known.map(p => p.store).concat(planParts(doc.data)))];
-    if (!stores.length) { doc.parts = []; return Drive.uploadJson('', doc, { fileId: c.fileId }); }
+    // 2. Upload area files
+    for (const [areaKey, storeList] of Object.entries(AREA_MAP)) {
+      const areaData = {};
+      let hasContent = false;
+      for (const s of storeList) {
+        if (Array.isArray(doc.data[s]) && doc.data[s].length) {
+          areaData[s] = doc.data[s];
+          hasContent = true;
+        }
+      }
 
-    const slots = new Map();
-    known.forEach(p => {
-      if (!slots.has(p.store)) slots.set(p.store, []);
-      slots.get(p.store).push(p);
-    });
-    const folder = await Drive.ensureFolder('SportTactic', null);
-    const parts = [];
-    const skipped = [];
-    for (const s of stores) {
-      const chunks = chunkRows(doc.data[s], skipped);
-      const reuse = (slots.get(s) || []).slice().sort((a, b) => (a.seq || 0) - (b.seq || 0));
-      for (let i = 0; i < chunks.length; i++) {
-        const cur = reuse[i];
-        const body = { app: 'SportTactic', kind: 'team-part', format: FORMAT, store: s, seq: i, updatedAt: Date.now(), rows: chunks[i] };
-        const res = await Drive.uploadJson(cur ? '' : partName(s, i), body, cur ? { fileId: cur.fileId } : { parent: folder });
-        const fileId = (res && res.id) || (cur && cur.fileId);
-        if (!fileId) continue;
-        // A part has to be readable the same way the head is, or a team code
-        // would open the index and none of the contents.
-        if (!cur) { try { await Drive.shareAnyone(fileId, 'reader'); } catch (e) { /* named invites still work */ } }
-        parts.push({ store: s, seq: i, fileId });
+      const existingInfo = updatedAreas[areaKey];
+      const curFileId = existingInfo && existingInfo.fileId;
+
+      if (hasContent) {
+        const areaDoc = {
+          app: 'SportTactic',
+          kind: 'team-area',
+          format: FORMAT,
+          area: areaKey,
+          updatedAt: Date.now(),
+          data: areaData
+        };
+
+        const res = curFileId
+          ? await Drive.uploadJson('', areaDoc, { fileId: curFileId })
+          : await Drive.uploadJson(areaFileName(areaKey), areaDoc, { parent: teamFolder });
+
+        const fileId = (res && res.id) || curFileId;
+        if (fileId) {
+          if (!curFileId) {
+            try { await Drive.shareAnyone(fileId, 'reader'); } catch (e) { /* ignore */ }
+          }
+          updatedAreas[areaKey] = { fileId, updatedAt: Date.now() };
+        }
+      } else if (curFileId && c.owner) {
+        try {
+          await Drive.uploadJson('', { app: 'SportTactic', kind: 'team-area', format: FORMAT, area: areaKey, updatedAt: Date.now(), data: {} }, { fileId: curFileId });
+        } catch (e) { /* ignore */ }
       }
-      // A part that is no longer needed is emptied rather than deleted, so a
-      // device still holding the old head does not read a file that is gone.
-      for (let i = chunks.length; i < reuse.length; i++) {
-        try { await Drive.uploadJson('', { app: 'SportTactic', kind: 'team-part', format: FORMAT, store: s, seq: i, updatedAt: Date.now(), rows: [] }, { fileId: reuse[i].fileId }); }
-        catch (e) { /* leave it; the head no longer points at it */ }
-      }
-      delete doc.data[s];
     }
-    doc.parts = parts;
-    await setCfg({ lastSkipped: skipped.length });
-    return Drive.uploadJson('', doc, { fileId: c.fileId });
+
+    // 3. Prepare final manifest with syncLock released (null)
+    const manifest = {
+      app: 'SportTactic',
+      kind: 'team-manifest',
+      format: FORMAT,
+      team: doc.team || c.teamName || '',
+      updatedAt: Date.now(),
+      by: Access.role(),
+      policy: doc.policy || Privacy.policy(),
+      protected: doc.protected || Privacy.protectedPaths(doc.policy || Privacy.policy()),
+      syncLock: null,
+      areas: updatedAreas,
+      parts: []
+    };
+
+    return Drive.uploadJson('', manifest, { fileId: c.fileId });
   }
 
   // ---- Applying what came down -------------------------------------------
-  // The read-only pass-key lock guards hand edits; it deliberately does not
-  // block a pull, because the shared file is exactly what a locked player copy
-  // is supposed to follow.
   async function applyDoc(doc, mode) {
     if (!isTeamDb(doc)) throw new Error('bad-file');
     const replace = mode === 'replace';
-    // A masked phone number must never land on top of the real one, so every
-    // field the sender redacted is kept from the local copy instead.
     const guarded = {};
     (Array.isArray(doc.protected) ? doc.protected : []).forEach(p => {
       const i = String(p).indexOf('.');
@@ -352,8 +387,6 @@ const TeamCloud = (() => {
     let n = 0;
     for (const s of syncStores()) {
       if (!Array.isArray(doc.data[s])) continue;
-      // Whoever wrote the shared file chooses how many rows it carries. A
-      // device that follows a code must not let that fill its storage.
       if (doc.data[s].length > MAX_ROWS_PER_STORE) throw new Error('too many records in ' + s);
       const theirs = Store.unpack(doc.data[s]).filter(r => r && typeof r.id === 'string');
       const mine = await DB.getAll(s);
@@ -375,35 +408,18 @@ const TeamCloud = (() => {
     }
     if (Array.isArray(doc.data.settings)) {
       const theirs = Store.unpack(doc.data.settings).filter(r => r && SHARED_SETTINGS.indexOf(r.id) >= 0);
-      // These rows are written on this device too, so the newer one wins exactly
-      // like every other store. A blind overwrite here used to undo a change
-      // that had not been pushed yet — new role passwords, for instance, went
-      // back to the previous set and the word handed out stopped working.
       const mine = (await DB.getAll('settings')).filter(r => SHARED_SETTINGS.indexOf(r.id) >= 0);
       const rows = replace ? theirs : mergeRows(mine, theirs);
       if (rows.length) { await DB.bulkPut('settings', rows); n += replace ? theirs.length : countNew(mine, theirs); }
     }
-    // The club's policy is the club's to set, so a copy that follows the file
-    // takes it as it stands. It is what decides here whether this device may
-    // send anything back, and it is on the fixed list, so the copy cannot
-    // quietly grant itself more than the coach gave it. Written straight to the
-    // database because that same list blocks it going through the store.
     if (!cfg().owner && doc.policy && typeof doc.policy === 'object') {
       await DB.bulkPut('settings', [{ id: 'sharePolicy', value: doc.policy, updatedAt: Date.now() }]);
     }
     await Store.loadAll();
-    // The planner, the matches and everything else a squad owns are read through
-    // Store.scoped(), so a row that arrived without one has to be given a squad
-    // or it is on the device and on no screen.
     await Store.adoptUnscoped();
     return n;
   }
 
-  // ---- The four things a coach can actually press ------------------------
-  // A copy let in with one squad's word has nothing left to follow once the club
-  // deletes that squad. Both the file's squad list and the password set have to
-  // say it is gone: a club that simply stopped sharing a squad for a while must
-  // not cost anybody their link.
   function revoked(doc) {
     if (cfg().owner || !window.Access || !Access.teamLock) return false;
     const lock = Access.teamLock();
@@ -415,15 +431,12 @@ const TeamCloud = (() => {
     if (!keys || !keys.teams) return false;
     return !keys.teams[lock];
   }
-  // Let go of the club completely: no file, no timer, no Google session, and
-  // none of the club's data left behind on a device that is no longer in it.
+
   async function cutOff() {
     stop();
     forget();
     try { if (window.Drive && Drive.disconnect) Drive.disconnect(); } catch (e) { /* already gone */ }
     for (const s of DB.STORES) { if (s !== 'settings') await DB.clear(s); }
-    // Written straight to the database: these are the rows the member lock is
-    // built to refuse, and the lock is exactly what is being torn down here.
     const now = Date.now();
     await DB.bulkPut('settings', [
       { id: 'roleClaim', value: null, updatedAt: now },
@@ -436,61 +449,51 @@ const TeamCloud = (() => {
     await Store.loadAll();
     emit({ revoked: true });
   }
-  async function pull(mode) {
-    if (busy) throw new Error('busy');
-    busy = true;
+
+  // Internal pull implementation (called within runExclusive)
+  async function pullInternal(mode) {
     let got = 0;
     try {
       const doc = await readRemote();
       got = await applyDoc(doc, mode);
       await setCfg({ lastPullAt: Date.now(), lastErr: '' });
-      // Nothing of it was kept, so it is not an update anybody wants announced.
-      if (revoked(doc)) { busy = false; await cutOff(); got = 0; return 0; }
+      if (revoked(doc)) { await cutOff(); got = 0; return 0; }
       return got;
     } catch (e) {
       await setCfg({ lastErr: e && e.oversize ? (cfg().owner ? 'oversize-owner' : 'oversize') : msg(e) });
       throw e;
-    } finally { busy = false; emit({ pulled: got }); }
+    } finally { emit({ pulled: got }); }
   }
-  async function push(mode) {
+
+  // Internal push implementation (called within runExclusive)
+  async function pushInternal(mode) {
+    const roleTier = window.Access ? Access.tier() : 'player';
+    if (roleTier === 'player') throw new Error('not-allowed');
     if (!Access.can('cloud.write') && !mayContribute()) throw new Error('not-allowed');
-    if (busy) throw new Error('busy');
-    busy = true;
+
     try {
       let doc = await snapshot();
       let remote = null;
       try {
         remote = await readRemote();
       } catch (e) {
-        // Anything else — a dropped connection, a dead part — must stop here.
-        // Carrying on with no remote would write a fresh set of part files
-        // beside the real ones and push a partial copy over everyone's work.
         if (!e || !e.oversize || !cfg().owner) throw e;
         mode = 'replace';
       }
       const owner = cfg().owner;
-      // Which part file holds which store is the file's own business, not this
-      // snapshot's. Losing it here would have writeRemote create a second set
-      // beside the first on every single push.
+      doc.areas = (remote && remote.areas && typeof remote.areas === 'object') ? remote.areas : {};
       doc.parts = (remote && Array.isArray(remote.parts)) ? remote.parts : [];
-      // The owner's policy is the one that counts, so a member sends back the
-      // copy they found and only touches the blocks it lets them touch.
+
       if (!owner && isTeamDb(remote)) {
         const pol = (remote.policy && typeof remote.policy === 'object') ? remote.policy : Privacy.defaults();
         doc.policy = pol;
         doc.protected = Array.isArray(remote.protected) ? remote.protected : doc.protected;
-        // A store that lives in a part file is out of a member's reach whatever
-        // the policy says: only the owner's Drive account may rewrite those.
-        const parted = new Set(doc.parts.map(p => p && p.store));
         for (const s of syncStores()) {
           const theirs = Array.isArray(remote.data[s]) ? remote.data[s] : null;
-          if (parted.has(s) || !Privacy.mayEdit(pol, s)) { if (theirs) doc.data[s] = theirs; else delete doc.data[s]; continue; }
-          // Without delete rights a removal here must not remove it for everyone.
+          if (!Privacy.mayEdit(pol, s)) { if (theirs) doc.data[s] = theirs; else delete doc.data[s]; continue; }
           if (!Privacy.mayDelete(pol, s) && theirs) doc.data[s] = mergeRows(theirs, doc.data[s] || []);
         }
       } else if (mode !== 'replace' && isTeamDb(remote)) {
-        // Merge on top of whatever is up there, so two coaches saving at the
-        // same time do not wipe each other's work.
         for (const s of syncStores()) {
           if (!Array.isArray(remote.data[s])) continue;
           if (!doc.data[s]) { doc.data[s] = remote.data[s]; continue; }
@@ -500,8 +503,6 @@ const TeamCloud = (() => {
           doc.data.settings = remote.data.settings;
         }
       }
-      // A squad the file leaves out must not walk back in through the merge, so
-      // what is already up there is filtered by the same rule as what we send.
       doc.data = Privacy.keepTeams(doc.data, doc.policy);
       await writeRemote(doc);
       await setCfg({ lastPushAt: Date.now(), lastErr: '' });
@@ -509,131 +510,187 @@ const TeamCloud = (() => {
     } catch (e) {
       await setCfg({ lastErr: e && e.oversize ? (cfg().owner ? 'oversize-owner' : 'oversize') : msg(e) });
       throw e;
-    } finally { busy = false; emit(); }
+    } finally { emit(); }
   }
-  // What the automatic timer and the single Sync button do: take everything
-  // new from the file, then put everything new of ours back.
+
+  // Public pull & push wrapped in runExclusive to prevent busy errors
+  async function pull(mode) {
+    return runExclusive(() => pullInternal(mode));
+  }
+
+  async function push(mode) {
+    const roleTier = window.Access ? Access.tier() : 'player';
+    if (roleTier === 'player') throw new Error('not-allowed');
+    return runExclusive(() => pushInternal(mode));
+  }
+
+  // Full synchronization:
+  // - For player: ONLY retrieves (pulls) data, never pushes.
+  // - For coach/admin: pulls latest, then pushes local changes.
   async function sync() {
-    let got = 0;
-    try {
-      got = await pull('merge');
-    } catch (e) {
-      // The one repair for a file too big to read: the owner writes it again,
-      // and writing it again splits it.
-      if (!e || !e.oversize || !cfg().owner || !signedIn()) throw e;
-      await push('replace');
-      return 0;
-    }
-    const mayWrite = Access.can('cloud.write') || mayContribute();
-    // The pull may have cut this device loose from the club altogether.
-    if (!cfg().fileId) return got;
-    // Skipping the upload without a word is how a coach ends up certain they
-    // shared something that never left the device.
-    if (mayWrite && !signedIn()) { await setCfg({ lastErr: 'signin' }); throw new Error('signin'); }
-    if (mayWrite) await push('merge');
-    return got;
+    return runExclusive(async () => {
+      let got = 0;
+      try {
+        got = await pullInternal('merge');
+      } catch (e) {
+        if (!e || !e.oversize || !cfg().owner || !signedIn()) throw e;
+        await pushInternal('replace');
+        return 0;
+      }
+
+      // Player can ONLY retrieve data (pull). Only staff/coaches with cloud.write push.
+      const roleTier = window.Access ? Access.tier() : 'player';
+      const isOwner = cfg().owner;
+      const mayWrite = isOwner || (roleTier !== 'player' && Access.can('cloud.write'));
+
+      if (!cfg().fileId || !mayWrite) return got;
+
+      if (mayWrite && !signedIn()) {
+        await setCfg({ lastErr: 'signin' });
+        throw new Error('signin');
+      }
+      if (mayWrite) await pushInternal('merge');
+      return got;
+    });
   }
-  // A copy that follows somebody else's file may still send its own work up,
-  // when the owner turned contributions on and left at least one block open.
-  // Google decides the rest: writing to the file needs a signed-in account the
-  // owner invited as an editor, which no API key can stand in for.
+
   function mayContribute() {
     const c = cfg();
     if (!c.fileId || c.owner) return false;
+    const roleTier = window.Access ? Access.tier() : 'player';
+    if (roleTier === 'player') return false;
     if (!window.Privacy || !Privacy.contributes(Privacy.policy())) return false;
     return syncStores().some(s => Privacy.mayEdit(Privacy.policy(), s));
   }
   const msg = e => String((e && e.message) || e || '').slice(0, 200);
 
   // ---- Setting it up -----------------------------------------------------
-  // Owner side: make (or find) the file, fill it with what is on this device,
-  // and open it to the link so a code is enough for everybody else.
+  // Coach: creates a dedicated team folder on Google Drive and sets up modular area databases
   async function createShared(teamName, opts) {
     opts = opts || {};
     if (!Access.can('cloud.setup')) throw new Error('not-allowed');
-    const folder = await Drive.ensureFolder('SportTactic', null);
-    const existing = await Drive.findFile(FILE_NAME, folder);
-    await setCfg({ teamName: teamName || '', owner: true, apiKey: opts.apiKey || cfg().apiKey });
-    // The head goes up empty first. It has to exist and be shared before the
-    // data follows, because a club big enough to need part files cannot send
-    // the whole thing as one upload at all.
-    const head = Object.assign({}, await snapshot(), { data: {}, parts: [] });
-    const res = existing
-      ? await Drive.uploadJson('', head, { fileId: existing.id })
-      : await Drive.uploadJson(FILE_NAME, head, { parent: folder });
-    const fileId = (res && res.id) || (existing && existing.id);
+
+    const rootFolder = await Drive.ensureFolder('SportTactic', null);
+    const safeName = (teamName || (Store.activeTeam() ? Store.activeTeam().name : '') || 'Team').trim().replace(/[/\\?%*:|"<>]/g, '-');
+    const teamFolder = await Drive.ensureFolder(safeName, rootFolder);
+    await Drive.setTeamFolderId(teamFolder);
+
+    let manifestFile = await Drive.findFile(MANIFEST_NAME, teamFolder);
+    if (!manifestFile) manifestFile = await Drive.findFile(FILE_NAME, teamFolder);
+    if (!manifestFile) manifestFile = await Drive.findFile(FILE_NAME, rootFolder);
+
+    await setCfg({
+      teamName: teamName || '',
+      owner: true,
+      apiKey: opts.apiKey || cfg().apiKey,
+      folderId: teamFolder
+    });
+
+    const snap = await snapshot();
+    const manifest = {
+      app: 'SportTactic',
+      kind: 'team-manifest',
+      format: FORMAT,
+      team: teamName || '',
+      updatedAt: Date.now(),
+      by: Access.role(),
+      policy: snap.policy,
+      protected: snap.protected,
+      syncLock: null,
+      areas: {},
+      parts: []
+    };
+
+    const res = manifestFile
+      ? await Drive.uploadJson('', manifest, { fileId: manifestFile.id })
+      : await Drive.uploadJson(MANIFEST_NAME, manifest, { parent: teamFolder });
+
+    const fileId = (res && res.id) || (manifestFile && manifestFile.id);
     await setCfg({ fileId, lastPushAt: Date.now(), lastErr: '' });
-    if (opts.linkShare !== false) { try { await Drive.shareAnyone(fileId, 'reader'); } catch (e) { /* the named invites still work */ } }
-    // Now fill it, splitting into parts if this club needs them.
+
+    if (opts.linkShare !== false) {
+      try { await Drive.shareAnyone(fileId, 'reader'); } catch (e) { /* ignore */ }
+      try { await Drive.shareAnyone(teamFolder, 'reader'); } catch (e) { /* ignore */ }
+    }
+
+    // Write the area database files in the team folder
     await push('replace');
     return fileId;
   }
-  // Invite the people on the access list: coaches and admins as editors,
-  // players as viewers. Google sends them the mail.
+
+  // Invite members by email with appropriate Drive roles across folder, manifest & area files
   async function inviteMembers(list) {
     const c = cfg();
     if (!c.fileId) throw new Error('not-linked');
     const out = [];
+
+    let manifest = null;
+    try { manifest = await readOne(c.fileId); } catch (e) { /* ignore */ }
+    const fileIds = [c.fileId];
+    if (manifest && manifest.areas) {
+      Object.values(manifest.areas).forEach(a => { if (a && a.fileId) fileIds.push(a.fileId); });
+    }
+    if (manifest && Array.isArray(manifest.parts)) {
+      manifest.parts.forEach(p => { if (p && p.fileId) fileIds.push(p.fileId); });
+    }
+    const folderId = c.folderId || await Drive.getTeamFolderId();
+    if (folderId) fileIds.push(folderId);
+
     for (const m of list || []) {
+      const dRole = Access.driveRole(m.role);
       const entry = { id: m.id, email: m.email, role: m.role, ok: false, error: '' };
-      try { await Drive.shareWith(c.fileId, m.email, Access.driveRole(m.role)); entry.ok = true; }
-      catch (e) { entry.error = msg(e); }
+      try {
+        for (const fid of fileIds) {
+          try { await Drive.shareWith(fid, m.email, dRole); } catch (err) { /* ignore individual file permission errors */ }
+        }
+        entry.ok = true;
+      } catch (e) { entry.error = msg(e); }
       out.push(entry);
     }
     await Access.markInvited(out.filter(o => o.ok).map(o => o.id));
     return out;
   }
-  // Member side: one paste and a first download.
+
+  // Member side: join with code and perform first data retrieval
   async function join(text) {
     const t = parseTarget(text);
     if (!t) throw new Error('bad-code');
-    // Taken before the first read: this is what lets the device offer a Drive
-    // sign-in, which is the only way it will ever send anything back.
     if (t.clientId && window.Drive && !(await Drive.getClientId())) {
-      try { await Drive.setClientId(t.clientId); } catch (e) { /* a bad id is not worth failing the join */ }
+      try { await Drive.setClientId(t.clientId); } catch (e) { /* ignore */ }
     }
     await setCfg({ fileId: t.fileId, apiKey: t.apiKey || cfg().apiKey, teamName: t.teamName || cfg().teamName, owner: false });
     const n = await pull('merge');
-    // A player who pasted a code wants the squad, the fixtures and the training
-    // plan to stay right — not to go looking for a sync setting. So following a
-    // file turns the timer on by itself; the coach's own copy is left alone,
-    // because when to publish is their decision.
     if (!cfg().autoMin) await setAuto(MEMBER_AUTO_MIN);
-    // The file is the authority on the role passwords; the set carried in the
-    // code is the fallback for a club whose file has not been synced since the
-    // words were made.
     if (t.roleKeys && window.Access && !Access.roleKeys()) await Access.adoptRoleKeys(t.roleKeys);
     return n;
   }
 
   // ---- Automatic sync ----------------------------------------------------
   function stop() { if (timer) { clearInterval(timer); timer = null; } }
-  // A background read must never be able to open Google's sign-in window, so
-  // the timer only fires when this device can already read the file on its own.
   const canSyncQuietly = () => signedIn() || !!cfg().apiKey;
+
   function start() {
     stop();
     const c = cfg();
     if (!c.fileId) return;
-    // A copy that follows somebody else's file is only as fresh as its last
-    // pull. Opening the app is itself a reason to refresh — without this a
-    // player reads yesterday's team sheet until the first timer tick, and with
-    // the timer off they would never see a change at all.
-    if (!c.owner && canSyncQuietly()) pull('merge').catch(() => { /* offline; the timer retries */ });
+    if (!c.owner && canSyncQuietly() && !isBusy()) {
+      pull('merge').catch(() => { /* offline; timer retries */ });
+    }
     if (!c.autoMin) return;
     timer = setInterval(() => {
-      if (!canSyncQuietly()) return;
-      sync().catch(() => { /* offline; the next tick tries again */ });
+      if (!canSyncQuietly() || isBusy()) return;
+      sync().catch(() => { /* offline; next tick retries */ });
     }, c.autoMin * 60000);
   }
+
   async function setAuto(min) {
     await setCfg({ autoMin: Math.max(0, +min || 0) });
     start();
   }
 
   return {
-    AUTO_MINUTES, FILE_NAME,
-    cfg, setCfg, forget, isLinked, onChange, signedIn, canSyncQuietly, mayContribute,
+    AUTO_MINUTES, FILE_NAME, MANIFEST_NAME, AREA_MAP,
+    cfg, setCfg, forget, isLinked, onChange, signedIn, canSyncQuietly, mayContribute, isBusy, isCoachSyncing,
     makeCode, readCode, parseTarget,
     snapshot, pull, push, sync,
     createShared, inviteMembers, join,

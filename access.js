@@ -57,6 +57,7 @@ const Access = (() => {
   // editor — otherwise a player is handed a code that says "contribute" and a
   // file Google will not let them save to.
   function driveRole(r) {
+    if (tier(r) === 'player') return 'reader';
     const base = DRIVE_ROLE[tier(r)] || 'reader';
     if (base === 'writer') return base;
     const pol = window.Privacy ? Privacy.policy() : null;
@@ -182,7 +183,10 @@ const Access = (() => {
   function memberCopy() {
     return following() && tier() === 'player';
   }
-  function readMode() { return memberCopy() && (profile().readOnly || unclaimed()); }
+  function readMode() {
+    if (following() && window.TeamCloud && TeamCloud.isCoachSyncing && TeamCloud.isCoachSyncing()) return true;
+    return memberCopy() && (profile().readOnly || unclaimed());
+  }
   // Staff let in with ONE squad's word: a full coach on that squad, but only in
   // the areas the club ticked for them.
   function squadCoach() {
