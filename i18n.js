@@ -223,6 +223,11 @@ const I18N = (() => {
       'tactics.animVideoNone': 'The video could not be recorded — the animation was saved without it',
       'tactics.animPlayVideo': 'Play video', 'tactics.animVideoPlayFail': 'This browser cannot play the clip — download it instead.',
       'tactics.savedAnims': 'Saved Animations', 'tactics.noSavedAnims': 'No saved animations yet', 'tactics.animLoad': 'Load',
+      'tactics.exportAnims': 'Export animations', 'tactics.exportAnimsHint': 'Export saved animations as a JSON file',
+      'tactics.importAnims': 'Import animations', 'tactics.importAnimsHint': 'Import animations from a JSON file',
+      'tactics.animsExported': '{0} animation(s) exported', 'tactics.animsImported': '{0} animation(s) imported',
+      'tactics.noAnimsToExport': 'No saved animations to export for this sport',
+      'tactics.importBadFile': 'Could not import animations — invalid or incompatible file',
       'play.formations': 'Formations', 'play.systems': 'Tactical Systems', 'play.default': 'Default', 'play.loaded': 'Play loaded', 'play.formationApplied': 'Formation applied',
       // Chess bot
       'chess.title': 'Play the Kasparov Bot', 'chess.panelHint': 'Play a full game vs the bot across 100 Kasparov training levels.',
@@ -1164,6 +1169,11 @@ const I18N = (() => {
       'tactics.animVideoNone': 'Videoen kunne ikke optages — animationen blev gemt uden den',
       'tactics.animPlayVideo': 'Afspil video', 'tactics.animVideoPlayFail': 'Denne browser kan ikke afspille klippet — hent det i stedet.',
       'tactics.savedAnims': 'Gemte animationer', 'tactics.noSavedAnims': 'Ingen gemte animationer endnu', 'tactics.animLoad': 'Hent',
+      'tactics.exportAnims': 'Eksportér animationer', 'tactics.exportAnimsHint': 'Eksportér gemte animationer som en JSON-fil',
+      'tactics.importAnims': 'Importér animationer', 'tactics.importAnimsHint': 'Importér animationer fra en JSON-fil',
+      'tactics.animsExported': '{0} animation(er) eksporteret', 'tactics.animsImported': '{0} animation(er) importeret',
+      'tactics.noAnimsToExport': 'Ingen gemte animationer at eksportere for denne sport',
+      'tactics.importBadFile': 'Kunne ikke importere animationer — ugyldig eller inkompatibel fil',
       'play.formations': 'Formationer', 'play.systems': 'Taktiske systemer', 'play.default': 'Standard', 'play.loaded': 'Spil indlæst', 'play.formationApplied': 'Formation anvendt',
       // Chess bot
       'chess.title': 'Spil mod Kasparov-botten', 'chess.panelHint': 'Spil et helt parti mod botten p\u00e5 tv\u00e6rs af 100 Kasparov-tr\u00e6ningsniveauer.',

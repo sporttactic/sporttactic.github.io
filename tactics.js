@@ -167,6 +167,8 @@ Views.tactics = function (mount, params) {
         <button class="btn sm" id="redoBtn" title="${T('tactics.redo')}">↷ ${T('tactics.redo')}</button>
         <button class="btn sm danger" id="resetBoard" title="${T('tactics.resetHint')}">⟳ ${T('tactics.reset')}</button>
         <button class="btn sm primary" id="savePlay">${T('tactics.save')}</button>
+        <button class="btn sm" id="topExportAnims" title="${T('tactics.exportAnimsHint')}">⭳ ${T('tactics.exportAnims')}</button>
+        <label class="btn sm" style="cursor:pointer" title="${T('tactics.importAnimsHint')}">⭱ ${T('tactics.importAnims')}<input id="topImportAnimsInput" type="file" accept="application/json" hidden></label>
         <button class="btn sm" id="fullscreenBtn">⛶ ${T('tactics.fullscreen')}</button>
         <button class="btn sm" id="zenBtn" title="${T('tactics.boardOnlyHint')}">▣ ${T('tactics.boardOnly')}</button>
       </div>
@@ -262,6 +264,10 @@ Views.tactics = function (mount, params) {
             </div>
             <button class="btn sm" id="animSend" disabled title="${T('tactics.animSendHint')}">👥 ${T('tactics.animSend')}</button>
             <button class="btn sm" id="animPlayAll" title="${T('tactics.animPlayAllHint')}">▶▶ ${T('tactics.animPlayAll')}</button>
+            <div class="tool-group anim-acts" style="margin-top:6px;gap:6px">
+              <button class="btn sm" id="animExportBtn" title="${T('tactics.exportAnimsHint')}">⭳ ${T('tactics.exportAnims')}</button>
+              <label class="btn sm" style="cursor:pointer" title="${T('tactics.importAnimsHint')}">⭱ ${T('tactics.importAnims')}<input id="animImportInput" type="file" accept="application/json" hidden></label>
+            </div>
             <div><span id="recDot" class="rec-dot hidden">REC <span id="recTime">0:00</span> · <span id="frameCount">0</span> ${T('tactics.framesCaptured')}</span></div>
             <div id="recExport" class="rec-export hidden"></div>
             <div id="facingWrap">
@@ -1929,6 +1935,124 @@ Views.tactics = function (mount, params) {
         renderAnimList(); UI.toast(T('common.delete'));
       });
     };
+
+    const expBtn = mount.querySelector('#animExportBtn');
+    if (expBtn) expBtn.onclick = exportAnimationsDialog;
+    const topExpBtn = mount.querySelector('#topExportAnims');
+    if (topExpBtn) topExpBtn.onclick = exportAnimationsDialog;
+
+    const impInp = mount.querySelector('#animImportInput');
+    if (impInp) impInp.onchange = e => { const f = e.target.files && e.target.files[0]; if (f) { e.target.value = ''; importAnimationsFile(f); } };
+    const topImpInp = mount.querySelector('#topImportAnimsInput');
+    if (topImpInp) topImpInp.onchange = e => { const f = e.target.files && e.target.files[0]; if (f) { e.target.value = ''; importAnimationsFile(f); } };
+  }
+
+  function exportAnimationsDialog() {
+    const mine = userSystems();
+    if (!mine.length) return UI.toast(T('tactics.noAnimsToExport'), 'error');
+    const box = mount.querySelector('#animList');
+    const curSel = box && (box.selectedOptions[0] || {}).value;
+
+    UI.modal({
+      title: T('tactics.exportAnims'),
+      width: 520,
+      body: `<p>${UI.esc(T('tactics.exportAnimsHint'))}</p>
+        <div class="anim-export-list" style="max-height:260px;overflow-y:auto;display:flex;flex-direction:column;gap:8px;margin:12px 0;padding:8px;background:var(--bg2,rgba(0,0,0,.2));border-radius:6px">
+          ${mine.map(s => `
+            <label class="check-row" style="display:flex;align-items:center;gap:8px;cursor:pointer">
+              <input type="checkbox" data-export-anim="${UI.esc(s.id)}" ${(!curSel || curSel === s.id || mine.length <= 5) ? 'checked' : ''}>
+              <span style="flex:1"><b>${UI.esc(s.name)}</b> <span class="tag">${s.frames.length} ${T('tactics.frameList')}</span></span>
+            </label>
+          `).join('')}
+        </div>
+        <div class="row" style="flex:0;gap:8px;margin-bottom:8px">
+          <button type="button" class="btn sm" id="expSelectAll">${T('settings.shareAll') || 'All'}</button>
+          <button type="button" class="btn sm" id="expSelectNone">${T('common.clearAll') || 'Clear'}</button>
+        </div>`,
+      footer: `<button class="btn ghost" data-close2>${T('common.cancel')}</button>
+        <button class="btn primary" data-go>⭳ ${T('tactics.exportAnims')}</button>`,
+      onOpen: (m, close) => {
+        m.querySelector('[data-close2]').onclick = close;
+        const allBtn = m.querySelector('#expSelectAll');
+        if (allBtn) allBtn.onclick = () => m.querySelectorAll('[data-export-anim]').forEach(cb => cb.checked = true);
+        const noneBtn = m.querySelector('#expSelectNone');
+        if (noneBtn) noneBtn.onclick = () => m.querySelectorAll('[data-export-anim]').forEach(cb => cb.checked = false);
+
+        m.querySelector('[data-go]').onclick = async () => {
+          const checked = [...m.querySelectorAll('[data-export-anim]:checked')].map(el => el.dataset.exportAnim);
+          if (!checked.length) return UI.toast(T('common.pickOne') || 'Pick at least one animation', 'error');
+          const picked = mine.filter(s => checked.indexOf(s.id) >= 0);
+          const dump = {
+            app: 'SportTactic',
+            pack: 'tactics',
+            kind: 'animations',
+            format: 1,
+            sport: sportId,
+            exportedAt: new Date().toISOString(),
+            stores: ['tactics'],
+            data: { tactics: await Store.pack(picked) }
+          };
+          const blob = new Blob([JSON.stringify(dump, null, 2)], { type: 'application/json' });
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(blob);
+          const prefix = picked.length === 1
+            ? (picked[0].name.replace(/[^\w.-]+/g, '_') || 'animation')
+            : `sporttactic-animations-${sportId}`;
+          a.download = `${prefix}-${new Date().toISOString().slice(0, 10)}.json`;
+          document.body.appendChild(a); a.click(); a.remove();
+          setTimeout(() => URL.revokeObjectURL(a.href), 20000);
+          close();
+          UI.toast(T('tactics.animsExported').replace('{0}', picked.length), 'success');
+        };
+      }
+    });
+  }
+
+  async function importAnimationsFile(file) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const parsed = JSON.parse(reader.result);
+        let rawRows = [];
+        if (parsed && parsed.data && Array.isArray(parsed.data.tactics)) {
+          rawRows = Store.unpack(parsed.data.tactics);
+        } else if (parsed && Array.isArray(parsed.tactics)) {
+          rawRows = Store.unpack(parsed.tactics);
+        } else if (Array.isArray(parsed)) {
+          rawRows = parsed;
+        } else if (parsed && parsed.frames && Array.isArray(parsed.frames)) {
+          rawRows = [parsed];
+        } else if (parsed && parsed.data && typeof parsed.data === 'object') {
+          rawRows = Object.values(parsed.data).flat();
+        }
+
+        const anims = rawRows.filter(r => r && (r.frames || r.kind === 'system')).map(r => {
+          const item = Object.assign({}, r);
+          item.kind = 'system';
+          item.sport = item.sport || sportId;
+          item.id = item.id || Store.uid('tac');
+          item.frames = normFrames(item.frames);
+          item.updatedAt = Date.now();
+          return item;
+        });
+
+        if (!anims.length) throw new Error('no-animations');
+
+        await DB.bulkPut('tactics', anims);
+        await Store.loadAll();
+        renderAnimList();
+        if (anims[0]) {
+          loadSystem(anims[0].id, false);
+          const box = mount.querySelector('#animList');
+          if (box) { box.value = anims[0].id; syncAnimActions(); }
+        }
+        UI.toast(T('tactics.animsImported').replace('{0}', anims.length), 'success');
+      } catch (e) {
+        UI.toast(T('tactics.importBadFile'), 'error');
+      }
+    };
+    reader.readAsText(file);
   }
   // Rename a saved animation, and optionally overwrite its frames with the board
   // as it stands now — without this, correcting one saved play meant deleting it
