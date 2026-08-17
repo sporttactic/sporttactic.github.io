@@ -101,6 +101,11 @@ const Privacy = (() => {
     return Array.isArray(t) ? new Set(t) : null;
   }
   const teamShared = (ids, teamId) => !ids || !teamId || ids.has(teamId);
+  // A planner event can be handed to squads other than the one that made it
+  // (see planner.js's allTeams/teams fields), so leaving a squad out of the
+  // shared file must not drop an event another, included squad was given.
+  const plannerShared = (ids, r) => teamShared(ids, r.teamId) || !!r.allTeams
+    || (Array.isArray(r.teams) && r.teams.some(t => ids.has(t)));
   // Every store at once, because the events carry no squad of their own and
   // have to follow the matches that survived. A row with no teamId belongs to
   // the club rather than to a squad, so it travels either way.
@@ -113,7 +118,9 @@ const Privacy = (() => {
       if (!Array.isArray(rows)) { out[s] = rows; return; }
       out[s] = s === 'teams'
         ? rows.filter(r => r && ids.has(r.id))
-        : rows.filter(r => r && teamShared(ids, r.teamId));
+        : s === 'planner'
+          ? rows.filter(r => r && plannerShared(ids, r))
+          : rows.filter(r => r && teamShared(ids, r.teamId));
     });
     if (Array.isArray(out.matches) && Array.isArray(out.events)) {
       const kept = new Set(out.matches.map(r => r.id));
