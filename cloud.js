@@ -618,6 +618,32 @@ const TeamCloud = (() => {
     return fileId;
   }
 
+  // A signed-in coach whose browser was reset still owns the team folder in
+  // their own Drive; this re-links to it by folder id instead of making a new
+  // one, and pulls whatever it holds back onto the now-empty device.
+  async function listExisting() {
+    if (!Access.can('cloud.setup')) throw new Error('not-allowed');
+    return Drive.listTeamFolders();
+  }
+  async function reconnectShared(folder) {
+    if (!Access.can('cloud.setup')) throw new Error('not-allowed');
+    if (!folder || !folder.id) throw new Error('no-folder');
+
+    let manifestFile = await Drive.findFile(MANIFEST_NAME, folder.id);
+    if (!manifestFile) manifestFile = await Drive.findFile(FILE_NAME, folder.id);
+    if (!manifestFile) throw new Error('no-database');
+
+    await Drive.setTeamFolderId(folder.id);
+    await setCfg({
+      fileId: manifestFile.id,
+      folderId: folder.id,
+      teamName: folder.name || '',
+      owner: true,
+      lastErr: ''
+    });
+    return pull('merge');
+  }
+
   // Invite members by email with appropriate Drive roles across folder, manifest & area files
   async function inviteMembers(list) {
     const c = cfg();
@@ -693,7 +719,7 @@ const TeamCloud = (() => {
     cfg, setCfg, forget, isLinked, onChange, signedIn, canSyncQuietly, mayContribute, isBusy, isCoachSyncing,
     makeCode, readCode, parseTarget,
     snapshot, pull, push, sync,
-    createShared, inviteMembers, join,
+    createShared, inviteMembers, join, listExisting, reconnectShared,
     start, stop, setAuto
   };
 })();

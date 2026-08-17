@@ -1484,6 +1484,59 @@ function cloudJoinDialog(onDone) {
   });
 }
 
+// Lets a signed-in owner pick a team folder this Google account already made
+// on Drive back up — the fix for "browser got reset, still have the account".
+function cloudReconnectDialog(onDone) {
+  const state0 = { busy: true, folders: [] };
+  const row = f => `<label class="check-row"><input type="radio" name="rc_pick" value="${UI.esc(f.id)}">
+    <span>${UI.esc(f.name)}</span></label>`;
+  const modal = UI.modal({
+    title: T('cloud.reconnectTitle'),
+    width: 620,
+    body: `<p>${UI.esc(T('cloud.reconnectIntro'))}</p>
+      <div id="rc_list"><p class="hint">${UI.esc(T('cloud.working'))}</p></div>
+      <p class="hint" id="rc_state"></p>`,
+    footer: `<button class="btn ghost" data-close2>${T('common.cancel')}</button>
+      <button class="btn primary" data-go disabled>${UI.esc(T('cloud.reconnectBtn'))}</button>`,
+    onOpen: async (m, close) => {
+      const list = m.querySelector('#rc_list');
+      const state = m.querySelector('#rc_state');
+      const go = m.querySelector('[data-go]');
+      m.querySelector('[data-close2]').onclick = close;
+      try {
+        state0.folders = await TeamCloud.listExisting();
+      } catch (e) {
+        list.innerHTML = `<p class="hint warn">${UI.esc(String((e && e.message) || e).slice(0, 200))}</p>`;
+        return;
+      } finally { state0.busy = false; }
+      if (!state0.folders.length) {
+        list.innerHTML = `<p class="hint">${UI.esc(T('cloud.reconnectNone'))}</p>`;
+        return;
+      }
+      list.innerHTML = state0.folders.map(row).join('');
+      list.querySelectorAll('input[name="rc_pick"]').forEach(r => r.onchange = () => { go.disabled = false; });
+      go.onclick = async () => {
+        const picked = m.querySelector('input[name="rc_pick"]:checked');
+        if (!picked) return;
+        const folder = state0.folders.find(f => f.id === picked.value);
+        go.disabled = true;
+        state.textContent = T('cloud.working');
+        try {
+          const n = await TeamCloud.reconnectShared(folder);
+          close();
+          UI.toast(T('cloud.reconnected').replace('{0}', n), 'success');
+          if (onDone) onDone();
+        } catch (e) {
+          state.textContent = e && e.message === 'no-database'
+            ? T('cloud.reconnectBad')
+            : String((e && e.message) || e).slice(0, 200);
+        } finally { go.disabled = false; }
+      };
+    }
+  });
+  return modal;
+}
+
 // A code that carries the club's read key opens the file with no Google account
 // at all. Without that key the file can only be opened by signing in, so a
 // player who is never asked simply never gets the coach's work. Both cases are
@@ -1765,6 +1818,7 @@ Views.settings = async function (mount) {
       <div class="row" style="flex:0;margin-top:10px;flex-wrap:wrap">
         ${maySetup ? `<button class="btn primary" id="clCreate">${T('cloud.createBtn')}</button>` : ''}
         <button class="btn" id="clJoin">${T('cloud.joinBtn')}</button>
+        ${maySetup ? `<button class="btn" id="clReconnect">${T('cloud.reconnectBtn')}</button>` : ''}
         ${maySetup ? `<button class="btn" id="clPolicy2">${T('pol.btn')}</button>` : ''}
         ${maySetup ? `<button class="btn" id="clMember2">${T('mem.btn')}</button>` : ''}
         <button class="btn" id="clGuide">${T('cloud.showMeHow')}</button>
@@ -1908,6 +1962,16 @@ Views.settings = async function (mount) {
       cloudCreateDialog(() => { refreshCloud(); refreshAccess(); });
     });
     on('#clJoin', () => cloudJoinDialog(() => { refreshCloud(); refreshAccess(); App.render(); }));
+    on('#clReconnect', async () => {
+      // Signed-in owner only: a code-less way back into a folder this same
+      // Google account already made, for when a browser reset wiped the id
+      // this app had remembered for it.
+      if (!await Drive.isConfigured()) return googleWizard(refreshCloud);
+      if (!Drive.isConnected()) {
+        try { await Drive.connect(); } catch (e) { return UI.toast(T('cloud.connectFailed'), 'error'); }
+      }
+      cloudReconnectDialog(() => { refreshCloud(); refreshAccess(); App.render(); });
+    });
     on('#clCode', cloudCodeDialog);
     on('#clPolicy', () => sharePolicyDialog(refreshCloud));
     on('#clPolicy2', () => sharePolicyDialog(refreshCloud));

@@ -251,6 +251,27 @@ const Drive = (() => {
     return r.id;
   }
 
+  // Same lookup as ensureFolder, minus the "create it if missing" half — used
+  // to check whether a folder already exists without conjuring a new one.
+  async function findFolder(name, parent) {
+    let q = "mimeType='application/vnd.google-apps.folder' and name='" + esc(name) + "' and trashed=false";
+    if (parent) q += " and '" + esc(parent) + "' in parents";
+    const found = await listFiles(q);
+    return found[0] || null;
+  }
+
+  // A browser reset wipes the fileId/folderId this app remembered, but not the
+  // team folder still sitting in this Google account's own Drive — drive.file
+  // access to what the app created survives that. Lists the folders under
+  // SportTactic so a coach can pick theirs back up instead of starting over.
+  async function listTeamFolders() {
+    const root = await findFolder(ROOT_FOLDER, null);
+    if (!root) return [];
+    const q = "mimeType='application/vnd.google-apps.folder' and trashed=false and '" + esc(root.id) + "' in parents";
+    const found = await listFiles(q);
+    return found.slice().sort((a, b) => (b.modifiedTime || '').localeCompare(a.modifiedTime || ''));
+  }
+
   async function shareWith(fileId, email, role) {
     return api('drive/v3/files/' + fileId + '/permissions?sendNotificationEmail=true', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -471,7 +492,7 @@ const Drive = (() => {
     channelName, ensureChannel, readChannel, updateChannel,
     setupTeam, coachSend, coachReadAll, findMyChannels, playerSend, playerPushTraining,
     // Low-level helpers, used by cloud.js for the shared team database.
-    ensureFolder, findFile, uploadJson, downloadJson, listFiles,
+    ensureFolder, findFolder, listTeamFolders, findFile, uploadJson, downloadJson, listFiles,
     shareAnyone, unshareAnyone, listPermissions, fileLink, publicDownload
   };
 })();

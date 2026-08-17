@@ -31,12 +31,16 @@ Views.teams = function (mount) {
   }
   // Animations a coach filed under this squad on the tactical board, plus the
   // club's own. Saving one files it under no squad, so leaving those out showed
-  // a coach an empty panel for work their players could already see.
+  // a coach an empty panel for work their players could already see. A squad
+  // that removed one of the club's own from its own list must not have it come
+  // straight back — hiddenFor tracks that per squad, without touching the
+  // animation (or any other squad's view of it).
   function teamAnimations(team) {
     if (!team) return [];
     return Store.all('tactics').filter(t => t.kind === 'system'
       && (t.sport || 'handball') === sportId
-      && (t.teamId === team.id || !t.teamId));
+      && (t.teamId === team.id || !t.teamId)
+      && (t.hiddenFor || []).indexOf(team.id) === -1);
   }
 
   function render() {
@@ -273,7 +277,7 @@ Views.teams = function (mount) {
       <span class="bm-acts">
         <button class="btn sm" data-anim-show="${UI.esc(a.id)}">▶ ${T('teams.animShowNow')}</button>
         <button class="btn sm primary" data-anim-open="${UI.esc(a.id)}">${T('common.go')}</button>
-        ${team && a.teamId === team.id ? `<button class="btn sm danger" data-anim-rm="${UI.esc(a.id)}">${T('teams.animRemove')}</button>` : ''}
+        ${team ? `<button class="btn sm danger" data-anim-rm="${UI.esc(a.id)}">${T('teams.animRemove')}</button>` : ''}
       </span>
     </div>`;
     UI.modal({
@@ -299,10 +303,14 @@ Views.teams = function (mount) {
         });
         m.querySelectorAll('[data-anim-rm]').forEach(b => b.onclick = () => {
           const a = Store.find('tactics', b.dataset.animRm);
-          if (!a) return;
-          // Only the link to the squad goes; the animation itself stays in the library.
+          if (!a || !team) return;
+          // The animation itself stays in the library — and, if some other
+          // squad still has it filed under them or open to everyone, in their
+          // list too. Only this squad's view of it changes.
           UI.confirm(T('teams.animRemoveAsk').replace('{0}', a.name || ''), async () => {
-            await Store.save('tactics', Object.assign({}, a, { teamId: '' }));
+            const patch = { hiddenFor: (a.hiddenFor || []).filter(id => id !== team.id).concat(team.id) };
+            if (a.teamId === team.id) patch.teamId = ''; // sever the direct link too
+            await Store.save('tactics', Object.assign({}, a, patch));
             close();
             UI.toast(T('teams.animRemoved'), 'success');
             render();
