@@ -10,8 +10,7 @@ window.ANIM = (function () {
   };
   // Same timings as the tactical board, so a clip plays here exactly as it does
   // there — including the coach's own speed choice.
-  const FRAME_MS = 1200;   // one pose to the next: tween, then hold
-  const TWEEN_MS = 400;
+  const FRAME_MS = 1200;   // one pose to the next — the whole span is now tween, no freeze
   const FLOW_MS = 90;      // a sampled point of a recorded drag — runs straight into the next
   const SPEEDS = { slow: 0.5, medium: 1, fast: 2 };
   const VIEW_SPEEDS = ['slow', 'medium'];   // fast is a board-only pace
@@ -286,16 +285,16 @@ window.ANIM = (function () {
           if (hold) { clearTimeout(hold); hold = null; }
           playBtn.textContent = '▶ ' + T('tactics.play');
         }
-        // Each pair of frames carries its own timing: a pose is held so the coach
-        // can talk over it, while a point sampled from a recorded drag runs
-        // straight into the next one — that is what makes a curve stay a curve
-        // instead of crawling through hundreds of held poses.
+        // Each pair of frames eases across its whole span, so play stays one
+        // continuous motion instead of a quick move and a freeze before the
+        // next pose; a point sampled from a recorded drag still runs straight
+        // into the next one, which is what keeps a curve playing as a curve.
         function runPair() {
           const a = frames[idx], b = frames[idx + 1];
           const mult = SPEEDS[speed] || 1;
           const flow = !!b.flow;
-          const tw = Math.max(40, (flow ? FLOW_MS : TWEEN_MS) / mult);
-          const wait = flow ? 0 : (FRAME_MS - TWEEN_MS) / mult;
+          const tw = Math.max(40, (flow ? FLOW_MS : FRAME_MS) / mult);
+          const wait = 0;
           const t0 = performance.now();
           const step = now => {
             raf = null;

@@ -45,8 +45,7 @@ Views.tactics = function (mount, params) {
   const PLAYER_SPEEDS = { slow: 0.5, medium: 1, fast: 2 }; // how fast players walk between frames
   const COURT_SIZES = [0.7, 0.85, 1, 1.15, 1.3];
   const AUTO_STEP = 4;     // percent of movement between two sampled points of a recorded drag
-  const FRAME_MS = 1200;   // one pose to the next while playing: tween, then hold
-  const TWEEN_MS = 400;
+  const FRAME_MS = 1200;   // one pose to the next while playing — the whole span is now tween, no freeze
   const FLOW_MS = 90;      // a sampled point of a recorded drag — runs straight into the next
   const FACE_RADIUS = 16;  // percent: drag a player this close to an opponent to auto-face them
   let ballSpeed = 'medium';                               // slow | medium | fast
@@ -1288,14 +1287,15 @@ Views.tactics = function (mount, params) {
         if (o.kind === 'ball') drawBall(x, y); else if (o.kind === 'cue') drawCue(oo, x, y); else if (o.kind === 'dart') drawDart(oo, x, y); else if (o.kind === 'prop') drawProp(oo, x, y); else if (o.kind === 'piece') drawPiece(oo, x, y); else if (o.kind === 'card') drawCard(oo, x, y); else if (o.kind === 'checker') drawChecker(oo, x, y); else drawPlayer(oo, x, y);
       });
     };
-    // Each pair of frames gets its own timing: a pose is held so the coach can
-    // talk over it, while a point sampled from a recorded drag runs straight
-    // into the next one — that is what makes a curve play back as a curve.
+    // Each pair of frames eases across its whole span, so play stays one
+    // continuous motion instead of a quick move and a freeze before the next
+    // pose; a point sampled from a recorded drag still runs straight into the
+    // next one, which is what makes a curve play back as a curve.
     function runPair() {
       const a = current.frames[i], b = current.frames[i + 1];
       const flow = !!b.flow;
-      const tw = Math.max(40, (flow ? FLOW_MS : TWEEN_MS) / mult);
-      const hold = flow ? 0 : (FRAME_MS - TWEEN_MS) / mult;
+      const tw = Math.max(40, (flow ? FLOW_MS : FRAME_MS) / mult);
+      const hold = 0;
       const t0 = Date.now();
       animStep = setInterval(() => {
         const t = Math.min(1, (Date.now() - t0) / tw);
