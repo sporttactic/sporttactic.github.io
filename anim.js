@@ -10,7 +10,7 @@ window.ANIM = (function () {
   };
   // Same timings as the tactical board, so a clip plays here exactly as it does
   // there — including the coach's own speed choice.
-  const FRAME_MS = 1200;   // one pose to the next — the whole span is now tween, no freeze
+  const FRAME_MS = 700;    // one pose to the next — the whole span is tween, no freeze
   const FLOW_MS = 90;      // a sampled point of a recorded drag — runs straight into the next
   const SPEEDS = { slow: 0.5, medium: 1, fast: 2 };
   const VIEW_SPEEDS = ['slow', 'medium'];   // fast is a board-only pace
