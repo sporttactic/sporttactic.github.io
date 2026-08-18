@@ -2289,7 +2289,7 @@ Views.tactics = function (mount, params) {
     UI.modal({
       title: UI.esc(s.name),
       width: 720,
-      body: `<video src="${show.url}" class="sys-video" controls autoplay loop muted playsinline></video>
+      body: `<video src="${show.url}" class="sys-video" controls autoplay muted playsinline></video>
         <p class="hint sys-video-err hidden">${T('tactics.animVideoPlayFail')}</p>`,
       footer: `<button class="btn ghost" data-close2>${T('common.close')}</button>` + items.map((i, n) => `<button class="btn" data-dl="${n}">⬇ ${i.ext.toUpperCase()}</button>`).join(''),
       onOpen: (m, close) => {

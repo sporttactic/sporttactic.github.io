@@ -16,8 +16,10 @@ const MAX_BACKUP_BYTES = 96 * 1024 * 1024;
 // a credential and must never end up in a file that gets mailed around.
 const PREF_PREFIX = 'stx_';
 // stx_lock is decided by the guard inside the file being imported, never by a
-// preference copied out of someone else's device.
-const PREF_SECRETS = ['stx_ai_key', 'stx_lock'];
+// preference copied out of someone else's device. stx_drive_token is a live
+// Google OAuth access token kept only so a page refresh does not force a fresh
+// sign-in — it must never ride along in a backup or export either.
+const PREF_SECRETS = ['stx_ai_key', 'stx_lock', 'stx_drive_token'];
 function readPrefs() {
   const out = {};
   try {
@@ -995,6 +997,7 @@ function sharePolicyDialog(onDone) {
         sharePolicyDialog(onDone);
       };
       m.querySelector('[data-go]').onclick = async () => {
+        if (sharingLocked()) { UI.toast(T('mem.blocked'), 'error'); return; }
         await Privacy.save(pol);
         const sent = await pushShareChange();
         close();
@@ -1045,6 +1048,13 @@ async function pushShareChange() {
     return true;
   } catch (e) { return false; }
 }
+// A device that itself joined somebody else's file with no more than a
+// read-only player role is not allowed to change what that file shares — the
+// write is refused deep inside Store.save (see access.js's FIXED_SETTINGS) —
+// but nothing before this used to check that first, so the dialog closed with
+// a "saved" toast while nothing had actually changed. Checked up front so the
+// coach is told why instead of being left to wonder.
+function sharingLocked() { return !!(window.Access && Access.readMode()); }
 function memberLabel() {
   const p = Access.profile();
   if (!p.readOnly) return T('mem.stateFull');
@@ -1130,6 +1140,7 @@ function memberModeDialog(onDone) {
       if (tall) tall.onclick = () => tboxes.forEach(b => { b.checked = true; });
       m.querySelector('[data-close2]').onclick = close;
       m.querySelector('[data-go]').onclick = async () => {
+        if (sharingLocked()) { UI.toast(T('mem.blocked'), 'error'); return; }
         try {
           await Access.saveProfile({
             readOnly: read.checked,
@@ -1198,6 +1209,7 @@ function coachAreasDialog(teamId, name, onDone) {
       m.querySelector('#ca_min').onclick = () => pick(['dashboard', 'teams', 'matches', 'planner', 'training', 'tactics']);
       m.querySelector('[data-close2]').onclick = close;
       m.querySelector('[data-go]').onclick = async () => {
+        if (sharingLocked()) { UI.toast(T('mem.blocked'), 'error'); return; }
         try {
           await Access.saveCoachAreas(teamId, boxes.filter(b => !b.checked).map(b => b.dataset.cmod));
           const opened = await shareForAreas(boxes.filter(b => b.checked).map(b => b.dataset.cmod));

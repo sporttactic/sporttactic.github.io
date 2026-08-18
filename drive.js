@@ -14,12 +14,39 @@ const Drive = (() => {
   const ROOT_FOLDER = 'SportTactic';
   // A real client id looks like 1234567890-abcdef.apps.googleusercontent.com.
   const CLIENT_ID_RE = /[0-9]+-[a-z0-9_.-]+\.apps\.googleusercontent\.com/i;
+  // The access token used to live only in memory, so every page refresh threw
+  // it away and made the coach click "Sign in" again even seconds later. It is
+  // short-lived anyway (about an hour) and scoped to drive.file only, so
+  // keeping it in localStorage across a reload is no bigger a risk than the
+  // session Google itself already holds in its own cookies — and it is never
+  // let near a backup file or the shared team database (see PREF_SECRETS in
+  // settings.js and CFG_KEY handling in cloud.js).
+  const TOKEN_KEY = 'stx_drive_token';
 
   let token = null;          // { access_token, expires }
   let tokenClient = null;
   let gisLoading = null;
 
   function now() { return Date.now(); }
+
+  function loadStoredToken() {
+    try {
+      const raw = localStorage.getItem(TOKEN_KEY);
+      if (!raw) return null;
+      const v = JSON.parse(raw);
+      return (v && v.access_token && (+v.expires || 0) > now() + 5000) ? v : null;
+    } catch (e) { return null; }
+  }
+  function persistToken(t) {
+    try {
+      if (t) localStorage.setItem(TOKEN_KEY, JSON.stringify(t));
+      else localStorage.removeItem(TOKEN_KEY);
+    } catch (e) { /* private mode */ }
+  }
+  // Picked up once, when the module first loads — that is, on every page
+  // refresh — so a still-valid sign-in survives the reload instead of forcing
+  // a fresh popup for a token that was good for another 50 minutes.
+  token = loadStoredToken();
 
   // ---- Configuration (persisted in the settings store) ----
   // Coaches paste whole lines out of the Cloud Console ("Client ID: 123-abc…",
@@ -42,6 +69,7 @@ const Drive = (() => {
     if (next === await getClientId()) return;
     await Store.setSetting('driveClientId', next);
     token = null; tokenClient = null;
+    persistToken(null);
   }
   async function isConfigured() { return !!(await getClientId()); }
   function isConnected() { return !!(token && token.access_token && token.expires > now() + 5000); }
@@ -80,6 +108,7 @@ const Drive = (() => {
                 access_token: resp.access_token,
                 expires: now() + (resp.expires_in ? resp.expires_in * 1000 : 3600000)
               };
+              persistToken(token);
               resolve(token);
             } else {
               reject(new Error(explain(resp && resp.error)));
@@ -107,6 +136,7 @@ const Drive = (() => {
       try { google.accounts.oauth2.revoke(token.access_token, () => {}); } catch (e) { /* ignore */ }
     }
     token = null;
+    persistToken(null);
   }
 
   async function ensureToken() {
