@@ -917,7 +917,7 @@ body.board-fs { overflow: hidden; }
 .draft-vids { margin: 6px 0 0; }
 .draft-vids > .hint { display: block; margin-bottom: 4px; }
 .draft-vids .vid-row input { font-size: 12px; }
-.draft-prev .ex-embed { max-width: 300px; margin: 6px 0 0; }
+.draft-prev .ex-embed { max-width: 300px; margin: 6px auto 0; }
 .plan-note { color: var(--muted); font-size: 12px; margin-top: 2px; }
 /* Report card header — the export row wraps instead of squeezing the title */
 .rep-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }

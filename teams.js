@@ -123,6 +123,7 @@ Views.teams = function (mount) {
       ? `<button class="btn ghost" id="cancelSquad">${T('common.cancel')}</button>
          <button class="btn primary" id="saveSquad">${T('teams.saveSquad')}</button>`
       : `<button class="btn sm" id="mailSquad">✉ ${T('mail.title')}</button>
+         ${Access.readMode() ? '' : UI.shareBar('team', { exportLabel: T('teams.exportSquad'), importLabel: T('teams.importSquad') })}
          <button class="btn sm" id="squadAnims">▶ ${T('teams.anims')} <span class="tag">${teamAnims.length}</span></button>
          <button class="btn sm" id="editSquad" data-write>✎ ${T('teams.editSquad')}</button>
          <button class="btn sm" id="aiSquad" data-write>🤖 ${T('teams.aiSquad')}</button>
@@ -203,6 +204,7 @@ Views.teams = function (mount) {
       q('#mailSquad').onclick = () => MAIL.compose({
         players, title: T('mail.title') + ' — ' + T('teams.squad')
       });
+      UI.bindShare(mount, 'team', () => { App.populateTeamPicker(); render(); }, { scoped: true });
       q('#squadAnims').onclick = () => animListDialog(team, teamAnimations(team));
       mount.querySelectorAll('[data-mail]').forEach(b => b.onclick = () => {
         const p = Store.find('players', b.dataset.mail);
