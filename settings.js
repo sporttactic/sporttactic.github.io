@@ -467,6 +467,7 @@ function cloudErrText(err) {
   // ever answers — offline, a blocked domain, or a dead connection — not
   // something a role or a permission fix can help with.
   if (/Failed to fetch|NetworkError|ERR_INTERNET_DISCONNECTED/i.test(s)) return T('cloud.syncFailedNet');
+  if (/bad-api-key|developer key/i.test(s)) return T('cloud.badApiKey');
   // A role password only decides what this device is ALLOWED to try; Google Drive
   // still refuses the actual write until the owner has invited this account by
   // e-mail, so a 403 here means "ask to be invited", not "something is broken".
@@ -594,6 +595,7 @@ function cloudJoinExplain(err) {
   const s = String((err && err.message) || err || '');
   if (/timeout/i.test(s)) return T('cloud.joinFailedTimeout');
   if (/Failed to fetch|NetworkError|offline/i.test(s)) return T('cloud.joinFailedNet');
+  if (/bad-api-key|developer key/i.test(s)) return T('cloud.joinFailedBadKey');
   if (/HTTP 403/.test(s)) return T('cloud.joinFailedForbidden');
   if (/HTTP 404/.test(s)) return T('cloud.joinFailedNotFound');
   if (/file too large/i.test(s)) return T('cloud.oversize');

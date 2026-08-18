@@ -14,6 +14,10 @@ const Drive = (() => {
   const ROOT_FOLDER = 'SportTactic';
   // A real client id looks like 1234567890-abcdef.apps.googleusercontent.com.
   const CLIENT_ID_RE = /[0-9]+-[a-z0-9_.-]+\.apps\.googleusercontent\.com/i;
+  // A real API key looks like AIza...; anything else sent to the Picker as a
+  // developer key makes Google refuse to even open it ("The API developer key
+  // is invalid"), so it is only ever passed along once it looks like this.
+  const API_KEY_RE = /^AIza[0-9A-Za-z_-]{10,}$/;
   // The access token used to live only in memory, so every page refresh threw
   // it away and made the coach click "Sign in" again even seconds later. It is
   // short-lived anyway (about an hour) and scoped to drive.file only, so
@@ -176,7 +180,10 @@ const Drive = (() => {
             if (data.action === google.picker.Action.PICKED) resolve(true);
             else if (data.action === google.picker.Action.CANCEL) resolve(false);
           });
-        if (apiKey) builder.setDeveloperKey(apiKey);
+        // An OAuth token alone is enough to browse this account's own files;
+        // a key that does not even look right would only make Google refuse
+        // the whole picker instead of just ignoring it.
+        if (apiKey && API_KEY_RE.test(apiKey.trim())) builder.setDeveloperKey(apiKey.trim());
         builder.build().setVisible(true);
       } catch (e) { reject(e); }
     });
@@ -251,7 +258,14 @@ const Drive = (() => {
 
   async function fetchJson(url, opts) {
     const res = await fetchRetrying(url, opts, FETCH_TIMEOUT);
-    if (!res.ok) throw new Error('HTTP ' + res.status);
+    if (!res.ok) {
+      // Google explains a bad/deleted/restricted API key in the body, not the
+      // status line — worth keeping so "invalid key" reaches the coach as
+      // that, not as a bare "HTTP 400".
+      let detail = '';
+      try { detail = (JSON.parse(await res.text())).error.message; } catch (e) { /* not JSON, or no such field */ }
+      throw new Error('HTTP ' + res.status + (detail ? ': ' + detail.slice(0, 180) : ''));
+    }
     const len = +res.headers.get('content-length');
     if (len > MAX_JSON_BYTES) throw new Error('file too large');
     const text = await readCapped(res);
@@ -401,8 +415,9 @@ const Drive = (() => {
   // API key — no OAuth, so a player can pull the squad on a device that has
   // never seen a Google sign-in screen.
   async function publicDownload(fileId, apiKey) {
+    if (!apiKey || !API_KEY_RE.test(apiKey.trim())) throw new Error('bad-api-key');
     return fetchJson('https://www.googleapis.com/drive/v3/files/' + encodeURIComponent(fileId) +
-      '?alt=media&key=' + encodeURIComponent(apiKey));
+      '?alt=media&key=' + encodeURIComponent(apiKey.trim()));
   }
 
   // ---- Backup / restore (private appDataFolder) ----
