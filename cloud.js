@@ -228,17 +228,27 @@ const TeamCloud = (() => {
 
   // Reads remote database — supports both new multi-area modular databases in a folder
   // and legacy single-file / part-based team databases.
-  // When coach is actively synchronizing, connected devices lock and wait until finished.
-  async function readRemote() {
+  // Any signed-in coach/admin can write now, not just the one who created the file, so
+  // the lock below is honoured for everybody, not only followers of somebody else's copy.
+  async function readRemote(opts) {
     const c = cfg();
     if (!c.fileId) throw new Error('not-linked');
+    const forWrite = !!(opts && opts.forWrite);
     let head;
     try { head = await readOne(c.fileId); }
     catch (e) { if (/too large/i.test(msg(e))) e.oversize = true; throw e; }
     if (!head || typeof head !== 'object') throw new Error('not-a-team-file');
 
-    // If coach is currently syncing, lock and wait until finished
-    if (!c.owner && isRemoteLocked(head)) {
+    if (isRemoteLocked(head)) {
+      // A push must not queue up behind somebody else's write and then barge in
+      // the moment it clears — it fails fast so the coach sees "Sync in progress"
+      // and tries again, instead of racing the write that is already underway.
+      if (forWrite) {
+        const err = new Error('sync-locked');
+        err.lockedBy = (head.syncLock && head.syncLock.by) || '';
+        throw err;
+      }
+      // A pull only reads, so it is safe to wait the other write out.
       coachSyncingState = true;
       emit({ coachSyncing: true, by: (head.syncLock && head.syncLock.by) || 'Coach' });
       const startWait = Date.now();
@@ -296,23 +306,22 @@ const TeamCloud = (() => {
     const existingAreas = (doc.areas && typeof doc.areas === 'object') ? doc.areas : {};
     const updatedAreas = Object.assign({}, existingAreas);
 
-    // 1. If owner/coach, lock manifest before uploading area files
-    if (c.owner) {
-      try {
-        const lockManifest = {
-          app: 'SportTactic',
-          kind: 'team-manifest',
-          format: FORMAT,
-          team: doc.team || c.teamName || '',
-          updatedAt: Date.now(),
-          by: Access.role() || 'Coach',
-          syncLock: { locked: true, by: Access.role() || 'Coach', at: Date.now() },
-          areas: existingAreas,
-          parts: []
-        };
-        await Drive.uploadJson('', lockManifest, { fileId: c.fileId });
-      } catch (e) { /* ignore pre-lock network issues */ }
-    }
+    // 1. Lock the manifest before uploading area files — whoever is writing,
+    // owner or an invited coach/admin, so any other writer sees it and backs off.
+    try {
+      const lockManifest = {
+        app: 'SportTactic',
+        kind: 'team-manifest',
+        format: FORMAT,
+        team: doc.team || c.teamName || '',
+        updatedAt: Date.now(),
+        by: Access.role() || 'Coach',
+        syncLock: { locked: true, by: Access.role() || 'Coach', at: Date.now() },
+        areas: existingAreas,
+        parts: []
+      };
+      await Drive.uploadJson('', lockManifest, { fileId: c.fileId });
+    } catch (e) { /* ignore pre-lock network issues */ }
 
     // 2. Upload area files
     for (const [areaKey, storeList] of Object.entries(AREA_MAP)) {
@@ -491,7 +500,7 @@ const TeamCloud = (() => {
       let doc = await snapshot();
       let remote = null;
       try {
-        remote = await readRemote();
+        remote = await readRemote({ forWrite: true });
       } catch (e) {
         if (!e || !e.oversize || !cfg().owner) throw e;
         mode = 'replace';

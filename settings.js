@@ -459,7 +459,7 @@ function fmtWhen(ts) {
 
 // Sync stores a token rather than a sentence, so the wording follows the
 // language the coach is reading in right now.
-const CLOUD_ERR = { 'oversize': 'cloud.oversize', 'oversize-owner': 'cloud.oversizeOwner', 'signin': 'cloud.signinNeeded' };
+const CLOUD_ERR = { 'oversize': 'cloud.oversize', 'oversize-owner': 'cloud.oversizeOwner', 'signin': 'cloud.signinNeeded', 'sync-locked': 'cloud.syncInProgress' };
 function cloudErrText(err) {
   if (CLOUD_ERR[err]) return T(CLOUD_ERR[err]);
   // A role password only decides what this device is ALLOWED to try; Google Drive
@@ -1995,7 +1995,7 @@ Views.settings = async function (mount) {
       UI.toast(typeof okKey === 'function' ? okKey(r) : T(okKey), 'success');
       if (reload) { reloadSoon(); return; }
     }
-    catch (e) { UI.toast(String((e && e.message) || e).slice(0, 200), 'error'); }
+    catch (e) { UI.toast(cloudErrText(String((e && e.message) || e)).slice(0, 200), 'error'); }
     finally { if (el) el.disabled = false; refreshCloud(); }
   };
 
