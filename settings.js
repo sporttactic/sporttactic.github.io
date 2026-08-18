@@ -462,10 +462,15 @@ function fmtWhen(ts) {
 const CLOUD_ERR = { 'oversize': 'cloud.oversize', 'oversize-owner': 'cloud.oversizeOwner', 'signin': 'cloud.signinNeeded', 'sync-locked': 'cloud.syncInProgress' };
 function cloudErrText(err) {
   if (CLOUD_ERR[err]) return T(CLOUD_ERR[err]);
+  const s = String(err || '');
+  // A raw "Failed to fetch" is the browser refusing the request before Google
+  // ever answers — offline, a blocked domain, or a dead connection — not
+  // something a role or a permission fix can help with.
+  if (/Failed to fetch|NetworkError|ERR_INTERNET_DISCONNECTED/i.test(s)) return T('cloud.syncFailedNet');
   // A role password only decides what this device is ALLOWED to try; Google Drive
   // still refuses the actual write until the owner has invited this account by
   // e-mail, so a 403 here means "ask to be invited", not "something is broken".
-  if (/Drive API 40[13]/.test(String(err || ''))) return T('cloud.writeForbidden');
+  if (/Drive API 40[13]/.test(s)) return T('cloud.writeForbidden');
   return err;
 }
 
