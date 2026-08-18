@@ -131,6 +131,57 @@ const Drive = (() => {
     return c || tr('drive.errGeneric', 'Google did not complete the sign-in.');
   }
 
+  // ---- Picker: the one-time "open" that a file needs from every OTHER account ----
+  // drive.file only ever reaches files this app created for the signed-in
+  // account — a coach who was invited by e-mail, or who joined with a team
+  // code, has a Google account Drive genuinely lets write the file, but this
+  // app's own OAuth grant for THAT account has never heard of it. Google's own
+  // fix for that gap is the file picker: once an account "opens" the file
+  // through it, the same per-file grant a created-by-this-app file already has
+  // is added for them too, and every ordinary REST call starts working.
+  const PICKER_SRC = 'https://apis.google.com/js/api.js';
+  let pickerLoading = null;
+  function loadPicker() {
+    if (window.google && google.picker) return Promise.resolve();
+    if (pickerLoading) return pickerLoading;
+    pickerLoading = new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = PICKER_SRC; s.async = true; s.defer = true;
+      s.onload = () => {
+        try {
+          window.gapi.load('picker', { callback: resolve, onerror: () => { pickerLoading = null; reject(new Error('picker-load-failed')); } });
+        } catch (e) { pickerLoading = null; reject(e); }
+      };
+      s.onerror = () => { pickerLoading = null; reject(new Error('Could not load Google Picker (offline?)')); };
+      document.head.appendChild(s);
+    });
+    return pickerLoading;
+  }
+  // Resolves true once the named file has been picked (and so is now reachable
+  // by this account), false if the coach closed the picker without choosing it.
+  async function grantAccess(fileId, fileName, apiKey) {
+    await loadPicker();
+    const at = await ensureToken();
+    return new Promise((resolve, reject) => {
+      try {
+        const view = new google.picker.DocsView(google.picker.ViewId.DOCS)
+          .setOwnedByMe(false)
+          .setIncludeFolders(true)
+          .setSelectFolderEnabled(false);
+        if (fileName) view.setQuery(fileName);
+        const builder = new google.picker.PickerBuilder()
+          .addView(view)
+          .setOAuthToken(at)
+          .setCallback(data => {
+            if (data.action === google.picker.Action.PICKED) resolve(true);
+            else if (data.action === google.picker.Action.CANCEL) resolve(false);
+          });
+        if (apiKey) builder.setDeveloperKey(apiKey);
+        builder.build().setVisible(true);
+      } catch (e) { reject(e); }
+    });
+  }
+
   function disconnect() {
     if (token && window.google && google.accounts && google.accounts.oauth2) {
       try { google.accounts.oauth2.revoke(token.access_token, () => {}); } catch (e) { /* ignore */ }
@@ -528,7 +579,7 @@ const Drive = (() => {
 
   return {
     getClientId, setClientId, normClientId, isConfigured, isConnected,
-    connect, disconnect,
+    connect, disconnect, grantAccess,
     backupNow, restoreNow, lastBackupAt, uploadBackup, downloadBackup,
     ensureTeamFolder, getTeamFolderId, setTeamFolderId, shareWith,
     channelName, ensureChannel, readChannel, updateChannel,

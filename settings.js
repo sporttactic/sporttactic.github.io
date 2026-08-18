@@ -459,7 +459,7 @@ function fmtWhen(ts) {
 
 // Sync stores a token rather than a sentence, so the wording follows the
 // language the coach is reading in right now.
-const CLOUD_ERR = { 'oversize': 'cloud.oversize', 'oversize-owner': 'cloud.oversizeOwner', 'signin': 'cloud.signinNeeded', 'sync-locked': 'cloud.syncInProgress' };
+const CLOUD_ERR = { 'oversize': 'cloud.oversize', 'oversize-owner': 'cloud.oversizeOwner', 'signin': 'cloud.signinNeeded', 'sync-locked': 'cloud.syncInProgress', 'cancelled': 'cloud.grantCancelled' };
 function cloudErrText(err) {
   if (CLOUD_ERR[err]) return T(CLOUD_ERR[err]);
   const s = String(err || '');
@@ -1508,6 +1508,10 @@ function cloudJoinDialog(onDone) {
           if (got) UI.toast(T('rk.joinedAs').replace('{0}', Access.label(got)), 'success');
           else if (Access.roleKeys()) UI.toast(T(pw ? 'rk.wrong' : 'rk.noneGiven'), 'error');
           else if (pw) UI.toast(T('rk.noKeys'), 'error');
+          // A staff word turns this into a writer locally, but Google Drive still
+          // needs this account to "open" the file once before it will let it
+          // save — said now, before the first sync ever tries and fails.
+          if (got && Access.tier(got) !== 'player') UI.toast(T('cloud.staffJoinedHint'), 'info');
           const rb = document.getElementById('roleBadge');
           if (rb) rb.textContent = T('role.' + Access.role());
           App.applyMemberMode();
@@ -1872,12 +1876,11 @@ Views.settings = async function (mount) {
       </div>
       <div class="row" style="flex:0;margin-top:10px;flex-wrap:wrap">
         <button class="btn primary" id="clSync">${T('cloud.syncNow')}</button>
-        <button class="btn" id="clPull">${T('cloud.pullAll')}</button>
-        ${mayWrite ? `<button class="btn" id="clPush">${T('cloud.pushAll')}</button>` : ''}
         <button class="btn" id="clCode">${T('cloud.showCode')}</button>
         ${maySetup ? `<button class="btn" id="clPolicy">${T('pol.btn')}</button>` : ''}
         ${maySetup ? `<button class="btn" id="clMember">${T('mem.btn')}</button>` : ''}
         ${maySetup ? `<button class="btn" id="clKeys">${T('rk.btn')}</button>` : ''}
+        ${mayWrite && !c.owner ? `<button class="btn" id="clGrant">${T('cloud.grantAccess')}</button>` : ''}
         <button class="btn danger" id="clForget" data-member-ok>${T('cloud.disconnect')}</button>
       </div>
       <div class="row" style="flex:0;margin-top:10px;flex-wrap:wrap;align-items:flex-end">
@@ -1984,7 +1987,25 @@ Views.settings = async function (mount) {
       UI.toast(typeof okKey === 'function' ? okKey(r) : T(okKey), 'success');
       if (reload) { reloadSoon(); return; }
     }
-    catch (e) { UI.toast(cloudErrText(String((e && e.message) || e)).slice(0, 200), 'error'); }
+    catch (e) {
+      const s = String((e && e.message) || e);
+      // A 401/403 on a write from anybody but the owner usually means this
+      // account has never "opened" the file in Google's own eyes yet — offer
+      // the one-time picker grant right here and retry the same action once it
+      // succeeds, instead of leaving the coach stuck on a dead-end error.
+      if (/Drive API 40[13]/.test(s) && window.TeamCloud && !TeamCloud.cfg().owner && window.Drive && window.Drive.grantAccess) {
+        UI.confirm(T('cloud.grantAsk'), async () => {
+          try {
+            const ok = await TeamCloud.grantAccess();
+            if (ok) return busyRun(sel, fn, okKey, reload);
+            UI.toast(T('cloud.grantCancelled'), 'error');
+          } catch (err) {
+            UI.toast(T('cloud.grantFailed') + ' — ' + String((err && err.message) || err).slice(0, 160), 'error');
+          }
+        });
+      }
+      UI.toast(cloudErrText(s).slice(0, 200), 'error');
+    }
     finally { if (el) el.disabled = false; refreshCloud(); }
   };
 
@@ -2018,10 +2039,11 @@ Views.settings = async function (mount) {
     // A sync rewrites every store underneath the open views, so the app is
     // reloaded rather than left showing what was on screen before it.
     on('#clSync', () => busyRun('#clSync', () => TeamCloud.sync(), () => T('cloud.synced'), true));
-    on('#clPull', () => UI.confirm(T('cloud.pullAsk'), () =>
-      busyRun('#clPull', () => TeamCloud.pull('replace'), () => T('cloud.pulled'), true)));
-    on('#clPush', () => UI.confirm(T('cloud.pushAsk'), () =>
-      busyRun('#clPush', () => TeamCloud.push('replace'), () => T('cloud.pushed'))));
+    on('#clGrant', () => busyRun('#clGrant', async () => {
+      const ok = await TeamCloud.grantAccess();
+      if (!ok) throw new Error('cancelled');
+      return TeamCloud.sync();
+    }, () => T('cloud.granted')));
     on('#clForget', () => UI.confirm(T('cloud.disconnectAsk'), async () => {
       await TeamCloud.forget();
       UI.toast(T('cloud.disconnected'), 'success');

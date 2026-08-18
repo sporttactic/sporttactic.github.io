@@ -754,11 +754,22 @@ const TeamCloud = (() => {
     start();
   }
 
+  // For every account except the one that created the file: drive.file scope
+  // never heard of this fileId until it is "opened" once through Google's own
+  // picker, which is what actually turns a Drive-side write permission into
+  // one this app can use. Owners never need it — they created the file.
+  async function grantAccess() {
+    if (!window.Drive || !Drive.grantAccess) throw new Error('not-supported');
+    const c = cfg();
+    if (!c.fileId) throw new Error('not-linked');
+    return Drive.grantAccess(c.fileId, MANIFEST_NAME, c.apiKey);
+  }
+
   return {
     AUTO_MINUTES, FILE_NAME, MANIFEST_NAME, AREA_MAP,
     cfg, setCfg, forget, isLinked, onChange, signedIn, canSyncQuietly, mayContribute, isBusy, isCoachSyncing,
     makeCode, readCode, parseTarget,
-    snapshot, pull, push, sync,
+    snapshot, pull, push, sync, grantAccess,
     createShared, inviteMembers, join, listExisting, reconnectShared,
     start, stop, setAuto
   };
