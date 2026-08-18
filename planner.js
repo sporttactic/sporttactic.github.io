@@ -85,12 +85,15 @@ Views.planner = function (mount) {
       ${UI.acc('plannerList', T('planner.schedule'), table, {
       open: true,
       sub: team ? `${upcoming} ${T('planner.upcoming')} · ${team.name}` : `${upcoming} ${T('planner.upcoming')}`,
-      actions: (events.length ? `<button class="btn sm danger" id="clearPlanner">🗑 ${T('planner.clearAll')}</button>` : '')
+      actions: UI.shareBar('planner', { exportLabel: T('planner.exportBtn'), importLabel: T('planner.importBtn') })
+        + (events.length ? `<button class="btn sm danger" id="clearPlanner">🗑 ${T('planner.clearAll')}</button>` : '')
         + (mine(events).length && Store.teams().length > 1 ? `<button class="btn sm" id="shareEvents">📤 ${T('planner.shareBtn')}</button>` : '')
         + `<button class="btn primary" id="addEvent">+ ${T('planner.newEvent')}</button>`
     })}`;
 
     UI.bindAcc(mount);
+    // The file carries the squad you are looking at, and lands back in it.
+    UI.bindShare(mount, 'planner', render, { scoped: true });
     mount.querySelector('#addEvent').onclick = () => form();
     const clear = mount.querySelector('#clearPlanner');
     if (clear) clear.onclick = () => clearAll(events);
