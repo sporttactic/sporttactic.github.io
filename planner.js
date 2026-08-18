@@ -120,7 +120,9 @@ Views.planner = function (mount) {
     const tid = Store.activeTeamId();
     // What another squad shared with us is theirs to delete, not ours.
     const mine = events.filter(e => !tid || !e.teamId || e.teamId === tid);
-    if (!mine.length) return;
+    // Every event on screen is one this squad merely received — nothing here
+    // is ours to clear, so say so instead of the button silently doing nothing.
+    if (!mine.length) return UI.toast(T('planner.clearNone'), 'error');
     UI.confirm(T('planner.clearAsk').replace('{0}', mine.length), async () => {
       for (const e of mine) await Store.remove('planner', e.id);
       UI.toast(T('planner.cleared'));

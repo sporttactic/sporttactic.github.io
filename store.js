@@ -82,6 +82,10 @@ const Store = (() => {
     if (blockWrite(store, find(store, id))) return false;
     await DB.remove(store, id);
     cache[store] = (cache[store] || []).filter(x => x.id !== id);
+    // Without this, a sync merges in whichever copy is still on Drive and the
+    // deleted row comes right back — the tombstone is what tells a later sync
+    // that the row is gone on purpose, not just missing from this device yet.
+    if (store !== 'settings') await recordTombstone(store, id);
     emit();
     return true;
   }
@@ -96,6 +100,60 @@ const Store = (() => {
   }
   async function setSetting(key, value) {
     await save('settings', { id: key, value });
+  }
+
+  // ---- Deletion tombstones ------------------------------------------------
+  // A delete only removes the row locally; a sync that merges by "newest
+  // updatedAt wins" has no way to tell a stale remote copy from an intentional
+  // delete, so the row it still has on Drive comes right back. A tombstone is a
+  // record of when an id was deleted, kept as a shared setting so it travels
+  // with the sync and other devices honour the delete too.
+  const TOMBSTONE_KEY = 'tombstones';
+  const TOMBSTONE_MAX_AGE = 90 * 864e5; // every device should have caught up by then
+  function tombstones() {
+    const s = find('settings', TOMBSTONE_KEY);
+    return (s && s.value && typeof s.value === 'object') ? s.value : {};
+  }
+  async function recordTombstone(store, id) {
+    const t = tombstones();
+    const forStore = Object.assign({}, t[store], { [id]: Date.now() });
+    await setSetting(TOMBSTONE_KEY, Object.assign({}, t, { [store]: forStore }));
+  }
+  // Union of both sides, newest deletedAt per id — a whole-row "newest wins"
+  // merge would throw away whichever side lost the timestamp race entirely.
+  function mergeTombstones(a, b) {
+    const out = {};
+    const now = Date.now();
+    [a || {}, b || {}].forEach(map => {
+      Object.keys(map).forEach(store => {
+        const src = map[store] || {};
+        const dst = out[store] || (out[store] = {});
+        Object.keys(src).forEach(id => {
+          const at = +src[id] || 0;
+          if (now - at > TOMBSTONE_MAX_AGE) return;
+          if (!dst[id] || at > dst[id]) dst[id] = at;
+        });
+      });
+    });
+    return out;
+  }
+  // Drops rows a tombstone says were deleted at or after they were last edited.
+  function dropTombstoned(store, rows, tombs) {
+    const t = (tombs || tombstones())[store];
+    if (!t || !rows || !rows.length) return rows;
+    return rows.filter(r => !(r && t[r.id] && t[r.id] >= (+r.updatedAt || 0)));
+  }
+  // Folds a remote settings block's tombstones into ours and persists the
+  // union so a delete made on any device sticks after the next sync everywhere.
+  async function syncTombstones(remoteSettingsRows) {
+    let tombs = tombstones();
+    const remoteRow = Array.isArray(remoteSettingsRows) && remoteSettingsRows.find(r => r && r.id === TOMBSTONE_KEY);
+    if (remoteRow) {
+      const merged = mergeTombstones(tombs, unpack(remoteRow.value));
+      if (JSON.stringify(merged) !== JSON.stringify(tombs)) await setSetting(TOMBSTONE_KEY, merged);
+      tombs = merged;
+    }
+    return tombs;
   }
 
   // ---- Statistics helpers ----
@@ -426,7 +484,13 @@ const Store = (() => {
     let mine = null;
     for (const s of stores) {
       let rows = await DB.getAll(s);
-      if (teamId && TEAM_SCOPED.indexOf(s) >= 0) rows = rows.filter(r => r.teamId === teamId);
+      // The plan on screen is what this squad owns AND what other squads handed
+      // it, so an "export what I see" backup follows the same rule — a strict
+      // ownership filter would silently export nothing for a squad that mostly
+      // looks at events other squads shared in.
+      if (teamId && s === 'planner') rows = rows.filter(r => !r.teamId || r.teamId === teamId
+        || r.allTeams || (Array.isArray(r.teams) && r.teams.indexOf(teamId) >= 0));
+      else if (teamId && TEAM_SCOPED.indexOf(s) >= 0) rows = rows.filter(r => r.teamId === teamId);
       if (teamId && s === 'teams') { rows = rows.filter(r => r.id === teamId); mine = rows; }
       if (mine && (s === 'clubs' || s === 'seasons')) {
         const want = new Set(mine.map(t => s === 'clubs' ? t.clubId : t.seasonId).filter(Boolean));
@@ -470,6 +534,7 @@ const Store = (() => {
     purgeDemoPlayers, purgeSeedDrills, purgeSeedMatches, purgeSeedClub,
     players, stampSquadSport,
     teams, activeTeam, activeTeamId, setActiveTeam, scoped, matches, coaches, stampTeamScope, adoptUnscoped,
-    pack, unpack, packKinds, exportPack, importPack, GOAL_TYPES
+    pack, unpack, packKinds, exportPack, importPack, GOAL_TYPES,
+    tombstones, mergeTombstones, dropTombstoned, syncTombstones
   };
 })();

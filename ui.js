@@ -365,7 +365,13 @@ const UI = (() => {
           const n = await Store.importPack(kind, JSON.parse(r.result), { teamId: scope() });
           toast(tr('share.imported', 'Imported') + ' (' + n + ')', 'success');
           if (onDone) onDone();
-        } catch { toast(tr('share.badFile', 'That file is not a SportTactic share file'), 'error'); }
+        } catch (err) {
+          // "nothing to import" means the file parsed fine but held no rows for
+          // this pack — a different message than an unreadable or foreign file.
+          const empty = err && /nothing to import/i.test(err.message || '');
+          toast(tr(empty ? 'share.empty' : 'share.badFile',
+            empty ? 'That file has nothing to import' : 'That file is not a SportTactic share file'), 'error');
+        }
       };
       r.readAsText(f);
     };

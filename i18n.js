@@ -27,6 +27,7 @@ const I18N = (() => {
       'planner.noneShared': 'No events have reached this device yet. They travel with the shared team database — press Sync now, and if it stays empty ask your coach to press Sync on their own device after making them.',
       'planner.delAsk': 'Delete this event?', 'planner.clearAll': 'Clear all',
       'planner.clearAsk': 'Delete all {0} events in this plan? Only the squad you are looking at is emptied.',
+      'planner.clearNone': 'Every event shown here was shared in by another squad — nothing belongs to this one to clear.',
       'planner.cleared': 'Plan cleared',
       'planner.exportBtn': 'Export plan', 'planner.importBtn': 'Import plan',
       'planner.formHint': 'The plan belongs to the active team and travels with Export plan and a full backup.',
@@ -400,6 +401,7 @@ const I18N = (() => {
       'mus.glutes': 'Glutes', 'mus.quads': 'Quads', 'mus.hamstrings': 'Hamstrings', 'mus.adductors': 'Adductors', 'mus.calves': 'Calves',
       'share.export': 'Export', 'share.import': 'Import', 'share.exported': 'File downloaded — send it to your team',
       'share.exportFailed': 'Export failed', 'share.imported': 'Imported', 'share.badFile': 'That file is not a SportTactic share file',
+      'share.empty': 'That file has nothing to import',
       // Opponents
       'opponents.title': 'Opponent Analysis', 'opponents.newOpponent': 'New Opponent', 'opponents.report': 'Scouting Report',
       'opponents.aiPlan': 'AI match plan',
@@ -965,6 +967,7 @@ const I18N = (() => {
       'planner.noneShared': 'Der er endnu ikke kommet nogen begivenheder til denne enhed. De følger med den delte holddatabase — tryk Synkronisér nu, og hvis den bliver ved med at være tom, så bed din træner om at trykke Synkronisér på sin egen enhed, efter de er oprettet.',
       'planner.delAsk': 'Slet denne begivenhed?', 'planner.clearAll': 'Ryd alle',
       'planner.clearAsk': 'Slet alle {0} begivenheder i denne plan? Kun det hold, du kigger på, tømmes.',
+      'planner.clearNone': 'Alle begivenheder her er delt af et andet hold \u2014 ingen af dem hører til dette hold at rydde.',
       'planner.cleared': 'Planen er ryddet',
       'planner.exportBtn': 'Eksportér plan', 'planner.importBtn': 'Importér plan',
       'planner.formHint': 'Planen hører til det aktive hold og kommer med i Eksportér plan og i en fuld backup.',
@@ -1408,6 +1411,7 @@ const I18N = (() => {
       'mus.abs': 'Mave', 'mus.obliques': 'Skrå mavemuskler', 'mus.lowerback': 'Lænd', 'mus.hipflexors': 'Hoftebøjere',
       'mus.glutes': 'Baller', 'mus.quads': 'Forlår', 'mus.hamstrings': 'Baglår', 'mus.adductors': 'Indvendige lår', 'mus.calves': 'Lægge',
       'share.export': 'Eksportér', 'share.import': 'Importér', 'share.exported': 'Filen er hentet — send den til holdet',
+      'share.empty': 'Den fil har intet at importere',
       'share.exportFailed': 'Eksport mislykkedes', 'share.imported': 'Importeret', 'share.badFile': 'Den fil er ikke en SportTactic-delefil',
       // Opponents
       'opponents.title': 'Modstanderanalyse', 'opponents.newOpponent': 'Ny Modstander', 'opponents.report': 'Scoutingrapport',

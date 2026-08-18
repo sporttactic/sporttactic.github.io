@@ -43,7 +43,8 @@ const TeamCloud = (() => {
   // which every coach needs to see the same way, the player profile, which is
   // the whole point of handing a code to a player, and the role password hashes
   // that decide what a joining device may be. The readable words never travel.
-  const SHARED_SETTINGS = ['accessMembers', 'memberProfile', 'roleKeys'];
+  // Tombstones travel too, so a delete made on one device is honoured everywhere.
+  const SHARED_SETTINGS = ['accessMembers', 'memberProfile', 'roleKeys', 'tombstones'];
   const AUTO_MINUTES = [0, 5, 15, 30, 60, 180];
   const MAX_ROWS_PER_STORE = 200000;
   const MEMBER_AUTO_MIN = 15;
@@ -385,11 +386,26 @@ const TeamCloud = (() => {
       (guarded[s] || (guarded[s] = [])).push(p.slice(i + 1));
     });
     let n = 0;
+    // Merge tombstones before touching any rows: a delete recorded on another
+    // device must remove the row here too, and a delete recorded here must not
+    // be undone by a remote copy that has not caught up to it yet.
+    const tombs = replace ? {} : await Store.syncTombstones(doc.data.settings);
     for (const s of syncStores()) {
       if (!Array.isArray(doc.data[s])) continue;
       if (doc.data[s].length > MAX_ROWS_PER_STORE) throw new Error('too many records in ' + s);
-      const theirs = Store.unpack(doc.data[s]).filter(r => r && typeof r.id === 'string');
-      const mine = await DB.getAll(s);
+      let theirs = Store.unpack(doc.data[s]).filter(r => r && typeof r.id === 'string');
+      let mine = await DB.getAll(s);
+      if (!replace) {
+        theirs = Store.dropTombstoned(s, theirs, tombs);
+        const alive = Store.dropTombstoned(s, mine, tombs);
+        // A tombstone from another device deletes the row here too, not only
+        // from the merge — otherwise it just sits back in the local database.
+        if (alive.length !== mine.length) {
+          const aliveIds = new Set(alive.map(r => r.id));
+          for (const r of mine) if (!aliveIds.has(r.id)) await DB.remove(s, r.id);
+        }
+        mine = alive;
+      }
       const keep = guarded[s] || [];
       if (keep.length) {
         const byId = new Map(mine.map(r => [r.id, r]));
@@ -484,6 +500,11 @@ const TeamCloud = (() => {
       doc.areas = (remote && remote.areas && typeof remote.areas === 'object') ? remote.areas : {};
       doc.parts = (remote && Array.isArray(remote.parts)) ? remote.parts : [];
 
+      // Merge tombstones with whatever the remote has recorded, so a delete
+      // that happened here (or on another device already reflected there)
+      // does not get merged back in from the remote's still-older copy below.
+      const tombs = isTeamDb(remote) ? await Store.syncTombstones(remote.data && remote.data.settings) : Store.tombstones();
+
       if (!owner && isTeamDb(remote)) {
         const pol = (remote.policy && typeof remote.policy === 'object') ? remote.policy : Privacy.defaults();
         doc.policy = pol;
@@ -496,12 +517,22 @@ const TeamCloud = (() => {
       } else if (mode !== 'replace' && isTeamDb(remote)) {
         for (const s of syncStores()) {
           if (!Array.isArray(remote.data[s])) continue;
-          if (!doc.data[s]) { doc.data[s] = remote.data[s]; continue; }
-          doc.data[s] = mergeRows(remote.data[s], doc.data[s]);
+          const remoteRows = Store.dropTombstoned(s, remote.data[s], tombs);
+          if (!doc.data[s]) { if (remoteRows.length) doc.data[s] = remoteRows; continue; }
+          doc.data[s] = mergeRows(remoteRows, doc.data[s]);
         }
         if (Array.isArray(remote.data.settings) && !Array.isArray(doc.data.settings)) {
           doc.data.settings = remote.data.settings;
         }
+      }
+      // Carry the merged tombstones along, even if this device made no deletes
+      // of its own — otherwise a delete recorded elsewhere stops travelling
+      // further the moment it passes through a device that only pushes.
+      if (Object.keys(tombs).length) {
+        const packedTomb = await Store.pack({ id: 'tombstones', value: tombs, updatedAt: Date.now() });
+        const settingsArr = (doc.data.settings || []).filter(r => r && r.id !== 'tombstones');
+        settingsArr.push(packedTomb);
+        doc.data.settings = settingsArr;
       }
       doc.data = Privacy.keepTeams(doc.data, doc.policy);
       await writeRemote(doc);
