@@ -1524,7 +1524,7 @@ const I18N = (() => {
       'cloud.reconnectBad': 'Den mappe har ingen SportTactic-database i sig.',
       'cloud.reconnected': 'Genforbundet \u2014 {0} poster modtaget',
       'cloud.connectAsk': 'Skal denne enhed forbindes til Google Drive? Du kan godt læse holdets data uden, men intet du ændrer her kan sendes tilbage til klubben, før du logger ind.',
-      'cloud.connectNeeded': 'Holdets fil kan kun åbnes med et Google-login. Skal du forbindes nu, så du bliver ved med at få det, din træner deler?',
+      'cloud.connectNeeded': 'Kunne ikke åbne holdets fil på den måde. At logge ind med Google er en anden vej ind — vil du forbindes nu?',
       'cloud.revoked': 'Din trup er fjernet af klubben. Denne enhed følger ikke længere holddatabasen, Google-forbindelsen er lukket, og holdets data er slettet fra den.',
       'cloud.connectFailed': 'Kunne ikke forbinde til Google Drive',
       'cloud.squadAttached': 'Tilknyttet {0}',

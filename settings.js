@@ -1518,9 +1518,13 @@ function cloudJoinDialog(onDone) {
         } catch (e) {
           state.textContent = cloudJoinExplain(e);
           // A club that shares with named people instead of a link hands out a
-          // code that cannot open anything on its own. The sign-in is offered
-          // here, on the attempt that just failed, and the code tried again.
-          if (!TeamCloud.canSyncQuietly() && window.Drive && !Drive.isConnected() && await Drive.isConfigured()) {
+          // code that cannot open anything on its own — and an API key that is
+          // misconfigured (wrong referrer, Drive API off) fails the very same
+          // way. Either way, signing in gives a second, independent path to the
+          // same file, so it is offered here whenever the read itself failed,
+          // not only when the code carried no key at all.
+          const netIsh = /Failed to fetch|NetworkError|HTTP 40[13]/i.test(String((e && e.message) || e || ''));
+          if ((!TeamCloud.canSyncQuietly() || netIsh) && window.Drive && !Drive.isConnected() && await Drive.isConfigured()) {
             UI.confirm(T('cloud.connectNeeded'), async () => {
               try {
                 await Drive.connect();
