@@ -461,7 +461,12 @@ function fmtWhen(ts) {
 // language the coach is reading in right now.
 const CLOUD_ERR = { 'oversize': 'cloud.oversize', 'oversize-owner': 'cloud.oversizeOwner', 'signin': 'cloud.signinNeeded' };
 function cloudErrText(err) {
-  return CLOUD_ERR[err] ? T(CLOUD_ERR[err]) : err;
+  if (CLOUD_ERR[err]) return T(CLOUD_ERR[err]);
+  // A role password only decides what this device is ALLOWED to try; Google Drive
+  // still refuses the actual write until the owner has invited this account by
+  // e-mail, so a 403 here means "ask to be invited", not "something is broken".
+  if (/Drive API 40[13]/.test(String(err || ''))) return T('cloud.writeForbidden');
+  return err;
 }
 
 // The three or four sentences that get somebody with a phone and no patience
@@ -576,6 +581,18 @@ function wizExplain(err) {
   if (/client id|client_id/i.test(s)) return T('gw.failClientId');
   if (/Failed to fetch|NetworkError|offline/i.test(s)) return T('gw.failOffline');
   return s.slice(0, 200);
+}
+
+// Turns a failed team-code join into the one thing the player should go and check,
+// instead of the raw fetch/HTTP error, which they cannot act on.
+function cloudJoinExplain(err) {
+  const s = String((err && err.message) || err || '');
+  if (/timeout/i.test(s)) return T('cloud.joinFailedTimeout');
+  if (/Failed to fetch|NetworkError|offline/i.test(s)) return T('cloud.joinFailedNet');
+  if (/HTTP 403/.test(s)) return T('cloud.joinFailedForbidden');
+  if (/HTTP 404/.test(s)) return T('cloud.joinFailedNotFound');
+  if (/file too large/i.test(s)) return T('cloud.oversize');
+  return T('cloud.joinFailed') + ' ' + s.slice(0, 180);
 }
 
 function googleWizard(onDone) {
@@ -1494,7 +1511,7 @@ function cloudJoinDialog(onDone) {
           if (onDone) onDone();
           offerDriveConnect();
         } catch (e) {
-          state.textContent = T('cloud.joinFailed') + ' ' + String((e && e.message) || e).slice(0, 180);
+          state.textContent = cloudJoinExplain(e);
           // A club that shares with named people instead of a link hands out a
           // code that cannot open anything on its own. The sign-in is offered
           // here, on the attempt that just failed, and the code tried again.
@@ -1881,7 +1898,7 @@ Views.settings = async function (mount) {
       <p class="hint">${UI.esc(TeamCloud.mayContribute()
         ? (online ? T('cloud.contribOn') : T('cloud.contribNeedsGoogle'))
         : T('cloud.contribOff'))}</p>`}
-      ${mayWrite ? '' : `<p class="hint mail-note">${UI.esc(T('cloud.readOnlyRole'))}</p>`}`;
+      ${mayWrite ? (c.owner ? '' : `<p class="hint mail-note">${UI.esc(T('cloud.staffNeedsInvite'))}</p>`) : `<p class="hint mail-note">${UI.esc(T('cloud.readOnlyRole'))}</p>`}`;
 
     return UI.acc('setCloud', T('cloud.title'), `
       <p style="color:var(--muted);font-size:13px">${T('cloud.desc')}</p>
