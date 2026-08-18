@@ -1747,18 +1747,43 @@ function accessEditDialog(existing, onDone) {
       m.querySelector('[data-close2]').onclick = close;
       m.querySelector('[data-go]').onclick = async () => {
         try {
-          await Access.grant({
+          const entry = await Access.grant({
             id: m0.id, addedAt: m0.addedAt, invitedAt: m0.invitedAt,
             name: name.value, email: mail.value,
             role: m.querySelector('#ac_role').value, note: m.querySelector('#ac_note').value
           });
           close();
           UI.toast(T('access.saved'), 'success');
+          // Being on this list is meant to BE the Drive permission, not a
+          // promise of one for later — so the invite goes out right away.
+          await autoInviteMember(entry);
           if (onDone) onDone();
         } catch (e) { state.textContent = T('access.badEmail'); }
       };
     }
   });
+}
+
+// Granting access here is the whole point of adding somebody, so the Drive
+// share goes out immediately instead of waiting for a separate trip to
+// "Invite people" — that button stays only for re-sending a failed one.
+async function autoInviteMember(entry) { return autoInviteMembers([entry]); }
+async function autoInviteMembers(list) {
+  list = (list || []).filter(Boolean);
+  if (!list.length || !window.TeamCloud || !TeamCloud.isLinked() || !window.Drive) return;
+  if (!(await Drive.isConfigured())) return;
+  try {
+    if (!Drive.isConnected()) await Drive.connect();
+    const res = await TeamCloud.inviteMembers(list);
+    const ok = res.filter(r => r.ok).length;
+    if (list.length === 1) {
+      UI.toast(ok ? T('access.invited').replace('{0}', list[0].email) : T('access.inviteFailed'), ok ? 'success' : 'error');
+    } else {
+      UI.toast(T('cloud.invited').replace('{0}', ok).replace('{1}', res.length), ok === res.length ? 'success' : 'error');
+    }
+  } catch (e) {
+    UI.toast(T('access.inviteFailed') + ' — ' + String((e && e.message) || e).slice(0, 160), 'error');
+  }
 }
 
 Views.settings = async function (mount) {
@@ -2064,9 +2089,11 @@ Views.settings = async function (mount) {
       const add = Access.suggestions().filter(s => !known.has(s.email));
       if (!add.length) return UI.toast(T('access.nothingToImport'));
       UI.confirm(T('access.fromSquadAsk').replace('{0}', add.length), async () => {
-        for (const s of add) await Access.grant(s);
+        const added = [];
+        for (const s of add) added.push(await Access.grant(s));
         UI.toast(T('access.imported').replace('{0}', add.length), 'success');
         refreshAccess();
+        await autoInviteMembers(added);
       });
     });
     mount.querySelectorAll('[data-acc-edit]').forEach(b => b.onclick = () => {
