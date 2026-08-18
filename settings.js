@@ -1968,7 +1968,6 @@ Views.settings = async function (mount) {
         <button class="btn primary" id="accAdd">${T('access.addTitle')}</button>
         <button class="btn" id="accImport">${T('access.fromSquad')}</button>
         <button class="btn" id="accGoogle">${T('access.googleBtn')}</button>
-        ${TeamCloud.isLinked() ? `<button class="btn" id="accInvite">${T('cloud.inviteBtn')}</button>` : ''}
       </div>
       <p class="hint">${T('access.hint')}</p>`);
   }
@@ -2082,7 +2081,6 @@ Views.settings = async function (mount) {
 
   function bindAccess() {
     on('#accAdd', () => accessEditDialog(null, refreshAccess));
-    on('#accInvite', () => cloudInviteDialog(refreshAccess));
     on('#accGoogle', googleUsersDialog);
     on('#accImport', () => {
       const known = new Set(Access.members().map(m => m.email));
