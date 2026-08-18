@@ -1633,49 +1633,6 @@ async function attachJoinedSquad() {
   return pick;
 }
 
-// Sends the Drive invitations. Everyone on the access list is offered; the
-// role they hold there decides whether they may write to the file.
-function cloudInviteDialog(onDone) {
-  const list = Access.members();
-  const row = m => `<label class="check-row share-row">
-    <input type="checkbox" data-inv="${UI.esc(m.id)}" checked>
-    <span>${UI.esc(m.name || m.email)}
-      <span class="tag">${UI.esc(Access.label(m.role))}</span>
-      <span class="tag ${Access.driveRole(m.role) === 'writer' ? 'green' : ''}">${UI.esc(T('cloud.drive' + (Access.driveRole(m.role) === 'writer' ? 'Editor' : 'Viewer')))}</span>
-      <span class="share-n">${UI.esc(m.email)}${m.invitedAt ? ' · ' + UI.esc(T('cloud.invitedAt')) + ' ' + UI.esc(fmtWhen(m.invitedAt)) : ''}</span>
-    </span></label>`;
-  UI.modal({
-    title: T('cloud.inviteTitle'),
-    width: 620,
-    body: `<p>${UI.esc(T('cloud.inviteIntro'))}</p>
-      ${list.length ? list.map(row).join('') : `<p class="hint">${UI.esc(T('access.none'))}</p>`}
-      <p class="hint" id="iv_state"></p>`,
-    footer: `<button class="btn ghost" data-close2>${T('common.close')}</button>
-      <button class="btn primary" data-go ${list.length ? '' : 'disabled'}>${UI.esc(T('cloud.inviteBtn'))}</button>`,
-    onOpen: (m, close) => {
-      const state = m.querySelector('#iv_state');
-      m.querySelector('[data-close2]').onclick = close;
-      const go = m.querySelector('[data-go]');
-      go.onclick = async () => {
-        const picked = list.filter(x => { const b = m.querySelector(`[data-inv="${CSS.escape(x.id)}"]`); return b && b.checked; });
-        if (!picked.length) return;
-        go.disabled = true;
-        state.textContent = T('cloud.working');
-        try {
-          if (!Drive.isConnected()) await Drive.connect();
-          const res = await TeamCloud.inviteMembers(picked);
-          const ok = res.filter(r => r.ok).length;
-          close();
-          UI.toast(T('cloud.invited').replace('{0}', ok).replace('{1}', res.length), ok ? 'success' : 'error');
-          if (onDone) onDone();
-        } catch (e) {
-          state.textContent = String((e && e.message) || e).slice(0, 220);
-        } finally { go.disabled = false; }
-      };
-    }
-  });
-}
-
 // ---- People & access ----------------------------------------------------
 // Everyone on the access list still has to be a Google test user before they
 // can sign in at all, and that list lives in the Cloud Console rather than in
@@ -1921,7 +1878,6 @@ Views.settings = async function (mount) {
         ${maySetup ? `<button class="btn" id="clPolicy">${T('pol.btn')}</button>` : ''}
         ${maySetup ? `<button class="btn" id="clMember">${T('mem.btn')}</button>` : ''}
         ${maySetup ? `<button class="btn" id="clKeys">${T('rk.btn')}</button>` : ''}
-        ${mayWrite ? `<button class="btn" id="clInvite">${T('cloud.inviteBtn')}</button>` : ''}
         <button class="btn danger" id="clForget" data-member-ok>${T('cloud.disconnect')}</button>
       </div>
       <div class="row" style="flex:0;margin-top:10px;flex-wrap:wrap;align-items:flex-end">
@@ -2059,7 +2015,6 @@ Views.settings = async function (mount) {
     on('#clMember', () => memberModeDialog(refreshCloud));
     on('#clMember2', () => memberModeDialog(refreshCloud));
     on('#clKeys', () => roleKeysDialog(refreshCloud));
-    on('#clInvite', () => cloudInviteDialog(refreshAccess));
     // A sync rewrites every store underneath the open views, so the app is
     // reloaded rather than left showing what was on screen before it.
     on('#clSync', () => busyRun('#clSync', () => TeamCloud.sync(), () => T('cloud.synced'), true));
