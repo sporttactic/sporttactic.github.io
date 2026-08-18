@@ -146,11 +146,33 @@ const Drive = (() => {
   }
 
   // ---- Low-level REST ----
+  // Mobile networks blip constantly; a fetch that THROWS (never got an answer at
+  // all) gets a couple of quick retries before it is treated as a real failure.
+  // A response Google actually sent back — even a 403 or 404 — is never retried:
+  // that is a real answer, not a dropped connection.
+  const NET_RETRIES = 2;
+  const NET_RETRY_DELAY = 700;
+  const isNetworkThrow = e => !!e && (e.name === 'AbortError' || /Failed to fetch|NetworkError/i.test(String((e && e.message) || e)));
+  async function fetchRetrying(url, opts, timeoutMs) {
+    for (let attempt = 0; ; attempt++) {
+      const ctl = (timeoutMs && typeof AbortController === 'function') ? new AbortController() : null;
+      const timer = ctl ? setTimeout(() => ctl.abort(), timeoutMs) : null;
+      try {
+        return await fetch(url, Object.assign({}, opts, ctl ? { signal: ctl.signal } : null));
+      } catch (e) {
+        if (!isNetworkThrow(e) || attempt === NET_RETRIES) {
+          throw new Error(e && e.name === 'AbortError' ? 'timeout' : String((e && e.message) || e));
+        }
+        await new Promise(r => setTimeout(r, NET_RETRY_DELAY * (attempt + 1)));
+      } finally { if (timer) clearTimeout(timer); }
+    }
+  }
+
   async function api(path, opts) {
     const at = await ensureToken();
     opts = opts || {};
     opts.headers = Object.assign({ Authorization: 'Bearer ' + at }, opts.headers || {});
-    const res = await fetch('https://www.googleapis.com/' + path, opts);
+    const res = await fetchRetrying('https://www.googleapis.com/' + path, opts, 45000);
     if (!res.ok) {
       let detail = '';
       try { detail = await res.text(); } catch (e) { /* ignore */ }
@@ -177,24 +199,14 @@ const Drive = (() => {
   const FETCH_TIMEOUT = 45000;
 
   async function fetchJson(url, opts) {
-    const ctl = typeof AbortController === 'function' ? new AbortController() : null;
-    const timer = setTimeout(() => { if (ctl) ctl.abort(); }, FETCH_TIMEOUT);
-    let res;
-    try {
-      res = await fetch(url, Object.assign({}, opts, ctl ? { signal: ctl.signal } : null));
-    } catch (e) {
-      clearTimeout(timer);
-      throw new Error(e && e.name === 'AbortError' ? 'timeout' : String((e && e.message) || e));
-    }
-    try {
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      const len = +res.headers.get('content-length');
-      if (len > MAX_JSON_BYTES) throw new Error('file too large');
-      const text = await readCapped(res);
-      const doc = JSON.parse(text);
-      if (!doc || typeof doc !== 'object') throw new Error('not a team file');
-      return doc;
-    } finally { clearTimeout(timer); }
+    const res = await fetchRetrying(url, opts, FETCH_TIMEOUT);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const len = +res.headers.get('content-length');
+    if (len > MAX_JSON_BYTES) throw new Error('file too large');
+    const text = await readCapped(res);
+    const doc = JSON.parse(text);
+    if (!doc || typeof doc !== 'object') throw new Error('not a team file');
+    return doc;
   }
 
   // Content-Length is optional and can lie, so the body is also counted as it
