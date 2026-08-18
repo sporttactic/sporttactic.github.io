@@ -14,6 +14,9 @@ const App = (() => {
   // unsaved play, a video with telestration on it, an open chat.
   const LIVE_ROUTES = ['scouting', 'tactics', 'video', 'messenger'];
   let menuHidden = [];
+  // The background sync only ever needs to say "you must grant access" once
+  // per session; every tick after that would just repeat the same dialog.
+  let grantNagged = false;
   const menuOff = r => ALWAYS_ON.indexOf(r) < 0 && menuHidden.indexOf(r) >= 0;
   // A copy made with a team code shows what the coach left in its profile, on
   // top of whatever this device hid for itself.
@@ -328,6 +331,24 @@ const App = (() => {
     b.title = T('cloud.syncNow');
     b.setAttribute('aria-label', T('cloud.syncNow'));
   }
+  // A 403/401 for anybody but the owner almost always means this Google account
+  // has never "opened" the file yet — offer the one-time picker grant right
+  // where the coach is standing and retry once it succeeds, instead of leaving
+  // them stuck reading a dead-end error.
+  function offerGrant(retry) {
+    if (!window.TeamCloud || !TeamCloud.grantAccess) return;
+    UI.confirm(T('cloud.grantAsk'), async () => {
+      try {
+        const ok = await TeamCloud.grantAccess();
+        if (!ok) { UI.toast(T('cloud.grantCancelled'), 'error'); return; }
+        UI.toast(T('cloud.granted'), 'success');
+        if (retry) await retry();
+      } catch (err) {
+        UI.toast(T('cloud.grantFailed') + ' — ' + String((err && err.message) || err).slice(0, 160), 'error');
+      }
+    });
+  }
+
   async function runTopSync() {
     const b = document.getElementById('topSync');
     if (!b || b.classList.contains('busy')) return;
@@ -343,6 +364,7 @@ const App = (() => {
       const got = await TeamCloud.sync();
       if (!got) UI.toast(T('cloud.upToDate'), 'success');
     } catch (e) {
+      if (e && e.needsGrant) { offerGrant(runTopSync); return; }
       const key = e && e.oversize ? (TeamCloud.cfg().owner ? 'cloud.oversizeOwner' : 'cloud.oversize')
         : (e && e.message === 'signin') ? 'cloud.signinNeeded' : '';
       UI.toast(key ? T(key) : T('cloud.syncFail') + ' — ' + ((e && e.message) || e), 'error');
@@ -428,6 +450,14 @@ const App = (() => {
         return;
       }
       if (info && info.revoked) { UI.toast(T('cloud.revoked'), 'error'); render(); return; }
+      // A silent background sync cannot pop the Google picker itself (that needs
+      // a real click), but it can say so once instead of retrying forever with
+      // nothing ever reaching anybody else who is following the same file.
+      if (info && info.needsGrant && !grantNagged) {
+        grantNagged = true;
+        offerGrant(() => TeamCloud.sync().catch(() => { /* reported by its own toast */ }));
+        return;
+      }
       // Rows landed from a background pull, so the view on screen was built
       // from the old ones. Redraw it — but not over a dialog, and not over the
       // modules that hold live work a redraw would throw away: a running match

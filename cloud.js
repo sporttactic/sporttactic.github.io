@@ -476,8 +476,16 @@ const TeamCloud = (() => {
   }
 
   // Internal pull implementation (called within runExclusive)
+  // 403/401 from Drive on a non-owner almost always means this Google account
+  // has never "opened" the file yet — the one-time picker grant fixes it. Flagging
+  // it here means every caller (the top bar, the settings page, the silent
+  // background timer) can offer that fix, not only whichever one happened to
+  // trigger the request.
+  const isForbidden = e => /Drive API 40[13]/.test(msg(e));
+  function needsGrant(e) { return isForbidden(e) && !cfg().owner; }
+
   async function pullInternal(mode) {
-    let got = 0;
+    let got = 0, forbidden = false;
     try {
       const doc = await readRemote();
       got = await applyDoc(doc, mode);
@@ -485,9 +493,10 @@ const TeamCloud = (() => {
       if (revoked(doc)) { await cutOff(); got = 0; return 0; }
       return got;
     } catch (e) {
+      forbidden = needsGrant(e);
       await setCfg({ lastErr: e && e.oversize ? (cfg().owner ? 'oversize-owner' : 'oversize') : msg(e) });
-      throw e;
-    } finally { emit({ pulled: got }); }
+      throw Object.assign(e, { needsGrant: forbidden });
+    } finally { emit({ pulled: got, needsGrant: forbidden }); }
   }
 
   // Internal push implementation (called within runExclusive)
@@ -549,7 +558,7 @@ const TeamCloud = (() => {
       return true;
     } catch (e) {
       await setCfg({ lastErr: e && e.oversize ? (cfg().owner ? 'oversize-owner' : 'oversize') : msg(e) });
-      throw e;
+      throw Object.assign(e, { needsGrant: needsGrant(e) });
     } finally { emit(); }
   }
 
@@ -745,7 +754,10 @@ const TeamCloud = (() => {
     if (!c.autoMin) return;
     timer = setInterval(() => {
       if (!canSyncQuietly() || isBusy()) return;
-      sync().catch(() => { /* offline; next tick retries */ });
+      // A push that needs the one-time grant fails the same way on every tick,
+      // so the retry alone will never fix it — say so once, instead of retrying
+      // forever in silence.
+      sync().catch(e => { if (e && e.needsGrant) emit({ needsGrant: true }); });
     }, c.autoMin * 60000);
   }
 
