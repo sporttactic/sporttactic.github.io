@@ -996,8 +996,10 @@ function sharePolicyDialog(onDone) {
       };
       m.querySelector('[data-go]').onclick = async () => {
         await Privacy.save(pol);
+        const sent = await pushShareChange();
         close();
         UI.toast(T('pol.savedMsg'), 'success');
+        if (!sent) UI.toast(T('mem.pushFailed'), 'error');
         if (onDone) onDone();
       };
     }
@@ -1029,6 +1031,19 @@ async function shareForAreas(routes) {
   }));
   if (opened) await Privacy.save(p);
   return opened;
+}
+// A module/policy change only reaches a joined copy on its next sync — which
+// for most devices is a manual button press, so a coach who ticks "Event
+// Planner" here and closes the dialog would otherwise see nothing change
+// until they remembered to press Sync. Push it now, the same way a fresh set
+// of role passwords already does, and say so if it could not go out.
+async function pushShareChange() {
+  if (!(window.TeamCloud && TeamCloud.isLinked() && window.Access && Access.can('cloud.write'))) return true;
+  try {
+    if (!TeamCloud.signedIn()) await Drive.connect();
+    await TeamCloud.push('merge');
+    return true;
+  } catch (e) { return false; }
 }
 function memberLabel() {
   const p = Access.profile();
@@ -1133,9 +1148,11 @@ function memberModeDialog(onDone) {
           const opened = await shareForAreas(
             boxes.filter(b => b.checked).map(b => b.dataset.mod)
               .concat(cboxes.filter(b => b.checked).map(b => b.dataset.cmod)));
+          const sent = await pushShareChange();
           close();
           UI.toast(T('mem.saved'), 'success');
           if (opened) UI.toast(T('pol.opened').replace('{0}', opened), 'success');
+          if (!sent) UI.toast(T('mem.pushFailed'), 'error');
           App.applyMemberMode();
           if (onDone) onDone();
         } catch (e) {
@@ -1184,9 +1201,11 @@ function coachAreasDialog(teamId, name, onDone) {
         try {
           await Access.saveCoachAreas(teamId, boxes.filter(b => !b.checked).map(b => b.dataset.cmod));
           const opened = await shareForAreas(boxes.filter(b => b.checked).map(b => b.dataset.cmod));
+          const sent = await pushShareChange();
           close();
           UI.toast(T('mem.saved'), 'success');
           if (opened) UI.toast(T('pol.opened').replace('{0}', opened), 'success');
+          if (!sent) UI.toast(T('mem.pushFailed'), 'error');
           App.applyMemberMode();
           if (onDone) onDone();
         } catch (e) {
