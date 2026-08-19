@@ -414,11 +414,21 @@ const Drive = (() => {
     return found.slice().sort((a, b) => (b.modifiedTime || '').localeCompare(a.modifiedTime || ''));
   }
 
-  async function shareWith(fileId, email, role) {
-    return api('drive/v3/files/' + fileId + '/permissions?sendNotificationEmail=true', {
+  async function shareWith(fileId, email, role, notify) {
+    const qs = notify === false ? '' : '?sendNotificationEmail=true';
+    return api('drive/v3/files/' + fileId + '/permissions' + qs, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ type: 'user', role: role || 'writer', emailAddress: email })
     });
+  }
+
+  // The signed-in account's own address — used to grant IT write access on the
+  // shared files without asking the coach to type an e-mail nobody prompted
+  // them for. `about.get` works under drive.file scope, so no extra consent
+  // screen is needed for it.
+  async function whoAmI() {
+    const r = await api('drive/v3/about?fields=' + encodeURIComponent('user(emailAddress,displayName)'));
+    return (r && r.user) || null;
   }
 
   // "Anyone with the link may view". This is what lets a player read the shared
@@ -629,7 +639,7 @@ const Drive = (() => {
 
   return {
     getClientId, setClientId, normClientId, isConfigured, isConnected,
-    connect, disconnect, grantAccess,
+    connect, disconnect, grantAccess, whoAmI,
     backupNow, restoreNow, lastBackupAt, uploadBackup, downloadBackup,
     ensureTeamFolder, getTeamFolderId, setTeamFolderId, shareWith,
     channelName, ensureChannel, readChannel, updateChannel,

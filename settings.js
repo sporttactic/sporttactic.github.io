@@ -1521,10 +1521,18 @@ function cloudJoinDialog(onDone) {
           if (got) UI.toast(T('rk.joinedAs').replace('{0}', Access.label(got)), 'success');
           else if (Access.roleKeys()) UI.toast(T(pw ? 'rk.wrong' : 'rk.noneGiven'), 'error');
           else if (pw) UI.toast(T('rk.noKeys'), 'error');
-          // A staff word turns this into a writer locally, but Google Drive still
-          // needs this account to "open" the file once before it will let it
-          // save — said now, before the first sync ever tries and fails.
-          if (got && Access.tier(got) !== 'player') UI.toast(T('cloud.staffJoinedHint'), 'info');
+          // A staff word turns this into a writer locally; if Google is already
+          // connected, tell Drive itself right away instead of leaving this
+          // account stuck on the "anyone may view" fallback until the next
+          // sync. Not yet connected — the hint below covers it once they are.
+          if (got && Access.tier(got) !== 'player') {
+            if (window.Drive && Drive.isConnected() && window.TeamCloud && TeamCloud.ensureSelfWriteAccess) {
+              const granted = await TeamCloud.ensureSelfWriteAccess(true).catch(() => false);
+              UI.toast(T(granted ? 'cloud.writeUnlocked' : 'cloud.staffJoinedHint'), granted ? 'success' : 'info');
+            } else {
+              UI.toast(T('cloud.staffJoinedHint'), 'info');
+            }
+          }
           const rb = document.getElementById('roleBadge');
           if (rb) rb.textContent = T('role.' + Access.role());
           App.applyMemberMode();
@@ -1627,6 +1635,13 @@ async function offerDriveConnect() {
       // leaving the player on an empty screen until the timer comes round.
       TeamCloud.start();
       if (needed) await TeamCloud.pull('merge');
+      // A staff role password only proves this locally; Google Drive still has
+      // to be told this account may write, or an approved coach stays stuck on
+      // the "anyone may view" fallback even though the app already trusts them.
+      if (window.TeamCloud && TeamCloud.ensureSelfWriteAccess) {
+        const granted = await TeamCloud.ensureSelfWriteAccess(true).catch(() => false);
+        if (granted) UI.toast(T('cloud.writeUnlocked'), 'success');
+      }
     } catch (e) {
       UI.toast(T('cloud.connectFailed') + ' — ' + String((e && e.message) || e).slice(0, 160), 'error');
     }
@@ -2203,6 +2218,12 @@ Views.settings = async function (mount) {
     if (squad) UI.toast(T('cloud.squadAttached').replace('{0}', squad.name || ''), 'success');
     App.applyMemberMode();
     App.render();
+    // Already signed in to Google — tell Drive this account may write right
+    // away instead of waiting for the next sync to discover it can't.
+    if (Access.tier(got) !== 'player' && window.Drive && Drive.isConnected() && window.TeamCloud && TeamCloud.ensureSelfWriteAccess) {
+      const granted = await TeamCloud.ensureSelfWriteAccess(true).catch(() => false);
+      if (granted) UI.toast(T('cloud.writeUnlocked'), 'success');
+    }
     offerDriveConnect();
   });
   const openMsg = mount.querySelector('#openMessenger');

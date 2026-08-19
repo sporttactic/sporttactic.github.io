@@ -621,7 +621,13 @@ const TeamCloud = (() => {
         await setCfg({ lastErr: 'signin' });
         throw new Error('signin');
       }
-      if (mayWrite) await pushInternal('merge');
+      if (mayWrite) {
+        // A role password only proves this device is trusted locally; Drive
+        // itself still has to be told, or a genuinely approved coach stays
+        // stuck on the "anyone may view" fallback forever.
+        if (!isOwner) await ensureSelfWriteAccess().catch(() => {});
+        await pushInternal('merge');
+      }
       return got;
     });
   }
@@ -716,23 +722,70 @@ const TeamCloud = (() => {
     return pull('merge');
   }
 
+  // The manifest, every area file, and the team folder itself — everything a
+  // member's Drive permission needs to cover, gathered once so a grant (by
+  // e-mail invite, or by the account granting itself — see
+  // ensureSelfWriteAccess) never has to be repeated one file at a time as new
+  // areas appear.
+  async function allShareableFileIds(c) {
+    const fileIds = [c.fileId];
+    let manifest = null;
+    try { manifest = await readOne(c.fileId); } catch (e) { /* share what is known; a later call fills in the rest */ }
+    if (manifest && manifest.areas) Object.values(manifest.areas).forEach(a => { if (a && a.fileId) fileIds.push(a.fileId); });
+    if (manifest && Array.isArray(manifest.parts)) manifest.parts.forEach(p => { if (p && p.fileId) fileIds.push(p.fileId); });
+    const folderId = c.folderId || await Drive.getTeamFolderId();
+    if (folderId) fileIds.push(folderId);
+    return fileIds;
+  }
+
+  const SELF_SHARE_KEY = 'driveSelfShared'; // { email, fileId, at }
+  // A role password (see access.js claimRole) is the club's own say-so that a
+  // joining device is a genuine coach/admin, but Google Drive has never heard
+  // that: without a separate per-account invite, this account still only sees
+  // the "anyone with the link may view" fallback and every write 403s forever.
+  // The moment this account's own Google sign-in is live, it grants ITSELF
+  // writer access — the same thing an e-mail invite does — instead of leaving
+  // an approved coach stuck read-only until an admin invites them by hand.
+  async function ensureSelfWriteAccess(force) {
+    if (!window.Drive || !Drive.isConnected() || !Drive.whoAmI) return false;
+    const c = cfg();
+    if (!c.fileId || c.owner) return false;
+    if (!window.Access || Access.tier() === 'player') return false;
+
+    const rec = Store.find('settings', SELF_SHARE_KEY);
+    const prev = (rec && rec.value && typeof rec.value === 'object') ? rec.value : null;
+    // Already done for this file — skip the network round trip on every sync.
+    if (!force && prev && prev.fileId === c.fileId) return true;
+
+    let me = null;
+    try { me = await Drive.whoAmI(); } catch (e) { return false; }
+    const email = me && me.emailAddress;
+    if (!email) return false;
+
+    const dRole = Access.driveRole(Access.role());
+    const fileIds = await allShareableFileIds(c);
+    let ok = false;
+    for (const fid of fileIds) {
+      try { await Drive.shareWith(fid, email, dRole, false); ok = true; } catch (e) { /* keep trying the rest */ }
+    }
+    if (ok) {
+      await Store.setSetting(SELF_SHARE_KEY, { email, fileId: c.fileId, at: Date.now() });
+      // The Access page's member list is "who has access" — a coach who let
+      // themselves in with a role password belongs on it, not just an
+      // invisible grant nobody else on the team can see.
+      if (window.Access && Access.grant) {
+        try { await Access.grant({ email, name: me.displayName || '', role: Access.role() }); } catch (e) { /* not fatal */ }
+      }
+    }
+    return ok;
+  }
+
   // Invite members by email with appropriate Drive roles across folder, manifest & area files
   async function inviteMembers(list) {
     const c = cfg();
     if (!c.fileId) throw new Error('not-linked');
     const out = [];
-
-    let manifest = null;
-    try { manifest = await readOne(c.fileId); } catch (e) { /* ignore */ }
-    const fileIds = [c.fileId];
-    if (manifest && manifest.areas) {
-      Object.values(manifest.areas).forEach(a => { if (a && a.fileId) fileIds.push(a.fileId); });
-    }
-    if (manifest && Array.isArray(manifest.parts)) {
-      manifest.parts.forEach(p => { if (p && p.fileId) fileIds.push(p.fileId); });
-    }
-    const folderId = c.folderId || await Drive.getTeamFolderId();
-    if (folderId) fileIds.push(folderId);
+    const fileIds = await allShareableFileIds(c);
 
     for (const m of list || []) {
       const dRole = Access.driveRole(m.role);
@@ -810,7 +863,7 @@ const TeamCloud = (() => {
     AUTO_MINUTES, FILE_NAME, MANIFEST_NAME, AREA_MAP,
     cfg, setCfg, forget, isLinked, onChange, signedIn, canSyncQuietly, mayContribute, isBusy, isCoachSyncing,
     makeCode, readCode, parseTarget,
-    snapshot, pull, push, sync, grantAccess,
+    snapshot, pull, push, sync, grantAccess, ensureSelfWriteAccess,
     createShared, inviteMembers, join, listExisting, reconnectShared,
     start, stop, setAuto
   };
