@@ -433,14 +433,27 @@ const Store = (() => {
   // false and 0 are answers, not blanks — those stay.
   const isBlank = v => v === undefined || v === null || v === ''
     || (Array.isArray(v) && !v.length);
+  // Blob references sourced from IndexedDB can go stale (a phone reclaiming
+  // memory in the background is the usual trigger) — reading them then throws
+  // a bare browser NotFoundError ("the object can not be found here"), which
+  // used to take the ENTIRE sync down with it. One unreadable photo/thumbnail
+  // now just drops out of the pack instead of blocking every other row.
+  async function packBlob(v, asBuffer) {
+    try { return { __blob: 1, type: asBuffer ? '' : v.type, size: asBuffer ? v.byteLength : v.size, data: await blobToB64(asBuffer ? new Blob([v]) : v) }; }
+    catch (e) { return null; }
+  }
   async function pack(v) {
     if (v == null || typeof v !== 'object') return v;
-    if (v instanceof Blob) return { __blob: 1, type: v.type, size: v.size, data: await blobToB64(v) };
-    if (v instanceof ArrayBuffer) return { __blob: 1, type: '', size: v.byteLength, data: await blobToB64(new Blob([v])) };
+    if (v instanceof Blob) return await packBlob(v, false);
+    if (v instanceof ArrayBuffer) return await packBlob(v, true);
     if (v instanceof Date) return { __date: 1, iso: v.toISOString() };
     if (Array.isArray(v)) { const out = []; for (const x of v) out.push(await pack(x)); return out; }
     const out = {};
-    for (const k of Object.keys(v)) { if (!isBlank(v[k])) out[k] = await pack(v[k]); }
+    for (const k of Object.keys(v)) {
+      if (isBlank(v[k])) continue;
+      const packed = await pack(v[k]);
+      if (packed !== null) out[k] = packed;
+    }
     return out;
   }
   // Keys that are not data. JSON.parse happily produces an own "__proto__"

@@ -344,7 +344,7 @@ const App = (() => {
         UI.toast(T('cloud.granted'), 'success');
         if (retry) await retry();
       } catch (err) {
-        UI.toast(T('cloud.grantFailed') + ' — ' + String((err && err.message) || err).slice(0, 160), 'error');
+        UI.toast(T('cloud.grantFailed') + ' — ' + pickerErrText(err), 'error');
       }
     });
   }

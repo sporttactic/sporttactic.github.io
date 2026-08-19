@@ -161,18 +161,18 @@ const Drive = (() => {
     });
     return pickerLoading;
   }
-  // Resolves true once the named file (or folder) has been picked (and so is
-  // now reachable by this account), false if the coach closed the picker
-  // without choosing it. Picking a FOLDER grants drive.file access to every
-  // file already inside it for this account in one step — the manifest and
-  // every area file together — instead of one grant per file.
-  async function grantAccess(target, legacyFileName, legacyApiKey) {
-    // Back-compat: earlier callers passed (fileId, fileName, apiKey) directly.
-    const t = (target && typeof target === 'object' && !Array.isArray(target))
-      ? target
-      : { fileId: target, fileName: legacyFileName, apiKey: legacyApiKey };
-    await loadPicker();
-    const at = await ensureToken();
+  // Re-runs gapi's own picker module load without re-fetching api.js. A phone
+  // that suspended this tab in the background can leave the Picker's internal
+  // iframe state stale even though `google.picker` still exists, which is what
+  // throws the browser's own generic "the object can not be found here." — a
+  // fresh gapi.load usually re-establishes it without the coach ever seeing it.
+  function reloadPickerModule() {
+    return new Promise((resolve, reject) => {
+      try { window.gapi.load('picker', { callback: resolve, onerror: () => reject(new Error('picker-load-failed')) }); }
+      catch (e) { reject(e); }
+    });
+  }
+  function buildPicker(t, at) {
     return new Promise((resolve, reject) => {
       try {
         const wantFolder = !!t.folderId;
@@ -201,6 +201,27 @@ const Drive = (() => {
         builder.build().setVisible(true);
       } catch (e) { reject(e); }
     });
+  }
+  // Resolves true once the named file (or folder) has been picked (and so is
+  // now reachable by this account), false if the coach closed the picker
+  // without choosing it. Picking a FOLDER grants drive.file access to every
+  // file already inside it for this account in one step — the manifest and
+  // every area file together — instead of one grant per file.
+  async function grantAccess(target, legacyFileName, legacyApiKey) {
+    // Back-compat: earlier callers passed (fileId, fileName, apiKey) directly.
+    const t = (target && typeof target === 'object' && !Array.isArray(target))
+      ? target
+      : { fileId: target, fileName: legacyFileName, apiKey: legacyApiKey };
+    await loadPicker();
+    const at = await ensureToken();
+    try {
+      return await buildPicker(t, at);
+    } catch (e) {
+      // One silent recovery attempt (see reloadPickerModule) before giving up
+      // and letting the coach see it as a real failure.
+      try { await reloadPickerModule(); } catch (e2) { throw e; }
+      return await buildPicker(t, at);
+    }
   }
 
   function disconnect() {

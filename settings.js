@@ -460,6 +460,15 @@ function fmtWhen(ts) {
 // Sync stores a token rather than a sentence, so the wording follows the
 // language the coach is reading in right now.
 const CLOUD_ERR = { 'oversize': 'cloud.oversize', 'oversize-owner': 'cloud.oversizeOwner', 'signin': 'cloud.signinNeeded', 'sync-locked': 'cloud.syncInProgress', 'cancelled': 'cloud.grantCancelled' };
+// Google's own Picker widget can lose its internal iframe state after a phone
+// suspends the tab in the background — the browser's own generic legacy text
+// for that ("the object can not be found here") means nothing to a coach, so
+// it gets a real next step instead of the raw text.
+function pickerErrText(err) {
+  const s = String((err && err.message) || err || '');
+  if (/object can.?n?o?t? be found/i.test(s)) return T('cloud.pickerGlitch');
+  return s.slice(0, 160);
+}
 function cloudErrText(err) {
   if (CLOUD_ERR[err]) return T(CLOUD_ERR[err]);
   const s = String(err || '');
@@ -2004,7 +2013,7 @@ Views.settings = async function (mount) {
             if (ok) return busyRun(sel, fn, okKey, reload);
             UI.toast(T('cloud.grantCancelled'), 'error');
           } catch (err) {
-            UI.toast(T('cloud.grantFailed') + ' — ' + String((err && err.message) || err).slice(0, 160), 'error');
+            UI.toast(T('cloud.grantFailed') + ' — ' + pickerErrText(err), 'error');
           }
         });
       }
