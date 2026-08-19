@@ -1270,8 +1270,8 @@ async function roleKeysDialog(onDone) {
   const stale = Access.wordsStale();
   const code = TeamCloud.makeCode();
   const link = location.origin + location.pathname;
-  // Two words per squad — one for its coaches, one for its players — then the
-  // three club-wide staff words.
+  // One word per squad for its coach, one for its players — a device only
+  // ever becomes Coach or Player this way, never a club-wide staff role.
   const teamRows = [];
   if (keys) {
     Object.keys(keys.teams || {}).forEach(id => {
@@ -1288,9 +1288,7 @@ async function roleKeysDialog(onDone) {
       });
     });
   }
-  const rows = teamRows.concat(Access.STAFF_ROLES.map(r => ({
-    key: r, role: r, label: Access.label(r), sub: T('rk.for' + r.replace(/\s/g, ''))
-  })));
+  const rows = teamRows;
   const row = r => `<div class="pol-row" data-key="${UI.esc(r.key)}">
     <span class="pol-name">${UI.esc(r.label)}
       <span class="share-n">${UI.esc(r.sub)}</span></span>
@@ -1304,13 +1302,10 @@ async function roleKeysDialog(onDone) {
       : `<span class="hint">${UI.esc(T(stale ? 'rk.stale' : made ? 'rk.elsewhere' : 'rk.none'))}</span>`}
     </span>
   </div>`;
-  // Each squad's word goes to that squad's own people; a club-wide staff word
-  // to those who already hold that role on the access list.
-  const mailTo = r => (r.teamId
-    ? (r.role === 'Coach'
-      ? Store.all('coaches').filter(c => c.teamId === r.teamId).map(c => c.email)
-      : Store.all('players').filter(p => p.teamId === r.teamId).map(p => p.email))
-    : Access.members().filter(x => x.role === r.role).map(x => x.email)).filter(Boolean).join(',');
+  // Each squad's word goes to that squad's own people.
+  const mailTo = r => (r.role === 'Coach'
+    ? Store.all('coaches').filter(c => c.teamId === r.teamId).map(c => c.email)
+    : Store.all('players').filter(p => p.teamId === r.teamId).map(p => p.email)).filter(Boolean).join(',');
   // Drive's write permission belongs to whoever owns the file; a staff word
   // only proves this device is trusted locally. This is where that gap
   // actually gets closed: any device with team write access can spin up its
@@ -1719,7 +1714,7 @@ Views.settings = async function (mount) {
       <button class="btn primary" id="unlockBtn">🔓 ${T('lock.unlock')}</button>`) : ''}
     ${readMode ? '' : menuCard()}
     ${UI.acc('setRole', T('settings.roleAccess'), `
-      <label class="field"><span>${T('settings.activeRole')}</span><select id="s_role" ${readMode ? 'disabled' : ''}>${['Super Admin', 'Club Admin', 'Coach', 'Analyst', 'Player'].map(r => `<option value="${r}" ${r === role ? 'selected' : ''}>${T('role.' + r)}</option>`).join('')}</select></label>
+      <label class="field"><span>${T('settings.activeRole')}</span><select id="s_role" ${readMode ? 'disabled' : ''}>${(Access.following() ? ['Coach', 'Player'] : ['Super Admin', 'Club Admin', 'Coach', 'Analyst', 'Player']).map(r => `<option value="${r}" ${r === role ? 'selected' : ''}>${T('role.' + r)}</option>`).join('')}</select></label>
       <p style="color:var(--muted);font-size:12px">${readMode ? T('mem.roleLocked') : T('settings.roleHint')}</p>
       ${Access.roleKeys() && Access.following() ? `<label class="field"><span>${T('rk.field')}</span>
         <span class="row" style="flex:0;gap:6px;align-items:center">

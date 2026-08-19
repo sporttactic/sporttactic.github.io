@@ -243,13 +243,12 @@ const Access = (() => {
   // what that device is allowed to BE. Anybody holding the code can read the
   // file, so only a salted PBKDF2 hash travels in it — the words themselves stay
   // on the device that made them, which is the one that hands them out.
-  // The three staff words are club-wide; a squad has two of its own — one for
-  // its players and one for its coaches — so whoever joins with either sees
-  // that squad and never the others.
+  // A squad has two words of its own — one for its players and one for its
+  // coaches — so whoever joins with either sees that squad and never the
+  // others.
   const KEYS_KEY = 'roleKeys';          // shared: { v, set, salt, iter, roles, teams }
   const WORDS_KEY = 'roleKeyWords';     // this device only: { set, words }
   const CLAIM_KEY = 'roleClaim';        // this device only: which word it showed
-  const STAFF_ROLES = ['Coach', 'Club Admin', 'Super Admin'];
   const KEY_ITER = 310000;
   // No 0/O, 1/I/L — a password read off a screen and typed on a phone.
   const KEY_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
@@ -294,10 +293,6 @@ const Access = (() => {
     const salt = crypto.getRandomValues(new Uint8Array(16));
     const set = b64(crypto.getRandomValues(new Uint8Array(6)));
     const words = {}, roles = {}, teams = {};
-    for (const r of STAFF_ROLES) {
-      words[r] = makeWord();
-      roles[r] = await keyHash(words[r], salt, KEY_ITER);
-    }
     // Every squad in the club, whatever sport it plays under: one word for its
     // players, one for the coaches the club wants kept to that squad.
     for (const t of Store.all('teams')) {
@@ -387,16 +382,13 @@ const Access = (() => {
     let hit = '', teamId = '';
     if (rec && w && cryptoOk()) {
       const hash = await keyHash(w, unb64(rec.salt), +rec.iter || KEY_ITER);
-      hit = STAFF_ROLES.find(r => rec.roles[r] === hash) || '';
-      if (!hit) {
-        const ids = Object.keys(rec.teams || {});
-        // A squad's own coach word: everything a coach may do, on that squad.
-        const c = ids.find(id => rec.teams[id] && rec.teams[id].coachHash === hash);
-        if (c) { hit = 'Coach'; teamId = c; }
-        else {
-          const t = ids.find(id => rec.teams[id] && rec.teams[id].hash === hash);
-          if (t) { hit = 'Player'; teamId = t; }
-        }
+      const ids = Object.keys(rec.teams || {});
+      // A squad's own coach word: everything a coach may do, on that squad.
+      const c = ids.find(id => rec.teams[id] && rec.teams[id].coachHash === hash);
+      if (c) { hit = 'Coach'; teamId = c; }
+      else {
+        const t = ids.find(id => rec.teams[id] && rec.teams[id].hash === hash);
+        if (t) { hit = 'Player'; teamId = t; }
       }
       // A set made before player words were per squad had one for the club.
       if (!hit && rec.roles.Player === hash) hit = 'Player';
@@ -461,7 +453,7 @@ const Access = (() => {
   return {
     ROLES, GRANTABLE, normRole, role, tier, can, isAdmin, isStaff, driveRole, label,
     members, findMember, saveMembers, grant, revoke, markInvited, suggestions, normEmail,
-    OPEN_ROUTES, MEMBER_STAMP, STAFF_ROLES,
+    OPEN_ROUTES, MEMBER_STAMP,
     profile, saveProfile, memberCopy, following, readMode, hiddenModules, moduleOpen, blocks, hidesEvents,
     coachHidden, saveCoachAreas,
     roleKeys, roleKeyWords, newRoleKeys, ensureTeamKeys, pruneTeamKeys, claimRole, claimedRole, claimedTeam: teamLock,
