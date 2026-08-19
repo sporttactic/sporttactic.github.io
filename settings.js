@@ -1566,16 +1566,20 @@ function cloudJoinDialog(onDone) {
           else if (pw) UI.toast(T('rk.noKeys'), 'error');
           // Google Drive's write permission belongs to whoever owns the file —
           // a staff word only proves this device is trusted locally, so a
-          // coach who wants to write makes their OWN database instead
-          // (Settings → Cloud → Create my own database).
-          if (got && Access.tier(got) !== 'player') UI.toast(T('cloud.staffJoinedHint'), 'info');
+          // coach who wants to write gets offered their OWN database right
+          // away, seeded with what was just pulled above, instead of a hint
+          // to go find the button later.
+          const offeredOwnDb = got && Access.tier(got) !== 'player' && offerOwnDb(onDone, 'cloud.joinOwnDbAsk');
+          if (got && Access.tier(got) !== 'player' && !offeredOwnDb) UI.toast(T('cloud.staffJoinedHint'), 'info');
           const rb = document.getElementById('roleBadge');
           if (rb) rb.textContent = T('role.' + Access.role());
           App.applyMemberMode();
           const squad = await attachJoinedSquad();
           if (squad) UI.toast(T('cloud.squadAttached').replace('{0}', squad.name || ''), 'success');
           if (onDone) onDone();
-          offerDriveConnect();
+          // Skip the separate "connect Drive?" prompt when the own-database
+          // offer above already covers it (cloudCreateDialog connects itself).
+          if (!offeredOwnDb) offerDriveConnect();
         } catch (e) {
           state.textContent = cloudJoinExplain(e);
           // A club that shares with named people instead of a link hands out a
@@ -1688,12 +1692,14 @@ async function offerDriveConnect() {
 // that from this side, so this offers the one thing that actually works: a
 // database of this device's own, seeded with whatever data already made it
 // here, instead of leaving the coach stuck on a dead-end error every sync.
-function offerOwnDb(onDone) {
+// askKey lets a caller swap in wording that fits its own moment (e.g. right
+// after joining by code) instead of the default read-failure phrasing.
+function offerOwnDb(onDone, askKey) {
   if (!window.TeamCloud || !window.Access) return false;
   const c = TeamCloud.cfg();
   if (!c.fileId || c.owner) return false;
   if (Access.tier() === 'player' || !Access.can('cloud.write') || !Access.autoWriteEnabled(Access.role())) return false;
-  UI.confirm(T('cloud.needsOwnDbAsk'), () => cloudCreateDialog(onDone, { ownCopy: true }));
+  UI.confirm(T(askKey || 'cloud.needsOwnDbAsk'), () => cloudCreateDialog(onDone, { ownCopy: true }));
   return true;
 }
 
