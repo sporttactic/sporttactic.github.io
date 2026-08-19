@@ -757,7 +757,7 @@ const TeamCloud = (() => {
     return fileIds;
   }
 
-  const SELF_SHARE_KEY = 'driveSelfShared'; // { email, fileId, at }
+  const SELF_SHARE_KEY = 'driveSelfShared'; // { email, fileId, granted: [fileIds], at, name }
   // A role password (see access.js claimRole) is the club's own say-so that a
   // joining device is a genuine coach/admin, but Google Drive has never heard
   // that: without a separate per-account invite, this account still only sees
@@ -766,7 +766,7 @@ const TeamCloud = (() => {
   // writer access — the same thing an e-mail invite does — instead of leaving
   // an approved coach stuck read-only until an admin invites them by hand.
   async function ensureSelfWriteAccess(force) {
-    if (!window.Drive || !Drive.isConnected() || !Drive.whoAmI) return false;
+    if (!window.Drive || !Drive.isConnected()) return false;
     const c = cfg();
     if (!c.fileId || c.owner) return false;
     if (!window.Access || Access.tier() === 'player') return false;
@@ -775,31 +775,49 @@ const TeamCloud = (() => {
     if (Access.autoWriteEnabled && !Access.autoWriteEnabled(Access.role())) return false;
 
     const rec = Store.find('settings', SELF_SHARE_KEY);
-    const prev = (rec && rec.value && typeof rec.value === 'object') ? rec.value : null;
-    // Already done for this file — skip the network round trip on every sync.
-    if (!force && prev && prev.fileId === c.fileId) return true;
-
-    let me = null;
-    try { me = await Drive.whoAmI(); } catch (e) { return false; }
-    const email = me && me.emailAddress;
+    const prev = (rec && rec.value && typeof rec.value === 'object' && rec.value.fileId === c.fileId) ? rec.value : null;
+    // The e-mail rarely changes between syncs, so it is reused from last time
+    // instead of asking Drive again on every single one — only a fresh grant
+    // (force) or a device that has never done this before pays for that call.
+    let email = (!force && prev && prev.email) ? prev.email : '';
+    let name = (prev && prev.name) || '';
+    if (!email) {
+      if (!Drive.whoAmI) return false;
+      let me = null;
+      try { me = await Drive.whoAmI(); } catch (e) { return false; }
+      email = me && me.emailAddress;
+      name = (me && me.displayName) || name;
+    }
     if (!email) return false;
 
+    // What this account has ALREADY been made a writer on, so a file created
+    // after the first grant (a new area that only just got its first content)
+    // still gets covered on the next sync instead of being silently skipped
+    // forever just because SOME file succeeded once before.
+    const already = new Set((prev && prev.email === email && Array.isArray(prev.granted)) ? prev.granted : []);
     const dRole = Access.driveRole(Access.role());
     const fileIds = await allShareableFileIds(c);
-    let ok = false;
-    for (const fid of fileIds) {
-      try { await Drive.shareWith(fid, email, dRole, false); ok = true; } catch (e) { /* keep trying the rest */ }
+    const pending = force ? fileIds : fileIds.filter(fid => !already.has(fid));
+    if (!pending.length) return true;
+
+    let anyOk = false;
+    for (const fid of pending) {
+      try { await Drive.shareWith(fid, email, dRole, false); already.add(fid); anyOk = true; }
+      catch (e) { /* not yet writable; retried again next time */ }
     }
-    if (ok) {
-      await Store.setSetting(SELF_SHARE_KEY, { email, fileId: c.fileId, at: Date.now() });
+    if (anyOk) {
+      await Store.setSetting(SELF_SHARE_KEY, { email, fileId: c.fileId, granted: [...already], at: Date.now(), name });
       // The Access page's member list is "who has access" — a coach who let
       // themselves in with a role password belongs on it, not just an
       // invisible grant nobody else on the team can see.
       if (window.Access && Access.grant) {
-        try { await Access.grant({ email, name: me.displayName || '', role: Access.role() }); } catch (e) { /* not fatal */ }
+        try { await Access.grant({ email, name, role: Access.role() }); } catch (e) { /* not fatal */ }
       }
     }
-    return ok;
+    // True only once every file this device currently knows about is covered —
+    // a caller can use that to stop nagging, while a partial grant keeps
+    // quietly finishing itself on the syncs after this one.
+    return fileIds.every(fid => already.has(fid));
   }
 
   // Invite members by email with appropriate Drive roles across folder, manifest & area files
@@ -877,8 +895,15 @@ const TeamCloud = (() => {
     const c = cfg();
     if (!c.fileId) throw new Error('not-linked');
     const folderId = c.folderId || await Drive.getTeamFolderId();
-    if (folderId) return Drive.grantAccess({ folderId, folderName: c.teamName || '', apiKey: c.apiKey });
-    return Drive.grantAccess({ fileId: c.fileId, fileName: MANIFEST_NAME, apiKey: c.apiKey });
+    const picked = folderId
+      ? await Drive.grantAccess({ folderId, folderName: c.teamName || '', apiKey: c.apiKey })
+      : await Drive.grantAccess({ fileId: c.fileId, fileName: MANIFEST_NAME, apiKey: c.apiKey });
+    // Opening the folder/file only fixes drive.file scope VISIBILITY; Drive's
+    // own permission on it is still whatever it was before (usually just the
+    // "anyone may view" fallback). Without this, a coach could press this
+    // button, see it succeed, and still get refused on the very next write.
+    if (picked) await ensureSelfWriteAccess(true).catch(() => false);
+    return picked;
   }
 
   return {

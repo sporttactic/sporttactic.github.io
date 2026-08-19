@@ -604,11 +604,15 @@ function wizExplain(err) {
 // instead of the raw fetch/HTTP error, which they cannot act on.
 function cloudJoinExplain(err) {
   const s = String((err && err.message) || err || '');
-  if (/timeout/i.test(s)) return T('cloud.joinFailedTimeout');
-  if (/Failed to fetch|NetworkError|offline/i.test(s)) return T('cloud.joinFailedNet');
-  if (/bad-api-key|developer key/i.test(s)) return T('cloud.joinFailedBadKey');
-  if (/HTTP 403/.test(s)) return T('cloud.joinFailedForbidden');
-  if (/HTTP 404/.test(s)) return T('cloud.joinFailedNotFound');
+  // The friendly sentence is the headline, but the raw text rides along
+  // (truncated) so a repeat report actually says what Google/the browser sent
+  // back, instead of the same guess every time.
+  const detail = s ? ' (' + s.slice(0, 140) + ')' : '';
+  if (/timeout/i.test(s)) return T('cloud.joinFailedTimeout') + detail;
+  if (/Failed to fetch|NetworkError|offline/i.test(s)) return T('cloud.joinFailedNet') + detail;
+  if (/bad-api-key|developer key/i.test(s)) return T('cloud.joinFailedBadKey') + detail;
+  if (/HTTP 403/.test(s)) return T('cloud.joinFailedForbidden') + detail;
+  if (/HTTP 404/.test(s)) return T('cloud.joinFailedNotFound') + detail;
   if (/file too large/i.test(s)) return T('cloud.oversize');
   return T('cloud.joinFailed') + ' ' + s.slice(0, 180);
 }
@@ -1596,12 +1600,18 @@ function cloudReconnectDialog(onDone) {
       <div id="rc_list"><p class="hint">${UI.esc(T('cloud.working'))}</p></div>
       <p class="hint" id="rc_state"></p>`,
     footer: `<button class="btn ghost" data-close2>${T('common.cancel')}</button>
+      <button class="btn" data-join>${UI.esc(T('cloud.joinBtn'))}</button>
       <button class="btn primary" data-go disabled>${UI.esc(T('cloud.reconnectBtn'))}</button>`,
     onOpen: async (m, close) => {
       const list = m.querySelector('#rc_list');
       const state = m.querySelector('#rc_state');
       const go = m.querySelector('[data-go]');
       m.querySelector('[data-close2]').onclick = close;
+      // Reconnect can only ever find a database THIS Google account made
+      // itself (see the comment above) — a coach handed a team code by
+      // somebody else needs Join, not this, so it is one click away instead
+      // of a dead end.
+      m.querySelector('[data-join]').onclick = () => { close(); cloudJoinDialog(onDone); };
       try {
         state0.folders = await TeamCloud.listExisting();
       } catch (e) {
