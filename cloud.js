@@ -265,6 +265,7 @@ const TeamCloud = (() => {
     // 1. Modular Multi-Area Database (format 2)
     if (head.areas && typeof head.areas === 'object') {
       const areas = head.areas;
+      let firstDenied = null;
       for (const [areaKey, info] of Object.entries(areas)) {
         if (!info || !info.fileId) continue;
         try {
@@ -274,8 +275,16 @@ const TeamCloud = (() => {
           }
         } catch (err) {
           if (!c.apiKey && !signedIn()) throw err;
+          // Signed in but this account was never "opened" the area file (see
+          // grantAccess): keep pulling whatever other areas ARE readable
+          // instead of blanking the whole sync out. The flag rides along on
+          // the returned doc (rather than throwing) so the data gathered so
+          // far still gets applied, and the caller can offer the one-time
+          // grant on top of it instead of the pull coming back empty-handed.
+          if (!firstDenied && isForbidden(err) && !c.owner) firstDenied = err;
         }
       }
+      if (firstDenied) head._grantNeeded = firstDenied;
       return head;
     }
 
@@ -476,12 +485,15 @@ const TeamCloud = (() => {
   }
 
   // Internal pull implementation (called within runExclusive)
-  // 403/401 from Drive on a non-owner almost always means this Google account
-  // has never "opened" the file yet — the one-time picker grant fixes it. Flagging
-  // it here means every caller (the top bar, the settings page, the silent
-  // background timer) can offer that fix, not only whichever one happened to
-  // trigger the request.
-  const isForbidden = e => /Drive API 40[13]/.test(msg(e));
+  // 401/403/404 from Drive on a non-owner almost always means this Google account
+  // has never "opened" the file yet — the one-time picker grant fixes it. A file
+  // this account's own OAuth grant has never heard of comes back as a 404
+  // ("File not found"), not a 403, under drive.file scope — so both are treated
+  // the same way. Flagging it here means every caller (the top bar, the settings
+  // page, the silent background timer) can offer that fix, not only whichever
+  // one happened to trigger the request. Both `api()` ("Drive API nnn") and
+  // `fetchJson()` ("HTTP nnn", used by downloadJson/publicDownload) are matched.
+  const isForbidden = e => /(?:Drive API|HTTP) 40[134]/.test(msg(e));
   function needsGrant(e) { return isForbidden(e) && !cfg().owner; }
 
   async function pullInternal(mode) {
@@ -489,7 +501,11 @@ const TeamCloud = (() => {
     try {
       const doc = await readRemote();
       got = await applyDoc(doc, mode);
-      await setCfg({ lastPullAt: Date.now(), lastErr: '' });
+      // Some areas may have come back short (see readRemote) — apply what
+      // landed, then still say so, instead of the pull silently reporting
+      // success while quietly missing data every time.
+      forbidden = !!doc._grantNeeded;
+      await setCfg({ lastPullAt: Date.now(), lastErr: forbidden ? msg(doc._grantNeeded) : '' });
       if (revoked(doc)) { await cutOff(); got = 0; return 0; }
       return got;
     } catch (e) {
@@ -505,11 +521,17 @@ const TeamCloud = (() => {
     if (roleTier === 'player') throw new Error('not-allowed');
     if (!Access.can('cloud.write') && !mayContribute()) throw new Error('not-allowed');
 
+    let forbidden = false;
     try {
       let doc = await snapshot();
       let remote = null;
       try {
         remote = await readRemote({ forWrite: true });
+        // Some areas may have come back unreadable for this account (see
+        // readRemote) — the push still goes ahead with whatever did load,
+        // but the grant offer must still reach the coach, or it silently
+        // never picks up the rest of the team's data.
+        forbidden = !!(remote && remote._grantNeeded);
       } catch (e) {
         if (!e || !e.oversize || !cfg().owner) throw e;
         mode = 'replace';
@@ -554,12 +576,13 @@ const TeamCloud = (() => {
       }
       doc.data = Privacy.keepTeams(doc.data, doc.policy);
       await writeRemote(doc);
-      await setCfg({ lastPushAt: Date.now(), lastErr: '' });
+      await setCfg({ lastPushAt: Date.now(), lastErr: forbidden ? msg(remote._grantNeeded) : '' });
       return true;
     } catch (e) {
+      forbidden = needsGrant(e);
       await setCfg({ lastErr: e && e.oversize ? (cfg().owner ? 'oversize-owner' : 'oversize') : msg(e) });
-      throw Object.assign(e, { needsGrant: needsGrant(e) });
-    } finally { emit(); }
+      throw Object.assign(e, { needsGrant: forbidden });
+    } finally { emit({ needsGrant: forbidden }); }
   }
 
   // Public pull & push wrapped in runExclusive to prevent busy errors
@@ -766,15 +789,21 @@ const TeamCloud = (() => {
     start();
   }
 
-  // For every account except the one that created the file: drive.file scope
-  // never heard of this fileId until it is "opened" once through Google's own
+  // For every account except the one that created the file(s): drive.file scope
+  // never heard of a fileId until it is "opened" once through Google's own
   // picker, which is what actually turns a Drive-side write permission into
-  // one this app can use. Owners never need it — they created the file.
+  // one this app can use. Owners never need it — they created the files.
+  // Picking the shared team FOLDER rather than one file at a time grants this
+  // account drive.file access to every file already inside it — the manifest
+  // AND every area file — in a single step, so an invited coach never has to
+  // repeat the grant per area as new ones are created.
   async function grantAccess() {
     if (!window.Drive || !Drive.grantAccess) throw new Error('not-supported');
     const c = cfg();
     if (!c.fileId) throw new Error('not-linked');
-    return Drive.grantAccess(c.fileId, MANIFEST_NAME, c.apiKey);
+    const folderId = c.folderId || await Drive.getTeamFolderId();
+    if (folderId) return Drive.grantAccess({ folderId, folderName: c.teamName || '', apiKey: c.apiKey });
+    return Drive.grantAccess({ fileId: c.fileId, fileName: MANIFEST_NAME, apiKey: c.apiKey });
   }
 
   return {

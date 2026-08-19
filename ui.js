@@ -90,6 +90,9 @@ const UI = (() => {
       if (detachFs) detachFs();
       host.classList.add('hidden'); host.innerHTML = ''; host.removeAttribute('data-locked');
       if (host.parentNode !== homeParent) homeParent.appendChild(host); // restore original position
+      // Lets anything waiting for the dialog to clear (e.g. the update popup
+      // that was deferred while this one was open) know it can try again.
+      document.dispatchEvent(new CustomEvent('modalclosed'));
     };
     host.onclick = null;
     if (onOpen) onOpen(m, close);

@@ -469,9 +469,11 @@ function cloudErrText(err) {
   if (/Failed to fetch|NetworkError|ERR_INTERNET_DISCONNECTED/i.test(s)) return T('cloud.syncFailedNet');
   if (/bad-api-key|developer key/i.test(s)) return T('cloud.badApiKey');
   // A role password only decides what this device is ALLOWED to try; Google Drive
-  // still refuses the actual write until the owner has invited this account by
-  // e-mail, so a 403 here means "ask to be invited", not "something is broken".
-  if (/Drive API 40[13]/.test(s)) return T('cloud.writeForbidden');
+  // still refuses the actual write until this account has either been invited by
+  // e-mail or "opened" the shared file/folder once (see grantAccess) — a file
+  // drive.file scope has never heard of comes back 404, not just 403/401 — so
+  // a raw permission/network error here means "ask to be invited", not "something is broken".
+  if (/(?:Drive API|HTTP) 40[134]/.test(s)) return T('cloud.writeForbidden');
   return err;
 }
 
@@ -1995,7 +1997,7 @@ Views.settings = async function (mount) {
       // account has never "opened" the file in Google's own eyes yet — offer
       // the one-time picker grant right here and retry the same action once it
       // succeeds, instead of leaving the coach stuck on a dead-end error.
-      if (/Drive API 40[13]/.test(s) && window.TeamCloud && !TeamCloud.cfg().owner && window.Drive && window.Drive.grantAccess) {
+      if (/(?:Drive API|HTTP) 40[134]/.test(s) && window.TeamCloud && !TeamCloud.cfg().owner && window.Drive && window.Drive.grantAccess) {
         UI.confirm(T('cloud.grantAsk'), async () => {
           try {
             const ok = await TeamCloud.grantAccess();

@@ -297,15 +297,15 @@ Produce video clips.">
   <!-- Loads first: beforeinstallprompt can fire the moment the page is
        interactive, and an event that is not caught cannot be asked for again. -->
   <script src="install.js?v=1"></script>
-  <script src="i18n.js?v=160"></script>
+  <script src="i18n.js?v=161"></script>
   <script src="sports.js?v=20"></script>
   <script src="playbook.js?v=12"></script>
   <script src="store.js?v=35"></script>
-  <script src="ui.js?v=37"></script>
+  <script src="ui.js?v=38"></script>
   <script src="access.js?v=22"></script>
   <script src="privacy.js?v=8"></script>
-  <script src="drive.js?v=11"></script>
-  <script src="cloud.js?v=24"></script>
+  <script src="drive.js?v=12"></script>
+  <script src="cloud.js?v=25"></script>
   <script src="mail.js?v=12"></script>
   <script src="ai.js?v=12"></script>
   <script src="dashboard.js?v=18"></script>
@@ -325,7 +325,7 @@ Produce video clips.">
   <script src="exercises.js?v=33"></script>
   <script src="opponents.js?v=20"></script>
   <script src="reports.js?v=23"></script>
-  <script src="settings.js?v=97"></script>
+  <script src="settings.js?v=98"></script>
   <script src="backup.js?v=2"></script>
   <script src="messenger.js?v=18"></script>
   <script src="app.js?v=45"></script>
@@ -341,19 +341,44 @@ Produce video clips.">
       if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
         // A new worker claims the page the moment it activates, but the scripts
         // this page already parsed stay old — which is how a copy ends up
-        // running half the new build and half the previous one. So apply it:
-        // reload once, unless a dialog is open and would lose what is typed in it.
+        // running half the new build and half the previous one. Everybody who
+        // has the app open — coach or player — gets an explicit popup instead
+        // of the page reloading itself under their hands mid-edit.
         var hadController = !!navigator.serviceWorker.controller;
         var reloading = false;
+        var pendingReload = false;
+        function askReload() {
+          var host = document.getElementById('modalHost');
+          // A dialog already open (e.g. mid-edit) must not be torn down to make
+          // room for this one — it is asked again once that dialog closes.
+          if (host && !host.classList.contains('hidden')) { pendingReload = true; return; }
+          if (window.UI && UI.modal) {
+            UI.modal({
+              title: tr('update.title', 'Update available'),
+              body: '<p>' + tr('update.body', 'A new version of the app is ready. Reload now to get the latest features and fixes.') + '</p>',
+              footer: '<button class="btn ghost" data-later>' + tr('update.later', 'Later') + '</button>'
+                + '<button class="btn primary" data-now>' + tr('update.now', 'Reload now') + '</button>',
+              onOpen: function (m, close) {
+                m.querySelector('[data-later]').onclick = close;
+                m.querySelector('[data-now]').onclick = function () {
+                  close(); reloading = true; location.reload();
+                };
+              }
+            });
+          } else {
+            say('footer.updateReady', 'Update installed — reload to apply');
+          }
+        }
         navigator.serviceWorker.addEventListener('controllerchange', function () {
           if (!hadController || reloading) return;
-          var host = document.getElementById('modalHost');
-          if (host && !host.classList.contains('hidden')) {
-            say('footer.updateReady', 'Update installed — reload to apply');
-            return;
-          }
-          reloading = true;
-          location.reload();
+          askReload();
+        });
+        // A dialog that was open when the update landed gets asked as soon as
+        // it closes, instead of the offer being lost the moment it was busy.
+        document.addEventListener('modalclosed', function () {
+          if (!pendingReload || reloading) return;
+          pendingReload = false;
+          askReload();
         });
         window.addEventListener('load', function () {
           navigator.serviceWorker.register('sw.js', { scope: './' }).then(function (reg) {

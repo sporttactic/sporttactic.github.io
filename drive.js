@@ -161,18 +161,32 @@ const Drive = (() => {
     });
     return pickerLoading;
   }
-  // Resolves true once the named file has been picked (and so is now reachable
-  // by this account), false if the coach closed the picker without choosing it.
-  async function grantAccess(fileId, fileName, apiKey) {
+  // Resolves true once the named file (or folder) has been picked (and so is
+  // now reachable by this account), false if the coach closed the picker
+  // without choosing it. Picking a FOLDER grants drive.file access to every
+  // file already inside it for this account in one step — the manifest and
+  // every area file together — instead of one grant per file.
+  async function grantAccess(target, legacyFileName, legacyApiKey) {
+    // Back-compat: earlier callers passed (fileId, fileName, apiKey) directly.
+    const t = (target && typeof target === 'object' && !Array.isArray(target))
+      ? target
+      : { fileId: target, fileName: legacyFileName, apiKey: legacyApiKey };
     await loadPicker();
     const at = await ensureToken();
     return new Promise((resolve, reject) => {
       try {
-        const view = new google.picker.DocsView(google.picker.ViewId.DOCS)
-          .setOwnedByMe(false)
-          .setIncludeFolders(true)
-          .setSelectFolderEnabled(false);
-        if (fileName) view.setQuery(fileName);
+        const wantFolder = !!t.folderId;
+        const view = wantFolder
+          ? new google.picker.DocsView(google.picker.ViewId.FOLDERS)
+              .setSelectFolderEnabled(true)
+              .setIncludeFolders(true)
+              .setOwnedByMe(false)
+          : new google.picker.DocsView(google.picker.ViewId.DOCS)
+              .setOwnedByMe(false)
+              .setIncludeFolders(true)
+              .setSelectFolderEnabled(false);
+        const query = wantFolder ? t.folderName : t.fileName;
+        if (query) view.setQuery(query);
         const builder = new google.picker.PickerBuilder()
           .addView(view)
           .setOAuthToken(at)
@@ -183,7 +197,7 @@ const Drive = (() => {
         // An OAuth token alone is enough to browse this account's own files;
         // a key that does not even look right would only make Google refuse
         // the whole picker instead of just ignoring it.
-        if (apiKey && API_KEY_RE.test(apiKey.trim())) builder.setDeveloperKey(apiKey.trim());
+        if (t.apiKey && API_KEY_RE.test(t.apiKey.trim())) builder.setDeveloperKey(t.apiKey.trim());
         builder.build().setVisible(true);
       } catch (e) { reject(e); }
     });
