@@ -15,8 +15,30 @@ const App = (() => {
   const LIVE_ROUTES = ['scouting', 'tactics', 'video', 'messenger'];
   let menuHidden = [];
   // The background sync only ever needs to say "you must grant access" once
-  // per session; every tick after that would just repeat the same dialog.
+  // per session — but a session is every launch of the PWA, and a coach opens
+  // and closes it constantly, so an in-memory flag alone still repeats the
+  // same confirm dialog most times they open the app. This persists across
+  // launches (per file, so switching teams still asks once) and only lets it
+  // interrupt again after a full day, instead of on every sync in between.
   let grantNagged = false;
+  const GRANT_NAG_KEY = 'stx_grant_nag';
+  const GRANT_NAG_COOLDOWN = 24 * 60 * 60 * 1000;
+  function grantNagState() {
+    try { return JSON.parse(localStorage.getItem(GRANT_NAG_KEY) || '{}') || {}; } catch (e) { return {}; }
+  }
+  function shouldNagGrant(fileId) {
+    if (!fileId) return true;
+    const at = grantNagState()[fileId];
+    return !at || (Date.now() - at) > GRANT_NAG_COOLDOWN;
+  }
+  function markGrantNagged(fileId) {
+    if (!fileId) return;
+    try {
+      const st = grantNagState();
+      st[fileId] = Date.now();
+      localStorage.setItem(GRANT_NAG_KEY, JSON.stringify(st));
+    } catch (e) { /* private mode */ }
+  }
   const menuOff = r => ALWAYS_ON.indexOf(r) < 0 && menuHidden.indexOf(r) >= 0;
   // A copy made with a team code shows what the coach left in its profile, on
   // top of whatever this device hid for itself.
@@ -364,6 +386,9 @@ const App = (() => {
       const got = await TeamCloud.sync();
       if (!got) UI.toast(T('cloud.upToDate'), 'success');
     } catch (e) {
+      // A direct click gets a direct answer every time, unlike the passive
+      // background listener (see shouldNagGrant) — this is the coach asking,
+      // not the app interrupting them unprompted.
       if (e && e.needsGrant) { offerGrant(runTopSync); return; }
       const key = e && e.oversize ? (TeamCloud.cfg().owner ? 'cloud.oversizeOwner' : 'cloud.oversize')
         : (e && e.message === 'signin') ? 'cloud.signinNeeded' : '';
@@ -453,9 +478,17 @@ const App = (() => {
       // A silent background sync cannot pop the Google picker itself (that needs
       // a real click), but it can say so once instead of retrying forever with
       // nothing ever reaching anybody else who is following the same file.
+      // The persisted cooldown (see shouldNagGrant) is what actually keeps this
+      // to about once a day rather than every sync — grantNagged alone only
+      // covers repeats within the same page load, and a PWA is closed and
+      // reopened far too often for that to be enough on its own.
       if (info && info.needsGrant && !grantNagged) {
-        grantNagged = true;
-        offerGrant(() => TeamCloud.sync().catch(() => { /* reported by its own toast */ }));
+        const fileId = TeamCloud.cfg().fileId;
+        if (shouldNagGrant(fileId)) {
+          grantNagged = true;
+          markGrantNagged(fileId);
+          offerGrant(() => TeamCloud.sync().catch(() => { /* reported by its own toast */ }));
+        }
         return;
       }
       // Rows landed from a background pull, so the view on screen was built

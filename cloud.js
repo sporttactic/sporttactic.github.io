@@ -307,10 +307,20 @@ const TeamCloud = (() => {
     const c = cfg();
     if (!c.fileId) throw new Error('not-linked');
 
-    const rootFolder = await Drive.ensureFolder('SportTactic', null);
-    const safeName = (c.teamName || (Store.activeTeam() ? Store.activeTeam().name : '') || 'Team').trim().replace(/[/\\?%*:|"<>]/g, '-');
-    const teamFolder = c.folderId ? c.folderId : await Drive.ensureFolder(safeName, rootFolder);
-    if (!c.folderId) await setCfg({ folderId: teamFolder });
+    // Never search-and-create by name here for a device that did not make the
+    // file itself: an invited coach's account can't see the owner's real
+    // "SportTactic" folder under drive.file scope, so that search would find
+    // nothing and quietly create an orphaned duplicate in THIS account's own
+    // Drive instead of ever touching the real shared one. knownFolderId's
+    // manifest-parent lookup covers every device that can already read the
+    // file; only a genuinely folderless legacy record falls through to it.
+    let teamFolder = await knownFolderId(c);
+    if (!teamFolder) {
+      const rootFolder = await Drive.ensureFolder('SportTactic', null);
+      const safeName = (c.teamName || (Store.activeTeam() ? Store.activeTeam().name : '') || 'Team').trim().replace(/[/\\?%*:|"<>]/g, '-');
+      teamFolder = await Drive.ensureFolder(safeName, rootFolder);
+      await setCfg({ folderId: teamFolder });
+    }
 
     const existingAreas = (doc.areas && typeof doc.areas === 'object') ? doc.areas : {};
     const updatedAreas = Object.assign({}, existingAreas);
@@ -741,6 +751,29 @@ const TeamCloud = (() => {
     return pull('merge');
   }
 
+  // Where the team folder actually is, without ever guessing: this device's
+  // own cached id, then the per-device Drive setting an owner's browser reset
+  // might still remember, then — the one that actually works for a device
+  // that only ever joined by code — the manifest file's own parent folder.
+  // Deliberately never falls back to searching Drive by name here: a
+  // non-owner account cannot see the owner's real "SportTactic" folder that
+  // way (drive.file scope), so a name search would silently create an
+  // orphaned duplicate in THIS account's own Drive instead of finding the
+  // real one (see writeRemote for the one place that IS allowed to create it).
+  async function knownFolderId(c) {
+    if (c.folderId) return c.folderId;
+    const remembered = await Drive.getTeamFolderId();
+    if (remembered) return remembered;
+    if (!signedIn() || !Drive.getParent) return '';
+    let parent = '';
+    try { parent = await Drive.getParent(c.fileId); } catch (e) { return ''; }
+    if (parent) {
+      await setCfg({ folderId: parent });
+      try { await Drive.setTeamFolderId(parent); } catch (e) { /* not fatal */ }
+    }
+    return parent;
+  }
+
   // The manifest, every area file, and the team folder itself — everything a
   // member's Drive permission needs to cover, gathered once so a grant (by
   // e-mail invite, or by the account granting itself — see
@@ -752,7 +785,7 @@ const TeamCloud = (() => {
     try { manifest = await readOne(c.fileId); } catch (e) { /* share what is known; a later call fills in the rest */ }
     if (manifest && manifest.areas) Object.values(manifest.areas).forEach(a => { if (a && a.fileId) fileIds.push(a.fileId); });
     if (manifest && Array.isArray(manifest.parts)) manifest.parts.forEach(p => { if (p && p.fileId) fileIds.push(p.fileId); });
-    const folderId = c.folderId || await Drive.getTeamFolderId();
+    const folderId = await knownFolderId(c);
     if (folderId) fileIds.push(folderId);
     return fileIds;
   }
@@ -894,7 +927,7 @@ const TeamCloud = (() => {
     if (!window.Drive || !Drive.grantAccess) throw new Error('not-supported');
     const c = cfg();
     if (!c.fileId) throw new Error('not-linked');
-    const folderId = c.folderId || await Drive.getTeamFolderId();
+    const folderId = await knownFolderId(c);
     const picked = folderId
       ? await Drive.grantAccess({ folderId, folderName: c.teamName || '', apiKey: c.apiKey })
       : await Drive.grantAccess({ fileId: c.fileId, fileName: MANIFEST_NAME, apiKey: c.apiKey });

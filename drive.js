@@ -388,6 +388,19 @@ const Drive = (() => {
     });
   }
 
+  // The folder a file already sits in, straight from its own metadata — used
+  // instead of ever searching Drive by folder name for a device that did not
+  // create that folder itself. A non-owner account cannot see the owner's
+  // real "SportTactic" folder under drive.file scope (it was never opened by
+  // this account), so a name search there finds nothing and — left to
+  // ensureFolder — would silently create an orphaned duplicate in THIS
+  // account's own Drive instead. Reading a file's own parent needs nothing
+  // beyond the per-file access this app already has to it.
+  async function getParent(fileId) {
+    const r = await api('drive/v3/files/' + encodeURIComponent(fileId) + '?fields=' + encodeURIComponent('parents'));
+    return (r && Array.isArray(r.parents) && r.parents[0]) || '';
+  }
+
   async function ensureFolder(name, parent) {
     let q = "mimeType='application/vnd.google-apps.folder' and name='" + esc(name) + "' and trashed=false";
     if (parent) q += " and '" + esc(parent) + "' in parents";
@@ -653,7 +666,7 @@ const Drive = (() => {
     channelName, ensureChannel, readChannel, updateChannel,
     setupTeam, coachSend, coachReadAll, findMyChannels, playerSend, playerPushTraining,
     // Low-level helpers, used by cloud.js for the shared team database.
-    ensureFolder, findFolder, listTeamFolders, findFile, uploadJson, downloadJson, listFiles,
+    ensureFolder, findFolder, listTeamFolders, findFile, uploadJson, downloadJson, listFiles, getParent,
     shareAnyone, unshareAnyone, listPermissions, fileLink, publicDownload
   };
 })();
