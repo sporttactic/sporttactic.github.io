@@ -1558,29 +1558,8 @@ function cloudJoinDialog(onDone) {
           const squad = await attachJoinedSquad();
           if (squad) UI.toast(T('cloud.squadAttached').replace('{0}', squad.name || ''), 'success');
           if (onDone) onDone();
-          // Skip the separate "connect Drive?" prompt when the own-database
-          // offer above already covers it (cloudCreateDialog connects itself).
-          if (!offeredOwnDb) offerDriveConnect();
         } catch (e) {
           state.textContent = cloudJoinExplain(e);
-          // A club that shares with named people instead of a link hands out a
-          // code that cannot open anything on its own — and an API key that is
-          // misconfigured (wrong referrer, Drive API off) fails the very same
-          // way. Either way, signing in gives a second, independent path to the
-          // same file, so it is offered here whenever the read itself failed,
-          // not only when the code carried no key at all.
-          const netIsh = /Failed to fetch|NetworkError|HTTP 40[13]/i.test(String((e && e.message) || e || ''));
-          if ((!TeamCloud.canSyncQuietly() || netIsh) && window.Drive && !Drive.isConnected() && await Drive.isConfigured()) {
-            UI.confirm(T('cloud.connectNeeded'), async () => {
-              try {
-                await Drive.connect();
-                UI.toast(T('cloud.connected'), 'success');
-                go.click();
-              } catch (err) {
-                UI.toast(T('cloud.connectFailed') + ' — ' + String((err && err.message) || err).slice(0, 160), 'error');
-              }
-            });
-          }
         } finally { go.disabled = false; }
       };
     }
@@ -1644,28 +1623,6 @@ function cloudReconnectDialog(onDone) {
     }
   });
   return modal;
-}
-
-// A code that carries the club's read key opens the file with no Google account
-// at all. Without that key the file can only be opened by signing in, so a
-// player who is never asked simply never gets the coach's work. Both cases are
-// offered here, while the click that opened the popup is still theirs.
-async function offerDriveConnect() {
-  if (!window.Drive || Drive.isConnected()) return;
-  if (!(await Drive.isConfigured())) return;
-  const needed = !TeamCloud.canSyncQuietly();
-  UI.confirm(T(needed ? 'cloud.connectNeeded' : 'cloud.connectAsk'), async () => {
-    try {
-      await Drive.connect();
-      UI.toast(T('cloud.connected'), 'success');
-      // Signing in is what made the file readable, so fetch it now rather than
-      // leaving the player on an empty screen until the timer comes round.
-      TeamCloud.start();
-      if (needed) await TeamCloud.pull('merge');
-    } catch (e) {
-      UI.toast(T('cloud.connectFailed') + ' — ' + String((e && e.message) || e).slice(0, 160), 'error');
-    }
-  });
 }
 
 // A non-owner's read failing with 401/403/404 (see cloudErrText) means the
@@ -2068,7 +2025,6 @@ Views.settings = async function (mount) {
     if (squad) UI.toast(T('cloud.squadAttached').replace('{0}', squad.name || ''), 'success');
     App.applyMemberMode();
     App.render();
-    offerDriveConnect();
   });
   const openMsg = mount.querySelector('#openMessenger');
   if (openMsg) openMsg.onclick = () => App.go('messenger');
