@@ -251,7 +251,11 @@ const Drive = (() => {
       const ctl = (timeoutMs && typeof AbortController === 'function') ? new AbortController() : null;
       const timer = ctl ? setTimeout(() => ctl.abort(), timeoutMs) : null;
       try {
-        return await fetch(url, Object.assign({}, opts, ctl ? { signal: ctl.signal } : null));
+        // A GET for the same file id looks identical on every sync, so without
+        // this the browser (mobile Safari especially) can hand back whatever it
+        // cached from BEFORE another coach's push — a sync that silently shows
+        // no changes when there plainly were some almost always traces back here.
+        return await fetch(url, Object.assign({ cache: 'no-store' }, opts, ctl ? { signal: ctl.signal } : null));
       } catch (e) {
         if (!isNetworkThrow(e) || attempt === NET_RETRIES) {
           throw new Error(e && e.name === 'AbortError' ? 'timeout' : String((e && e.message) || e));
@@ -375,7 +379,9 @@ const Drive = (() => {
 
   async function downloadJson(fileId) {
     const at = await ensureToken();
-    return fetchJson('https://www.googleapis.com/drive/v3/files/' + encodeURIComponent(fileId) + '?alt=media', {
+    // The timestamp is belt-and-suspenders alongside cache: 'no-store' above —
+    // a proxy that ignores fetch cache directives still sees a brand new URL.
+    return fetchJson('https://www.googleapis.com/drive/v3/files/' + encodeURIComponent(fileId) + '?alt=media&_=' + now(), {
       headers: { Authorization: 'Bearer ' + at }
     });
   }
@@ -462,7 +468,7 @@ const Drive = (() => {
   async function publicDownload(fileId, apiKey) {
     if (!apiKey || !API_KEY_RE.test(apiKey.trim())) throw new Error('bad-api-key');
     return fetchJson('https://www.googleapis.com/drive/v3/files/' + encodeURIComponent(fileId) +
-      '?alt=media&key=' + encodeURIComponent(apiKey.trim()));
+      '?alt=media&_=' + now() + '&key=' + encodeURIComponent(apiKey.trim()));
   }
 
   // ---- Backup / restore (private appDataFolder) ----

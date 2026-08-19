@@ -1297,6 +1297,10 @@ async function roleKeysDialog(onDone) {
     <span class="pol-name">${UI.esc(r.label)}
       <span class="share-n">${UI.esc(r.sub)}</span></span>
     <span class="pol-opts">
+      ${made && !r.teamId && Access.STAFF_ROLES.indexOf(r.role) >= 0 && Access.can('cloud.setup')
+      ? `<label class="pol-chk" title="${UI.esc(T('rk.writeHint'))}">
+           <input type="checkbox" data-write="${UI.esc(r.role)}" ${Access.autoWriteEnabled(r.role) ? 'checked' : ''}>
+           ${UI.esc(T('rk.writeToggle'))}</label>` : ''}
       ${r.role === 'Coach' && r.teamId && Access.can('cloud.setup')
       ? `<button type="button" class="btn sm" data-areas="${UI.esc(r.teamId)}">${UI.esc(T('mem.coachAreas'))}</button>` : ''}
       ${words[r.key] && !stale
@@ -1333,6 +1337,19 @@ async function roleKeysDialog(onDone) {
       m.querySelectorAll('[data-areas]').forEach(b => b.onclick = () => {
         const r = rows.find(x => x.teamId === b.dataset.areas && x.role === 'Coach');
         coachAreasDialog(b.dataset.areas, r ? r.label : '');
+      });
+      // Whether this role's password also self-grants real Google Drive write
+      // access the moment that account connects — off leaves it on the
+      // "anyone may view" fallback until an admin invites it by hand instead.
+      m.querySelectorAll('[data-write]').forEach(cb => cb.onchange = async () => {
+        await Access.setAutoWrite(cb.dataset.write, cb.checked);
+        if (TeamCloud.isLinked() && Access.can('cloud.write')) {
+          try {
+            if (!TeamCloud.signedIn()) await Drive.connect();
+            await TeamCloud.push('merge');
+          } catch (e) { /* the next ordinary sync carries the change instead */ }
+        }
+        UI.toast(T(cb.checked ? 'rk.writeOn' : 'rk.writeOff').replace('{0}', Access.label(cb.dataset.write)), 'success');
       });
       m.querySelectorAll('[data-copy]').forEach(b => b.onclick = async () => {
         const w = words[b.dataset.copy] || '';

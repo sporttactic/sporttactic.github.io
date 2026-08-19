@@ -317,6 +317,11 @@ const TeamCloud = (() => {
 
     // 1. Lock the manifest before uploading area files — whoever is writing,
     // owner or an invited coach/admin, so any other writer sees it and backs off.
+    // A random token (not just role+timestamp) lets the read-back just below
+    // tell this device's own lock apart from another account's, in case two
+    // pushes from two different Google accounts land in the same instant.
+    const lockToken = Math.random().toString(36).slice(2) + Date.now().toString(36);
+    let locked = false;
     try {
       const lockManifest = {
         app: 'SportTactic',
@@ -325,12 +330,26 @@ const TeamCloud = (() => {
         team: doc.team || c.teamName || '',
         updatedAt: Date.now(),
         by: Access.role() || 'Coach',
-        syncLock: { locked: true, by: Access.role() || 'Coach', at: Date.now() },
+        syncLock: { locked: true, by: Access.role() || 'Coach', at: Date.now(), token: lockToken },
         areas: existingAreas,
         parts: []
       };
       await Drive.uploadJson('', lockManifest, { fileId: c.fileId });
-    } catch (e) { /* ignore pre-lock network issues */ }
+      locked = true;
+    } catch (e) { /* ignore pre-lock network issues — the push still goes ahead unprotected */ }
+
+    if (locked) {
+      // Another account's push could have written its own lock in the same
+      // instant; if the one now on Drive is not this device's token, back off
+      // instead of uploading area files that would silently clobber theirs.
+      let check = null;
+      try { check = await Drive.downloadJson(c.fileId); } catch (e) { /* can't confirm; proceed optimistically */ }
+      if (check && check.syncLock && check.syncLock.token && check.syncLock.token !== lockToken) {
+        const err = new Error('sync-locked');
+        err.lockedBy = check.syncLock.by || '';
+        throw err;
+      }
+    }
 
     // 2. Upload area files
     for (const [areaKey, storeList] of Object.entries(AREA_MAP)) {
@@ -751,6 +770,9 @@ const TeamCloud = (() => {
     const c = cfg();
     if (!c.fileId || c.owner) return false;
     if (!window.Access || Access.tier() === 'player') return false;
+    // The club's own switch, per role, in the Role passwords screen — off
+    // means "we will invite each Drive account by hand instead".
+    if (Access.autoWriteEnabled && !Access.autoWriteEnabled(Access.role())) return false;
 
     const rec = Store.find('settings', SELF_SHARE_KEY);
     const prev = (rec && rec.value && typeof rec.value === 'object') ? rec.value : null;

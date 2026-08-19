@@ -273,6 +273,25 @@ const Access = (() => {
     const v = (rec && rec.value && typeof rec.value === 'object') ? rec.value : null;
     return (v && v.salt && v.roles) ? v : null;
   }
+  // Whether claiming this role by password should also self-grant real Google
+  // Drive write access (see TeamCloud.ensureSelfWriteAccess) instead of
+  // leaving the account stuck on the "anyone may view" fallback. On by
+  // default — a set made before this checkbox existed has no `autoWrite` field
+  // at all, and defaults to on rather than silently demoting every coach who
+  // already joined to read-only.
+  function autoWriteEnabled(role) {
+    const rec = roleKeys();
+    const map = rec && rec.autoWrite;
+    if (!map || typeof map[normRole(role)] !== 'boolean') return true;
+    return map[normRole(role)];
+  }
+  async function setAutoWrite(role, enabled) {
+    const rec = roleKeys();
+    if (!rec) return false;
+    const map = Object.assign({}, rec.autoWrite || {}, { [normRole(role)]: !!enabled });
+    await Store.setSetting(KEYS_KEY, Object.assign({}, rec, { autoWrite: map }));
+    return true;
+  }
   // Only the device that generated them holds the readable words.
   function roleKeyWords() {
     const rec = Store.find('settings', WORDS_KEY);
@@ -291,6 +310,9 @@ const Access = (() => {
   }
   async function newRoleKeys() {
     if (!cryptoOk()) throw new Error('no-crypto');
+    // A policy the club already set must survive re-making the passwords —
+    // otherwise every coach switched off here would quietly turn back on.
+    const prevAutoWrite = (roleKeys() || {}).autoWrite || {};
     const salt = crypto.getRandomValues(new Uint8Array(16));
     const set = b64(crypto.getRandomValues(new Uint8Array(6)));
     const words = {}, roles = {}, teams = {};
@@ -310,7 +332,9 @@ const Access = (() => {
         coachHash: await keyHash(cw, salt, KEY_ITER)
       };
     }
-    await Store.setSetting(KEYS_KEY, { v: 2, set, salt: b64(salt), iter: KEY_ITER, roles, teams });
+    const autoWrite = {};
+    STAFF_ROLES.forEach(r => { autoWrite[r] = prevAutoWrite[r] !== false; });
+    await Store.setSetting(KEYS_KEY, { v: 2, set, salt: b64(salt), iter: KEY_ITER, roles, teams, autoWrite });
     await Store.setSetting(WORDS_KEY, { set, words });
     return words;
   }
@@ -436,7 +460,8 @@ const Access = (() => {
       await Store.setSetting(KEYS_KEY, {
         v: +keys.v || 2, set: String(keys.set || ''), salt: String(keys.salt),
         iter: +keys.iter || KEY_ITER, roles: keys.roles,
-        teams: (keys.teams && typeof keys.teams === 'object') ? keys.teams : {}
+        teams: (keys.teams && typeof keys.teams === 'object') ? keys.teams : {},
+        autoWrite: (keys.autoWrite && typeof keys.autoWrite === 'object') ? keys.autoWrite : {}
       });
     } finally { claiming = false; }
     return true;
@@ -465,7 +490,7 @@ const Access = (() => {
     profile, saveProfile, memberCopy, following, readMode, hiddenModules, moduleOpen, blocks, hidesEvents,
     coachHidden, saveCoachAreas,
     roleKeys, roleKeyWords, newRoleKeys, ensureTeamKeys, pruneTeamKeys, claimRole, claimedRole, claimedTeam: teamLock,
-    unclaimed, wordsStale, adoptRoleKeys, teamLock, squadCoach
+    unclaimed, wordsStale, adoptRoleKeys, teamLock, squadCoach, autoWriteEnabled, setAutoWrite
   };
 })();
 window.Access = Access;
