@@ -1295,10 +1295,6 @@ async function roleKeysDialog(onDone) {
     <span class="pol-name">${UI.esc(r.label)}
       <span class="share-n">${UI.esc(r.sub)}</span></span>
     <span class="pol-opts">
-      ${made && !r.teamId && Access.STAFF_ROLES.indexOf(r.role) >= 0 && Access.can('cloud.setup')
-      ? `<label class="pol-chk" title="${UI.esc(T('rk.writeHint'))}">
-           <input type="checkbox" data-write="${UI.esc(r.role)}" ${Access.autoWriteEnabled(r.role) ? 'checked' : ''}>
-           ${UI.esc(T('rk.writeToggle'))}</label>` : ''}
       ${r.role === 'Coach' && r.teamId && Access.can('cloud.setup')
       ? `<button type="button" class="btn sm" data-areas="${UI.esc(r.teamId)}">${UI.esc(T('mem.coachAreas'))}</button>` : ''}
       ${words[r.key] && !stale
@@ -1316,12 +1312,11 @@ async function roleKeysDialog(onDone) {
       : Store.all('players').filter(p => p.teamId === r.teamId).map(p => p.email))
     : Access.members().filter(x => x.role === r.role).map(x => x.email)).filter(Boolean).join(',');
   // Drive's write permission belongs to whoever owns the file; a staff word
-  // only proves this device is trusted locally. Right under the write-access
-  // switches is where that gap actually gets closed: a device claiming a
-  // write-enabled role can spin up its OWN database for whichever squad it
-  // picks here, instead of ever needing to write to somebody else's.
-  const showOwnDb = TeamCloud.isLinked() && !TeamCloud.cfg().owner
-    && Access.tier() !== 'player' && Access.autoWriteEnabled(Access.role());
+  // only proves this device is trusted locally. This is where that gap
+  // actually gets closed: any device with team write access can spin up its
+  // OWN database for whichever squad it picks here, instead of ever needing
+  // to write to somebody else's.
+  const showOwnDb = TeamCloud.isLinked() && !TeamCloud.cfg().owner && Access.can('cloud.write');
   const ownDbBlock = showOwnDb ? `<div class="pol-row">
     <span class="pol-name">${UI.esc(T('cloud.ownDbBtn'))}
       <span class="share-n">${UI.esc(T('cloud.ownDbRkHint'))}</span></span>
@@ -1352,19 +1347,6 @@ async function roleKeysDialog(onDone) {
       m.querySelectorAll('[data-areas]').forEach(b => b.onclick = () => {
         const r = rows.find(x => x.teamId === b.dataset.areas && x.role === 'Coach');
         coachAreasDialog(b.dataset.areas, r ? r.label : '');
-      });
-      // Whether this role is allowed to create its own writable database (see
-      // the button just below the rows) — off means a device claiming this
-      // role can only ever read the shared file, never write anywhere.
-      m.querySelectorAll('[data-write]').forEach(cb => cb.onchange = async () => {
-        await Access.setAutoWrite(cb.dataset.write, cb.checked);
-        if (TeamCloud.isLinked() && Access.can('cloud.write')) {
-          try {
-            if (!TeamCloud.signedIn()) await Drive.connect();
-            await TeamCloud.push('merge');
-          } catch (e) { /* the next ordinary sync carries the change instead */ }
-        }
-        UI.toast(T(cb.checked ? 'rk.writeOn' : 'rk.writeOff').replace('{0}', Access.label(cb.dataset.write)), 'success');
       });
       m.querySelectorAll('[data-copy]').forEach(b => b.onclick = async () => {
         const w = words[b.dataset.copy] || '';
@@ -1430,12 +1412,12 @@ function cloudCreateDialog(onDone, opts) {
           ? `<select id="cl_name">${teams.map(t => `<option value="${UI.esc(t.name)}" ${t.id === (team && team.id) ? 'selected' : ''}>${UI.esc(t.name)}</option>`).join('')}</select>`
           : `<input id="cl_name" maxlength="60" value="${UI.esc((team && team.name) || TeamCloud.cfg().teamName || '')}">`}
       </label>
-      <label class="check-row"><input type="checkbox" id="cl_link" checked>
+      ${ownCopy ? '' : `<label class="check-row"><input type="checkbox" id="cl_link" checked>
         <span>${UI.esc(T('cloud.linkShare'))}<span class="share-n">${UI.esc(T('cloud.linkShareHint'))}</span></span></label>
       <label class="field"><span>${UI.esc(T('cloud.apiKey'))}</span>
         <input id="cl_key" spellcheck="false" autocomplete="off" placeholder="AIza…" value="${UI.esc(TeamCloud.cfg().apiKey || '')}">
         <span class="hint">${UI.esc(T('cloud.apiKeyWhy'))}</span></label>
-      <p class="hint warn" id="cl_keywarn"></p>
+      <p class="hint warn" id="cl_keywarn"></p>`}
       ${ownCopy ? `<p class="hint warn">${UI.esc(T('cloud.ownDbWarn'))}</p>` : ''}
       <p class="hint" id="cl_state"></p>`,
     footer: `<button class="btn ghost" data-close2>${T('common.cancel')}</button>
@@ -1445,14 +1427,18 @@ function cloudCreateDialog(onDone, opts) {
       const key = m.querySelector('#cl_key');
       const warn = m.querySelector('#cl_keywarn');
       // Said before the file exists, not after the code has been handed out:
-      // without a key every player needs a Google account of their own.
-      const keyState = () => {
-        const v = key.value.trim();
-        warn.textContent = !v ? T('cloud.apiKeyMissing')
-          : API_KEY_RE.test(v) ? '' : T('cloud.apiKeyBad');
-      };
-      key.oninput = keyState;
-      keyState();
+      // without a key every player needs a Google account of their own. Not
+      // shown at all for an own-copy database — it already inherited the
+      // master's key when this device joined by code.
+      if (key && warn) {
+        const keyState = () => {
+          const v = key.value.trim();
+          warn.textContent = !v ? T('cloud.apiKeyMissing')
+            : API_KEY_RE.test(v) ? '' : T('cloud.apiKeyBad');
+        };
+        key.oninput = keyState;
+        keyState();
+      }
       m.querySelector('[data-close2]').onclick = close;
       const go = m.querySelector('[data-go]');
       go.onclick = async () => {
@@ -1464,8 +1450,8 @@ function cloudCreateDialog(onDone, opts) {
           // first byte. A browser without WebCrypto simply gets no passwords.
           try { if (!Access.roleKeys()) await Access.newRoleKeys(); } catch (e) { /* no crypto here */ }
           await TeamCloud.createShared(m.querySelector('#cl_name').value.trim(), {
-            linkShare: m.querySelector('#cl_link').checked,
-            apiKey: key.value.trim()
+            linkShare: m.querySelector('#cl_link') ? m.querySelector('#cl_link').checked : true,
+            apiKey: key ? key.value.trim() : (TeamCloud.cfg().apiKey || '')
           });
           close();
           UI.toast(T('cloud.created'), 'success');
@@ -1698,7 +1684,7 @@ function offerOwnDb(onDone, askKey) {
   if (!window.TeamCloud || !window.Access) return false;
   const c = TeamCloud.cfg();
   if (!c.fileId || c.owner) return false;
-  if (Access.tier() === 'player' || !Access.can('cloud.write') || !Access.autoWriteEnabled(Access.role())) return false;
+  if (!Access.can('cloud.write')) return false;
   UI.confirm(T(askKey || 'cloud.needsOwnDbAsk'), () => cloudCreateDialog(onDone, { ownCopy: true }));
   return true;
 }
@@ -1829,7 +1815,7 @@ Views.settings = async function (mount) {
     // Google account can borrow it. A non-owner who wants to contribute
     // writable data makes their OWN database instead — gated by the same
     // per-role "Write access for Google accounts" switch in Role passwords.
-    const canOwnDb = mayWrite && !c.owner && (!window.Access || Access.autoWriteEnabled(Access.role()));
+    const canOwnDb = mayWrite && !c.owner;
     const state = !linked ? T('cloud.stateOff')
       : (c.owner ? T('cloud.stateOwner') : T('cloud.stateMember')) + (c.teamName ? ' · ' + c.teamName : '');
 
