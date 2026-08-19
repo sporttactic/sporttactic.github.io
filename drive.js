@@ -14,9 +14,9 @@ const Drive = (() => {
   const ROOT_FOLDER = 'SportTactic';
   // A real client id looks like 1234567890-abcdef.apps.googleusercontent.com.
   const CLIENT_ID_RE = /[0-9]+-[a-z0-9_.-]+\.apps\.googleusercontent\.com/i;
-  // A real API key looks like AIza...; anything else sent to the Picker as a
-  // developer key makes Google refuse to even open it ("The API developer key
-  // is invalid"), so it is only ever passed along once it looks like this.
+  // A real API key looks like AIza...; anything else sent to Google as one
+  // just gets a bare "API key not valid" back, so it is only ever used once
+  // it looks like this.
   const API_KEY_RE = /^AIza[0-9A-Za-z_-]{10,}$/;
   // The access token used to live only in memory, so every page refresh threw
   // it away and made the coach click "Sign in" again even seconds later. It is
@@ -133,97 +133,6 @@ const Drive = (() => {
     if (c.indexOf('access_denied') >= 0) return tr('drive.errDenied', 'Google refused access. Add your own e-mail under Test users on the OAuth consent screen.');
     if (c.indexOf('idpiframe') >= 0 || c.indexOf('origin') >= 0) return tr('drive.errOriginList', 'This address is not listed under Authorised JavaScript origins for that Client ID.');
     return c || tr('drive.errGeneric', 'Google did not complete the sign-in.');
-  }
-
-  // ---- Picker: the one-time "open" that a file needs from every OTHER account ----
-  // drive.file only ever reaches files this app created for the signed-in
-  // account — a coach who was invited by e-mail, or who joined with a team
-  // code, has a Google account Drive genuinely lets write the file, but this
-  // app's own OAuth grant for THAT account has never heard of it. Google's own
-  // fix for that gap is the file picker: once an account "opens" the file
-  // through it, the same per-file grant a created-by-this-app file already has
-  // is added for them too, and every ordinary REST call starts working.
-  const PICKER_SRC = 'https://apis.google.com/js/api.js';
-  let pickerLoading = null;
-  function loadPicker() {
-    if (window.google && google.picker) return Promise.resolve();
-    if (pickerLoading) return pickerLoading;
-    pickerLoading = new Promise((resolve, reject) => {
-      const s = document.createElement('script');
-      s.src = PICKER_SRC; s.async = true; s.defer = true;
-      s.onload = () => {
-        try {
-          window.gapi.load('picker', { callback: resolve, onerror: () => { pickerLoading = null; reject(new Error('picker-load-failed')); } });
-        } catch (e) { pickerLoading = null; reject(e); }
-      };
-      s.onerror = () => { pickerLoading = null; reject(new Error('Could not load Google Picker (offline?)')); };
-      document.head.appendChild(s);
-    });
-    return pickerLoading;
-  }
-  // Re-runs gapi's own picker module load without re-fetching api.js. A phone
-  // that suspended this tab in the background can leave the Picker's internal
-  // iframe state stale even though `google.picker` still exists, which is what
-  // throws the browser's own generic "the object can not be found here." — a
-  // fresh gapi.load usually re-establishes it without the coach ever seeing it.
-  function reloadPickerModule() {
-    return new Promise((resolve, reject) => {
-      try { window.gapi.load('picker', { callback: resolve, onerror: () => reject(new Error('picker-load-failed')) }); }
-      catch (e) { reject(e); }
-    });
-  }
-  function buildPicker(t, at) {
-    return new Promise((resolve, reject) => {
-      try {
-        const wantFolder = !!t.folderId;
-        const view = wantFolder
-          ? new google.picker.DocsView(google.picker.ViewId.FOLDERS)
-              .setSelectFolderEnabled(true)
-              .setIncludeFolders(true)
-              .setOwnedByMe(false)
-          : new google.picker.DocsView(google.picker.ViewId.DOCS)
-              .setOwnedByMe(false)
-              .setIncludeFolders(true)
-              .setSelectFolderEnabled(false);
-        const query = wantFolder ? t.folderName : t.fileName;
-        if (query) view.setQuery(query);
-        // No setDeveloperKey here on purpose: an OAuth token alone is enough
-        // for the Picker to browse and open this account's own files, and a
-        // key created only for the Drive REST API (not separately enabled for
-        // the Picker API in Cloud Console) makes the whole widget refuse to
-        // open with "The API developer key is invalid" instead of just
-        // skipping the one feature (public-file thumbnails) the key was for.
-        const builder = new google.picker.PickerBuilder()
-          .addView(view)
-          .setOAuthToken(at)
-          .setCallback(data => {
-            if (data.action === google.picker.Action.PICKED) resolve(true);
-            else if (data.action === google.picker.Action.CANCEL) resolve(false);
-          });
-        builder.build().setVisible(true);
-      } catch (e) { reject(e); }
-    });
-  }
-  // Resolves true once the named file (or folder) has been picked (and so is
-  // now reachable by this account), false if the coach closed the picker
-  // without choosing it. Picking a FOLDER grants drive.file access to every
-  // file already inside it for this account in one step — the manifest and
-  // every area file together — instead of one grant per file.
-  async function grantAccess(target, legacyFileName, legacyApiKey) {
-    // Back-compat: earlier callers passed (fileId, fileName, apiKey) directly.
-    const t = (target && typeof target === 'object' && !Array.isArray(target))
-      ? target
-      : { fileId: target, fileName: legacyFileName, apiKey: legacyApiKey };
-    await loadPicker();
-    const at = await ensureToken();
-    try {
-      return await buildPicker(t, at);
-    } catch (e) {
-      // One silent recovery attempt (see reloadPickerModule) before giving up
-      // and letting the coach see it as a real failure.
-      try { await reloadPickerModule(); } catch (e2) { throw e; }
-      return await buildPicker(t, at);
-    }
   }
 
   function disconnect() {
@@ -443,15 +352,6 @@ const Drive = (() => {
     });
   }
 
-  // The signed-in account's own address — used to grant IT write access on the
-  // shared files without asking the coach to type an e-mail nobody prompted
-  // them for. `about.get` works under drive.file scope, so no extra consent
-  // screen is needed for it.
-  async function whoAmI() {
-    const r = await api('drive/v3/about?fields=' + encodeURIComponent('user(emailAddress,displayName)'));
-    return (r && r.user) || null;
-  }
-
   // "Anyone with the link may view". This is what lets a player read the shared
   // team database without a Google account and without the app asking them for
   // one — the file id alone is the ticket, so it must only ever hold squad data
@@ -488,9 +388,9 @@ const Drive = (() => {
 
   // The folder a publicly-shared file sits in, read with nothing but the API
   // key — no OAuth, so this works even for a Google account that has never
-  // opened anything yet. This is what lets grantAccess offer the FOLDER
-  // picker (which covers every area file in one step) on the very first try,
-  // instead of only being able to fall back to picking the one manifest file.
+  // signed in. Used to find the real team folder id (see cloud.js
+  // knownFolderId) without ever searching Drive by name, which a non-owner
+  // account cannot do anyway.
   async function publicGetParent(fileId, apiKey) {
     if (!apiKey || !API_KEY_RE.test(apiKey.trim())) throw new Error('bad-api-key');
     const r = await fetchJson('https://www.googleapis.com/drive/v3/files/' + encodeURIComponent(fileId) +
@@ -672,7 +572,7 @@ const Drive = (() => {
 
   return {
     getClientId, setClientId, normClientId, isConfigured, isConnected,
-    connect, disconnect, grantAccess, whoAmI,
+    connect, disconnect,
     backupNow, restoreNow, lastBackupAt, uploadBackup, downloadBackup,
     ensureTeamFolder, getTeamFolderId, setTeamFolderId, shareWith,
     channelName, ensureChannel, readChannel, updateChannel,

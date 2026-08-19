@@ -459,16 +459,7 @@ function fmtWhen(ts) {
 
 // Sync stores a token rather than a sentence, so the wording follows the
 // language the coach is reading in right now.
-const CLOUD_ERR = { 'oversize': 'cloud.oversize', 'oversize-owner': 'cloud.oversizeOwner', 'signin': 'cloud.signinNeeded', 'sync-locked': 'cloud.syncInProgress', 'cancelled': 'cloud.grantCancelled' };
-// Google's own Picker widget can lose its internal iframe state after a phone
-// suspends the tab in the background — the browser's own generic legacy text
-// for that ("the object can not be found here") means nothing to a coach, so
-// it gets a real next step instead of the raw text.
-function pickerErrText(err) {
-  const s = String((err && err.message) || err || '');
-  if (/object can.?n?o?t? be found/i.test(s)) return T('cloud.pickerGlitch');
-  return s.slice(0, 160);
-}
+const CLOUD_ERR = { 'oversize': 'cloud.oversize', 'oversize-owner': 'cloud.oversizeOwner', 'signin': 'cloud.signinNeeded', 'sync-locked': 'cloud.syncInProgress' };
 function cloudErrText(err) {
   if (CLOUD_ERR[err]) return T(CLOUD_ERR[err]);
   const s = String(err || '');
@@ -477,11 +468,9 @@ function cloudErrText(err) {
   // something a role or a permission fix can help with.
   if (/Failed to fetch|NetworkError|ERR_INTERNET_DISCONNECTED/i.test(s)) return T('cloud.syncFailedNet');
   if (/bad-api-key|developer key/i.test(s)) return T('cloud.badApiKey');
-  // A role password only decides what this device is ALLOWED to try; Google Drive
-  // still refuses the actual write until this account has either been invited by
-  // e-mail or "opened" the shared file/folder once (see grantAccess) — a file
-  // drive.file scope has never heard of comes back 404, not just 403/401 — so
-  // a raw permission/network error here means "ask to be invited", not "something is broken".
+  // Drive's own write permission belongs to whoever owns the file — nobody
+  // else's Google account can borrow it, code or no code, so this means "make
+  // your own database" (Settings → Cloud), not "something is broken".
   if (/(?:Drive API|HTTP) 40[134]/.test(s)) return T('cloud.writeForbidden');
   return err;
 }
@@ -1321,6 +1310,20 @@ async function roleKeysDialog(onDone) {
       ? Store.all('coaches').filter(c => c.teamId === r.teamId).map(c => c.email)
       : Store.all('players').filter(p => p.teamId === r.teamId).map(p => p.email))
     : Access.members().filter(x => x.role === r.role).map(x => x.email)).filter(Boolean).join(',');
+  // Drive's write permission belongs to whoever owns the file; a staff word
+  // only proves this device is trusted locally. Right under the write-access
+  // switches is where that gap actually gets closed: a device claiming a
+  // write-enabled role can spin up its OWN database for whichever squad it
+  // picks here, instead of ever needing to write to somebody else's.
+  const showOwnDb = TeamCloud.isLinked() && !TeamCloud.cfg().owner
+    && Access.tier() !== 'player' && Access.autoWriteEnabled(Access.role());
+  const ownDbBlock = showOwnDb ? `<div class="pol-row">
+    <span class="pol-name">${UI.esc(T('cloud.ownDbBtn'))}
+      <span class="share-n">${UI.esc(T('cloud.ownDbRkHint'))}</span></span>
+    <span class="pol-opts">
+      <button type="button" class="btn sm primary" id="rk_owndb">${UI.esc(T('cloud.ownDbBtn'))}</button>
+    </span>
+  </div>` : '';
 
   UI.modal({
     title: T('rk.title'),
@@ -1328,6 +1331,7 @@ async function roleKeysDialog(onDone) {
     body: `<p>${UI.esc(T('rk.intro'))}</p>
       <div class="callout-warn">${UI.esc(T(stale ? 'rk.staleWarn' : 'rk.warn'))}</div>
       ${rows.map(row).join('')}
+      ${ownDbBlock}
       <p class="hint">${UI.esc(T('rk.teamNote'))}</p>
       <p class="hint">${UI.esc(T('rk.note'))}</p>
       <p class="hint">${UI.esc(T('rk.codeNote'))}</p>
@@ -1336,15 +1340,17 @@ async function roleKeysDialog(onDone) {
       ${Access.can('cloud.setup') ? `<button class="btn ${made && !stale ? '' : 'primary'}" data-new>${UI.esc(T(made ? 'rk.again' : 'rk.make'))}</button>` : ''}`,
     onOpen: (m, close) => {
       m.querySelector('[data-close2]').onclick = close;
+      const ownBtn = m.querySelector('#rk_owndb');
+      if (ownBtn) ownBtn.onclick = () => { close(); cloudCreateDialog(onDone, { ownCopy: true }); };
       // Which squad a coach gets is the word you hand out; this is which areas
       // of it they get once they are in.
       m.querySelectorAll('[data-areas]').forEach(b => b.onclick = () => {
         const r = rows.find(x => x.teamId === b.dataset.areas && x.role === 'Coach');
         coachAreasDialog(b.dataset.areas, r ? r.label : '');
       });
-      // Whether this role's password also self-grants real Google Drive write
-      // access the moment that account connects — off leaves it on the
-      // "anyone may view" fallback until an admin invites it by hand instead.
+      // Whether this role is allowed to create its own writable database (see
+      // the button just below the rows) — off means a device claiming this
+      // role can only ever read the shared file, never write anywhere.
       m.querySelectorAll('[data-write]').forEach(cb => cb.onchange = async () => {
         await Access.setAutoWrite(cb.dataset.write, cb.checked);
         if (TeamCloud.isLinked() && Access.can('cloud.write')) {
@@ -1400,24 +1406,35 @@ async function roleKeysDialog(onDone) {
   });
 }
 
-// Owner path: name the team, build the file, hand back the code.
-function cloudCreateDialog(onDone) {
+// Owner path: name the team, build the file, hand back the code. Also reused
+// for a non-owner who already follows somebody else's shared database and
+// wants their OWN, separate one (opts.ownCopy) — Drive's write permission
+// belongs to whoever owns the file, so that is the only way to get a copy
+// this device can actually write to.
+function cloudCreateDialog(onDone, opts) {
+  opts = opts || {};
+  const ownCopy = !!opts.ownCopy;
   const team = Store.activeTeam();
+  const teams = Store.teams();
   UI.modal({
-    title: T('cloud.createTitle'),
+    title: T(ownCopy ? 'cloud.ownDbTitle' : 'cloud.createTitle'),
     width: 620,
-    body: `<p>${UI.esc(T('cloud.createIntro'))}</p>
+    body: `<p>${UI.esc(T(ownCopy ? 'cloud.ownDbIntro' : 'cloud.createIntro'))}</p>
       <label class="field"><span>${UI.esc(T('cloud.teamName'))}</span>
-        <input id="cl_name" maxlength="60" value="${UI.esc((team && team.name) || TeamCloud.cfg().teamName || '')}"></label>
+        ${teams.length
+          ? `<select id="cl_name">${teams.map(t => `<option value="${UI.esc(t.name)}" ${t.id === (team && team.id) ? 'selected' : ''}>${UI.esc(t.name)}</option>`).join('')}</select>`
+          : `<input id="cl_name" maxlength="60" value="${UI.esc((team && team.name) || TeamCloud.cfg().teamName || '')}">`}
+      </label>
       <label class="check-row"><input type="checkbox" id="cl_link" checked>
         <span>${UI.esc(T('cloud.linkShare'))}<span class="share-n">${UI.esc(T('cloud.linkShareHint'))}</span></span></label>
       <label class="field"><span>${UI.esc(T('cloud.apiKey'))}</span>
         <input id="cl_key" spellcheck="false" autocomplete="off" placeholder="AIza…" value="${UI.esc(TeamCloud.cfg().apiKey || '')}">
         <span class="hint">${UI.esc(T('cloud.apiKeyWhy'))}</span></label>
       <p class="hint warn" id="cl_keywarn"></p>
+      ${ownCopy ? `<p class="hint warn">${UI.esc(T('cloud.ownDbWarn'))}</p>` : ''}
       <p class="hint" id="cl_state"></p>`,
     footer: `<button class="btn ghost" data-close2>${T('common.cancel')}</button>
-      <button class="btn primary" data-go>${UI.esc(T('cloud.createBtn'))}</button>`,
+      <button class="btn primary" data-go>${UI.esc(T(ownCopy ? 'cloud.ownDbBtn' : 'cloud.createBtn'))}</button>`,
     onOpen: (m, close) => {
       const state = m.querySelector('#cl_state');
       const key = m.querySelector('#cl_key');
@@ -1542,18 +1559,11 @@ function cloudJoinDialog(onDone) {
           if (got) UI.toast(T('rk.joinedAs').replace('{0}', Access.label(got)), 'success');
           else if (Access.roleKeys()) UI.toast(T(pw ? 'rk.wrong' : 'rk.noneGiven'), 'error');
           else if (pw) UI.toast(T('rk.noKeys'), 'error');
-          // A staff word turns this into a writer locally; if Google is already
-          // connected, tell Drive itself right away instead of leaving this
-          // account stuck on the "anyone may view" fallback until the next
-          // sync. Not yet connected — the hint below covers it once they are.
-          if (got && Access.tier(got) !== 'player') {
-            if (window.Drive && Drive.isConnected() && window.TeamCloud && TeamCloud.ensureSelfWriteAccess) {
-              const granted = await TeamCloud.ensureSelfWriteAccess(true).catch(() => false);
-              UI.toast(T(granted ? 'cloud.writeUnlocked' : 'cloud.staffJoinedHint'), granted ? 'success' : 'info');
-            } else {
-              UI.toast(T('cloud.staffJoinedHint'), 'info');
-            }
-          }
+          // Google Drive's write permission belongs to whoever owns the file —
+          // a staff word only proves this device is trusted locally, so a
+          // coach who wants to write makes their OWN database instead
+          // (Settings → Cloud → Create my own database).
+          if (got && Access.tier(got) !== 'player') UI.toast(T('cloud.staffJoinedHint'), 'info');
           const rb = document.getElementById('roleBadge');
           if (rb) rb.textContent = T('role.' + Access.role());
           App.applyMemberMode();
@@ -1662,13 +1672,6 @@ async function offerDriveConnect() {
       // leaving the player on an empty screen until the timer comes round.
       TeamCloud.start();
       if (needed) await TeamCloud.pull('merge');
-      // A staff role password only proves this locally; Google Drive still has
-      // to be told this account may write, or an approved coach stays stuck on
-      // the "anyone may view" fallback even though the app already trusts them.
-      if (window.TeamCloud && TeamCloud.ensureSelfWriteAccess) {
-        const granted = await TeamCloud.ensureSelfWriteAccess(true).catch(() => false);
-        if (granted) UI.toast(T('cloud.writeUnlocked'), 'success');
-      }
     } catch (e) {
       UI.toast(T('cloud.connectFailed') + ' — ' + String((e && e.message) || e).slice(0, 160), 'error');
     }
@@ -1909,6 +1912,11 @@ Views.settings = async function (mount) {
     const online = TeamCloud.signedIn();
     const mayWrite = Access.can('cloud.write', role);
     const maySetup = Access.can('cloud.setup', role);
+    // Drive's write permission belongs to whoever owns the file; nobody else's
+    // Google account can borrow it. A non-owner who wants to contribute
+    // writable data makes their OWN database instead — gated by the same
+    // per-role "Write access for Google accounts" switch in Role passwords.
+    const canOwnDb = mayWrite && !c.owner && (!window.Access || Access.autoWriteEnabled(Access.role()));
     const state = !linked ? T('cloud.stateOff')
       : (c.owner ? T('cloud.stateOwner') : T('cloud.stateMember')) + (c.teamName ? ' · ' + c.teamName : '');
 
@@ -1935,18 +1943,15 @@ Views.settings = async function (mount) {
         ${maySetup ? `<button class="btn" id="clPolicy">${T('pol.btn')}</button>` : ''}
         ${maySetup ? `<button class="btn" id="clMember">${T('mem.btn')}</button>` : ''}
         ${maySetup ? `<button class="btn" id="clKeys">${T('rk.btn')}</button>` : ''}
-        ${mayWrite && !c.owner ? `<button class="btn" id="clGrant">${T('cloud.grantAccess')}</button>` : ''}
+        ${canOwnDb ? `<button class="btn" id="clOwnDb">${T('cloud.ownDbBtn')}</button>` : ''}
         <button class="btn danger" id="clForget" data-member-ok>${T('cloud.disconnect')}</button>
       </div>
       <div class="row" style="flex:0;margin-top:10px;flex-wrap:wrap;align-items:flex-end">
         <label class="field" style="max-width:220px"><span>${T('cloud.autoEvery')}</span>
           <select id="clAuto">${TeamCloud.AUTO_MINUTES.map(m => `<option value="${m}" ${m === c.autoMin ? 'selected' : ''}>${everyLabel(m)}</option>`).join('')}</select></label>
       </div>
-      ${c.owner ? '' : `<p class="hint">${UI.esc(T('cloud.memberFresh'))}</p>
-      <p class="hint">${UI.esc(TeamCloud.mayContribute()
-        ? (online ? T('cloud.contribOn') : T('cloud.contribNeedsGoogle'))
-        : T('cloud.contribOff'))}</p>`}
-      ${mayWrite ? (c.owner ? '' : `<p class="hint mail-note">${UI.esc(T('cloud.staffNeedsInvite'))}</p>`) : `<p class="hint mail-note">${UI.esc(T('cloud.readOnlyRole'))}</p>`}`;
+      ${c.owner ? '' : `<p class="hint">${UI.esc(T('cloud.memberFresh'))}</p>`}
+      ${c.owner ? '' : `<p class="hint mail-note">${UI.esc(canOwnDb ? T('cloud.ownDbHint') : T('cloud.readOnlyRole'))}</p>`}`;
 
     return UI.acc('setCloud', T('cloud.title'), `
       <p style="color:var(--muted);font-size:13px">${T('cloud.desc')}</p>
@@ -2044,21 +2049,6 @@ Views.settings = async function (mount) {
     }
     catch (e) {
       const s = String((e && e.message) || e);
-      // A 401/403 on a write from anybody but the owner usually means this
-      // account has never "opened" the file in Google's own eyes yet — offer
-      // the one-time picker grant right here and retry the same action once it
-      // succeeds, instead of leaving the coach stuck on a dead-end error.
-      if (/(?:Drive API|HTTP) 40[134]/.test(s) && window.TeamCloud && !TeamCloud.cfg().owner && window.Drive && window.Drive.grantAccess) {
-        UI.confirm(T('cloud.grantAsk'), async () => {
-          try {
-            const ok = await TeamCloud.grantAccess();
-            if (ok) return busyRun(sel, fn, okKey, reload);
-            UI.toast(T('cloud.grantCancelled'), 'error');
-          } catch (err) {
-            UI.toast(T('cloud.grantFailed') + ' — ' + pickerErrText(err), 'error');
-          }
-        });
-      }
       UI.toast(cloudErrText(s).slice(0, 200), 'error');
     }
     finally { if (el) el.disabled = false; refreshCloud(); }
@@ -2094,11 +2084,7 @@ Views.settings = async function (mount) {
     // A sync rewrites every store underneath the open views, so the app is
     // reloaded rather than left showing what was on screen before it.
     on('#clSync', () => busyRun('#clSync', () => TeamCloud.sync(), () => T('cloud.synced'), true));
-    on('#clGrant', () => busyRun('#clGrant', async () => {
-      const ok = await TeamCloud.grantAccess();
-      if (!ok) throw new Error('cancelled');
-      return TeamCloud.sync();
-    }, () => T('cloud.granted')));
+    on('#clOwnDb', () => cloudCreateDialog(() => { refreshCloud(); refreshAccess(); }, { ownCopy: true }));
     on('#clForget', () => UI.confirm(T('cloud.disconnectAsk'), async () => {
       await TeamCloud.forget();
       UI.toast(T('cloud.disconnected'), 'success');
@@ -2245,12 +2231,6 @@ Views.settings = async function (mount) {
     if (squad) UI.toast(T('cloud.squadAttached').replace('{0}', squad.name || ''), 'success');
     App.applyMemberMode();
     App.render();
-    // Already signed in to Google — tell Drive this account may write right
-    // away instead of waiting for the next sync to discover it can't.
-    if (Access.tier(got) !== 'player' && window.Drive && Drive.isConnected() && window.TeamCloud && TeamCloud.ensureSelfWriteAccess) {
-      const granted = await TeamCloud.ensureSelfWriteAccess(true).catch(() => false);
-      if (granted) UI.toast(T('cloud.writeUnlocked'), 'success');
-    }
     offerDriveConnect();
   });
   const openMsg = mount.querySelector('#openMessenger');

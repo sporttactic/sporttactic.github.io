@@ -273,12 +273,13 @@ const Access = (() => {
     const v = (rec && rec.value && typeof rec.value === 'object') ? rec.value : null;
     return (v && v.salt && v.roles) ? v : null;
   }
-  // Whether claiming this role by password should also self-grant real Google
-  // Drive write access (see TeamCloud.ensureSelfWriteAccess) instead of
-  // leaving the account stuck on the "anyone may view" fallback. On by
-  // default — a set made before this checkbox existed has no `autoWrite` field
-  // at all, and defaults to on rather than silently demoting every coach who
-  // already joined to read-only.
+  // Whether claiming this role by password is allowed to create its own
+  // writable Google Drive database (see TeamCloud.createShared, opts.ownCopy)
+  // — Drive's write permission belongs to whoever owns a file, so this is the
+  // only way for another Google account to ever get one. On by default — a
+  // set made before this checkbox existed has no `autoWrite` field at all,
+  // and defaults to on rather than silently blocking every coach who already
+  // joined from ever writing anywhere.
   function autoWriteEnabled(role) {
     const rec = roleKeys();
     const map = rec && rec.autoWrite;

@@ -3,15 +3,20 @@
    The whole idea in two sentences: one person (an admin or a head coach) keeps
    the team's database in a dedicated folder in their own Google Drive, split
    into small modular area databases (squad, training, tactics, matches, etc.).
-   Coaches you invite as editors can write to it; players only retrieve/sync data.
    Nobody has to run a server — the coach presses one button and hands out
    a short team code.
 
    Two ways in, so a player never has to sign in to anything:
-     · signed in  — the files are fetched with the member's own Google account,
-                    which is also the only way for staff to write.
+     · signed in  — the files are fetched with the member's own Google account.
      · team code  — the files are shared as "anyone with the link may view" and are
                     read with the team's Drive API key. No account, no sign-in.
+
+   Only the account that OWNS a file can ever write to it — Google Drive has no
+   way to lend that permission to another account, so every device that joins
+   by code is read-only on that database, whatever its role. A coach who wants
+   to contribute writable data creates their OWN separate database instead (see
+   createShared, and its opts.ownCopy call sites in settings.js) — which starts
+   as a copy of whatever this device already has, so nothing is lost switching.
 
    Merging is per record: whichever copy of a row has the newer updatedAt wins.
    Deletions do not travel that way, so the two "replace" directions exist for
@@ -275,12 +280,11 @@ const TeamCloud = (() => {
           }
         } catch (err) {
           if (!c.apiKey && !signedIn()) throw err;
-          // Signed in but this account was never "opened" the area file (see
-          // grantAccess): keep pulling whatever other areas ARE readable
-          // instead of blanking the whole sync out. The flag rides along on
-          // the returned doc (rather than throwing) so the data gathered so
-          // far still gets applied, and the caller can offer the one-time
-          // grant on top of it instead of the pull coming back empty-handed.
+          // This account can't read that area file (not shared with it, or
+          // the owner's sharing broke): keep pulling whatever other areas ARE
+          // readable instead of blanking the whole sync out. The flag rides
+          // along on the returned doc (rather than throwing) so the data
+          // gathered so far still gets applied.
           if (!firstDenied && isForbidden(err) && !c.owner) firstDenied = err;
         }
       }
@@ -514,13 +518,12 @@ const TeamCloud = (() => {
   }
 
   // Internal pull implementation (called within runExclusive)
-  // 401/403/404 from Drive on a non-owner almost always means this Google account
-  // has never "opened" the file yet — the one-time picker grant fixes it. A file
-  // this account's own OAuth grant has never heard of comes back as a 404
-  // ("File not found"), not a 403, under drive.file scope — so both are treated
-  // the same way. Flagging it here means every caller (the top bar, the settings
-  // page, the silent background timer) can offer that fix, not only whichever
-  // one happened to trigger the request. Both `api()` ("Drive API nnn") and
+  // 401/403/404 on a non-owner read almost always means the owner never
+  // shared that file with this account (or stopped sharing it) — a file this
+  // account can't see at all comes back as a 404 ("File not found"), not a
+  // 403, so both are treated the same way. Flagged here purely so the UI can
+  // show a clear "ask to be shared with, or make your own database" message
+  // instead of a raw fetch/HTTP error. Both `api()` ("Drive API nnn") and
   // `fetchJson()` ("HTTP nnn", used by downloadJson/publicDownload) are matched.
   const isForbidden = e => /(?:Drive API|HTTP) 40[134]/.test(msg(e));
   function needsGrant(e) { return isForbidden(e) && !cfg().owner; }
@@ -546,9 +549,7 @@ const TeamCloud = (() => {
 
   // Internal push implementation (called within runExclusive)
   async function pushInternal(mode) {
-    const roleTier = window.Access ? Access.tier() : 'player';
-    if (roleTier === 'player') throw new Error('not-allowed');
-    if (!Access.can('cloud.write') && !mayContribute()) throw new Error('not-allowed');
+    if (!cfg().owner) throw new Error('not-allowed');
 
     let forbidden = false;
     try {
@@ -565,7 +566,6 @@ const TeamCloud = (() => {
         if (!e || !e.oversize || !cfg().owner) throw e;
         mode = 'replace';
       }
-      const owner = cfg().owner;
       doc.areas = (remote && remote.areas && typeof remote.areas === 'object') ? remote.areas : {};
       doc.parts = (remote && Array.isArray(remote.parts)) ? remote.parts : [];
 
@@ -574,16 +574,7 @@ const TeamCloud = (() => {
       // does not get merged back in from the remote's still-older copy below.
       const tombs = isTeamDb(remote) ? await Store.syncTombstones(remote.data && remote.data.settings) : Store.tombstones();
 
-      if (!owner && isTeamDb(remote)) {
-        const pol = (remote.policy && typeof remote.policy === 'object') ? remote.policy : Privacy.defaults();
-        doc.policy = pol;
-        doc.protected = Array.isArray(remote.protected) ? remote.protected : doc.protected;
-        for (const s of syncStores()) {
-          const theirs = Array.isArray(remote.data[s]) ? remote.data[s] : null;
-          if (!Privacy.mayEdit(pol, s)) { if (theirs) doc.data[s] = theirs; else delete doc.data[s]; continue; }
-          if (!Privacy.mayDelete(pol, s) && theirs) doc.data[s] = mergeRows(theirs, doc.data[s] || []);
-        }
-      } else if (mode !== 'replace' && isTeamDb(remote)) {
+      if (mode !== 'replace' && isTeamDb(remote)) {
         for (const s of syncStores()) {
           if (!Array.isArray(remote.data[s])) continue;
           const remoteRows = Store.dropTombstoned(s, remote.data[s], tombs);
@@ -620,14 +611,16 @@ const TeamCloud = (() => {
   }
 
   async function push(mode) {
-    const roleTier = window.Access ? Access.tier() : 'player';
-    if (roleTier === 'player') throw new Error('not-allowed');
+    if (!cfg().owner) throw new Error('not-allowed');
     return runExclusive(() => pushInternal(mode));
   }
 
   // Full synchronization:
-  // - For player: ONLY retrieves (pulls) data, never pushes.
-  // - For coach/admin: pulls latest, then pushes local changes.
+  // - Owner: pulls latest, then pushes local changes.
+  // - Everybody else: pull only. Drive's own permissions belong to whoever
+  // created the file, and there is no way for another Google account to
+  // borrow them — a coach who wants to contribute writable data makes their
+  // OWN database (see createShared) instead of writing to somebody else's.
   async function sync() {
     return runExclusive(async () => {
       let got = 0;
@@ -639,36 +632,18 @@ const TeamCloud = (() => {
         return 0;
       }
 
-      // Player can ONLY retrieve data (pull). Only staff/coaches with cloud.write push.
-      const roleTier = window.Access ? Access.tier() : 'player';
       const isOwner = cfg().owner;
-      const mayWrite = isOwner || (roleTier !== 'player' && Access.can('cloud.write'));
+      if (!cfg().fileId || !isOwner) return got;
 
-      if (!cfg().fileId || !mayWrite) return got;
-
-      if (mayWrite && !signedIn()) {
+      if (!signedIn()) {
         await setCfg({ lastErr: 'signin' });
         throw new Error('signin');
       }
-      if (mayWrite) {
-        // A role password only proves this device is trusted locally; Drive
-        // itself still has to be told, or a genuinely approved coach stays
-        // stuck on the "anyone may view" fallback forever.
-        if (!isOwner) await ensureSelfWriteAccess().catch(() => {});
-        await pushInternal('merge');
-      }
+      await pushInternal('merge');
       return got;
     });
   }
 
-  function mayContribute() {
-    const c = cfg();
-    if (!c.fileId || c.owner) return false;
-    const roleTier = window.Access ? Access.tier() : 'player';
-    if (roleTier === 'player') return false;
-    if (!window.Privacy || !Privacy.contributes(Privacy.policy())) return false;
-    return syncStores().some(s => Privacy.mayEdit(Privacy.policy(), s));
-  }
   const msg = e => String((e && e.message) || e || '').slice(0, 200);
 
   // ---- Setting it up -----------------------------------------------------
@@ -790,11 +765,9 @@ const TeamCloud = (() => {
     return parent;
   }
 
-  // The manifest, every area file, and the team folder itself — everything a
-  // member's Drive permission needs to cover, gathered once so a grant (by
-  // e-mail invite, or by the account granting itself — see
-  // ensureSelfWriteAccess) never has to be repeated one file at a time as new
-  // areas appear.
+  // The manifest, every area file, and the team folder itself — everything an
+  // e-mail invite (see inviteMembers) needs to cover, gathered once so it
+  // never has to be repeated one file at a time as new areas appear.
   async function allShareableFileIds(c) {
     const fileIds = [c.fileId];
     let manifest = null;
@@ -804,69 +777,6 @@ const TeamCloud = (() => {
     const folderId = await knownFolderId(c);
     if (folderId) fileIds.push(folderId);
     return fileIds;
-  }
-
-  const SELF_SHARE_KEY = 'driveSelfShared'; // { email, fileId, granted: [fileIds], at, name }
-  // A role password (see access.js claimRole) is the club's own say-so that a
-  // joining device is a genuine coach/admin, but Google Drive has never heard
-  // that: without a separate per-account invite, this account still only sees
-  // the "anyone with the link may view" fallback and every write 403s forever.
-  // The moment this account's own Google sign-in is live, it grants ITSELF
-  // writer access — the same thing an e-mail invite does — instead of leaving
-  // an approved coach stuck read-only until an admin invites them by hand.
-  async function ensureSelfWriteAccess(force) {
-    if (!window.Drive || !Drive.isConnected()) return false;
-    const c = cfg();
-    if (!c.fileId || c.owner) return false;
-    if (!window.Access || Access.tier() === 'player') return false;
-    // The club's own switch, per role, in the Role passwords screen — off
-    // means "we will invite each Drive account by hand instead".
-    if (Access.autoWriteEnabled && !Access.autoWriteEnabled(Access.role())) return false;
-
-    const rec = Store.find('settings', SELF_SHARE_KEY);
-    const prev = (rec && rec.value && typeof rec.value === 'object' && rec.value.fileId === c.fileId) ? rec.value : null;
-    // The e-mail rarely changes between syncs, so it is reused from last time
-    // instead of asking Drive again on every single one — only a fresh grant
-    // (force) or a device that has never done this before pays for that call.
-    let email = (!force && prev && prev.email) ? prev.email : '';
-    let name = (prev && prev.name) || '';
-    if (!email) {
-      if (!Drive.whoAmI) return false;
-      let me = null;
-      try { me = await Drive.whoAmI(); } catch (e) { return false; }
-      email = me && me.emailAddress;
-      name = (me && me.displayName) || name;
-    }
-    if (!email) return false;
-
-    // What this account has ALREADY been made a writer on, so a file created
-    // after the first grant (a new area that only just got its first content)
-    // still gets covered on the next sync instead of being silently skipped
-    // forever just because SOME file succeeded once before.
-    const already = new Set((prev && prev.email === email && Array.isArray(prev.granted)) ? prev.granted : []);
-    const dRole = Access.driveRole(Access.role());
-    const fileIds = await allShareableFileIds(c);
-    const pending = force ? fileIds : fileIds.filter(fid => !already.has(fid));
-    if (!pending.length) return true;
-
-    let anyOk = false;
-    for (const fid of pending) {
-      try { await Drive.shareWith(fid, email, dRole, false); already.add(fid); anyOk = true; }
-      catch (e) { /* not yet writable; retried again next time */ }
-    }
-    if (anyOk) {
-      await Store.setSetting(SELF_SHARE_KEY, { email, fileId: c.fileId, granted: [...already], at: Date.now(), name });
-      // The Access page's member list is "who has access" — a coach who let
-      // themselves in with a role password belongs on it, not just an
-      // invisible grant nobody else on the team can see.
-      if (window.Access && Access.grant) {
-        try { await Access.grant({ email, name, role: Access.role() }); } catch (e) { /* not fatal */ }
-      }
-    }
-    // True only once every file this device currently knows about is covered —
-    // a caller can use that to stop nagging, while a partial grant keeps
-    // quietly finishing itself on the syncs after this one.
-    return fileIds.every(fid => already.has(fid));
   }
 
   // Invite members by email with appropriate Drive roles across folder, manifest & area files
@@ -931,49 +841,11 @@ const TeamCloud = (() => {
     start();
   }
 
-  // For every account except the one that created the file(s): drive.file scope
-  // never heard of a fileId until it is "opened" once through Google's own
-  // picker, which is what actually turns a Drive-side write permission into
-  // one this app can use. Owners never need it — they created the files.
-  // Picking the shared team FOLDER rather than one file at a time grants this
-  // account drive.file access to every file already inside it — the manifest
-  // AND every area file — in a single step, so an invited coach never has to
-  // repeat the grant per area as new ones are created.
-  async function grantAccess() {
-    if (!window.Drive || !Drive.grantAccess) throw new Error('not-supported');
-    const c = cfg();
-    if (!c.fileId) throw new Error('not-linked');
-    let folderId = await knownFolderId(c);
-    const picked = folderId
-      ? await Drive.grantAccess({ folderId, folderName: c.teamName || '', apiKey: c.apiKey })
-      : await Drive.grantAccess({ fileId: c.fileId, fileName: MANIFEST_NAME, apiKey: c.apiKey });
-    if (!picked) return false;
-    // Opening the folder/file only fixes drive.file scope VISIBILITY; Drive's
-    // own permission on it is still whatever it was before (usually just the
-    // "anyone may view" fallback). Without this, a coach could press this
-    // button, see it succeed, and still get refused on the very next write.
-    await ensureSelfWriteAccess(true).catch(() => false);
-    // No team API key configured means the real folder id could not be found
-    // before anything was open (see knownFolderId), so the picker above could
-    // only ever offer the single manifest file — now that it IS open, the
-    // folder itself can finally be found too; picking it here as well covers
-    // every area file in the same action instead of leaving the coach to
-    // notice and press Grant Drive access a second time.
-    if (!folderId) {
-      folderId = await knownFolderId(c);
-      if (folderId) {
-        const gotFolder = await Drive.grantAccess({ folderId, folderName: c.teamName || '', apiKey: c.apiKey });
-        if (gotFolder) await ensureSelfWriteAccess(true).catch(() => false);
-      }
-    }
-    return true;
-  }
-
   return {
     AUTO_MINUTES, FILE_NAME, MANIFEST_NAME, AREA_MAP,
-    cfg, setCfg, forget, isLinked, onChange, signedIn, canSyncQuietly, mayContribute, isBusy, isCoachSyncing,
+    cfg, setCfg, forget, isLinked, onChange, signedIn, canSyncQuietly, isBusy, isCoachSyncing,
     makeCode, readCode, parseTarget,
-    snapshot, pull, push, sync, grantAccess, ensureSelfWriteAccess,
+    snapshot, pull, push, sync,
     createShared, inviteMembers, join, listExisting, reconnectShared,
     start, stop, setAuto
   };
