@@ -187,6 +187,12 @@ const Drive = (() => {
               .setSelectFolderEnabled(false);
         const query = wantFolder ? t.folderName : t.fileName;
         if (query) view.setQuery(query);
+        // No setDeveloperKey here on purpose: an OAuth token alone is enough
+        // for the Picker to browse and open this account's own files, and a
+        // key created only for the Drive REST API (not separately enabled for
+        // the Picker API in Cloud Console) makes the whole widget refuse to
+        // open with "The API developer key is invalid" instead of just
+        // skipping the one feature (public-file thumbnails) the key was for.
         const builder = new google.picker.PickerBuilder()
           .addView(view)
           .setOAuthToken(at)
@@ -194,10 +200,6 @@ const Drive = (() => {
             if (data.action === google.picker.Action.PICKED) resolve(true);
             else if (data.action === google.picker.Action.CANCEL) resolve(false);
           });
-        // An OAuth token alone is enough to browse this account's own files;
-        // a key that does not even look right would only make Google refuse
-        // the whole picker instead of just ignoring it.
-        if (t.apiKey && API_KEY_RE.test(t.apiKey.trim())) builder.setDeveloperKey(t.apiKey.trim());
         builder.build().setVisible(true);
       } catch (e) { reject(e); }
     });
