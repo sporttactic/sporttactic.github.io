@@ -1714,119 +1714,8 @@ async function attachJoinedSquad() {
   return pick;
 }
 
-// ---- People & access ----------------------------------------------------
-// Everyone on the access list still has to be a Google test user before they
-// can sign in at all, and that list lives in the Cloud Console rather than in
-// the app. This hands over the addresses and the page they go on.
-function googleUsersDialog() {
-  const users = wizTestUsers();
-  const joined = users.join(', ');
-  UI.modal({
-    title: T('access.googleTitle'),
-    width: 620,
-    body: `<p>${UI.esc(T('access.googleIntro'))}</p>
-      <ol class="wiz-list">
-        <li>${UI.esc(T('access.googleS1'))}</li>
-        <li>${UI.esc(T('access.googleS2'))}</li>
-        <li>${UI.esc(T('access.googleS3'))}</li>
-      </ol>
-      ${users.length
-        ? `<div class="wiz-copy wiz-users">
-             <span class="wiz-copy-label">${UI.esc(T('gw.s3Users').replace('{0}', users.length))}</span>
-             <code class="wiz-copy-val">${UI.esc(joined)}</code>
-             <button type="button" class="btn sm" id="gu_copy">${UI.esc(T('gw.s3CopyUsers'))}</button>
-           </div>`
-        : `<p class="hint">${UI.esc(T('gw.s3NoUsers'))}</p>`}
-      <p class="hint">${UI.esc(T('access.googleTail'))}</p>`,
-    footer: `<a class="btn primary" href="${GOOGLE_PAGES.audience}" target="_blank" rel="noopener">${UI.esc(T('access.googleOpen'))} \u2197</a>
-      <button class="btn ghost" data-close2>${T('common.close')}</button>`,
-    onOpen: (m, close) => {
-      m.querySelector('[data-close2]').onclick = close;
-      const copy = m.querySelector('#gu_copy');
-      if (copy) copy.onclick = async () => {
-        const ok = await copyText(joined);
-        UI.toast(ok ? T('cloud.copied') : T('gw.copyFailed'), ok ? 'success' : 'error');
-      };
-    }
-  });
-}
-
-function accessEditDialog(existing, onDone) {
-  const m0 = existing || { name: '', email: '', role: 'Player', note: '' };
-  const sugg = Access.suggestions().filter(s => !existing);
-  UI.modal({
-    title: existing ? T('access.editTitle') : T('access.addTitle'),
-    width: 560,
-    body: `<label class="field"><span>${UI.esc(T('access.name'))}</span>
-        <input id="ac_name" maxlength="60" value="${UI.esc(m0.name)}"></label>
-      <label class="field"><span>${UI.esc(T('access.email'))}</span>
-        <input id="ac_mail" type="email" spellcheck="false" autocomplete="off" value="${UI.esc(m0.email)}"
-          ${existing ? 'readonly' : `list="ac_sugg"`}>
-        <span class="hint">${UI.esc(T('access.emailHint'))}</span></label>
-      ${sugg.length ? `<datalist id="ac_sugg">${sugg.map(s => `<option value="${UI.esc(s.email)}">${UI.esc(s.name)}</option>`).join('')}</datalist>` : ''}
-      <label class="field"><span>${UI.esc(T('access.role'))}</span>
-        <select id="ac_role">${Access.GRANTABLE.map(r => `<option value="${UI.esc(r)}" ${r === m0.role ? 'selected' : ''}>${UI.esc(Access.label(r))}</option>`).join('')}</select>
-        <span class="hint">${UI.esc(T('access.roleHint'))}</span></label>
-      <label class="field"><span>${UI.esc(T('access.note'))}</span>
-        <input id="ac_note" maxlength="80" value="${UI.esc(m0.note || '')}"></label>
-      <p class="hint" id="ac_state"></p>`,
-    footer: `<button class="btn ghost" data-close2>${T('common.cancel')}</button>
-      <button class="btn primary" data-go>${T('common.save')}</button>`,
-    onOpen: (m, close) => {
-      const mail = m.querySelector('#ac_mail');
-      const name = m.querySelector('#ac_name');
-      const state = m.querySelector('#ac_state');
-      (existing ? name : mail).focus();
-      // Picking a known address fills the rest in, so nothing has to be retyped.
-      mail.oninput = () => {
-        const hit = sugg.find(s => s.email === Access.normEmail(mail.value));
-        if (hit && !name.value.trim()) { name.value = hit.name; m.querySelector('#ac_role').value = hit.role; }
-      };
-      m.querySelector('[data-close2]').onclick = close;
-      m.querySelector('[data-go]').onclick = async () => {
-        try {
-          const entry = await Access.grant({
-            id: m0.id, addedAt: m0.addedAt, invitedAt: m0.invitedAt,
-            name: name.value, email: mail.value,
-            role: m.querySelector('#ac_role').value, note: m.querySelector('#ac_note').value
-          });
-          close();
-          UI.toast(T('access.saved'), 'success');
-          // Being on this list is meant to BE the Drive permission, not a
-          // promise of one for later — so the invite goes out right away.
-          await autoInviteMember(entry);
-          if (onDone) onDone();
-        } catch (e) { state.textContent = T('access.badEmail'); }
-      };
-    }
-  });
-}
-
-// Granting access here is the whole point of adding somebody, so the Drive
-// share goes out immediately instead of waiting for a separate trip to
-// "Invite people" — that button stays only for re-sending a failed one.
-async function autoInviteMember(entry) { return autoInviteMembers([entry]); }
-async function autoInviteMembers(list) {
-  list = (list || []).filter(Boolean);
-  if (!list.length || !window.TeamCloud || !TeamCloud.isLinked() || !window.Drive) return;
-  if (!(await Drive.isConfigured())) return;
-  try {
-    if (!Drive.isConnected()) await Drive.connect();
-    const res = await TeamCloud.inviteMembers(list);
-    const ok = res.filter(r => r.ok).length;
-    if (list.length === 1) {
-      UI.toast(ok ? T('access.invited').replace('{0}', list[0].email) : T('access.inviteFailed'), ok ? 'success' : 'error');
-    } else {
-      UI.toast(T('cloud.invited').replace('{0}', ok).replace('{1}', res.length), ok === res.length ? 'success' : 'error');
-    }
-  } catch (e) {
-    UI.toast(T('access.inviteFailed') + ' — ' + String((e && e.message) || e).slice(0, 160), 'error');
-  }
-}
-
 Views.settings = async function (mount) {
   const role = await Store.getSetting('role', 'Coach');
-  const staff = Access.isStaff(role);
   // A look-only team copy cannot promote itself out of read mode; the way back
   // is the coach, or leaving the shared database altogether.
   const readMode = Access.readMode();
@@ -1847,7 +1736,6 @@ Views.settings = async function (mount) {
         </span>
         <span class="hint">${T('rk.unlockHint')}</span></label>` : ''}`)}
     <div id="cloudCardHost">${cloudCard()}</div>
-    <div id="accessCardHost">${staff ? accessCard() : ''}</div>
     ${UI.acc('setData', T('settings.dataCard'), `
       <p style="color:var(--muted);font-size:13px">${T('settings.dataHint')}</p>
 
@@ -1985,31 +1873,6 @@ Views.settings = async function (mount) {
       <p class="hint">${T('cloud.hint')}</p>`);
   }
 
-  // ---- People & access (admin / coach only) ----
-  function accessCard() {
-    const list = Access.members();
-    const row = m => `<div class="acc-person">
-      <span class="acc-person-main">
-        <b>${UI.esc(m.name || m.email)}</b>
-        <span class="tag ${Access.isStaff(m.role) ? 'green' : ''}">${UI.esc(Access.label(m.role))}</span>
-        <span class="share-n">${UI.esc(m.email)}${m.note ? ' · ' + UI.esc(m.note) : ''}</span>
-      </span>
-      <span class="bm-acts">
-        <button class="btn sm" data-acc-edit="${UI.esc(m.id)}">${T('common.edit')}</button>
-        <button class="btn sm danger" data-acc-rm="${UI.esc(m.id)}">${T('common.remove')}</button>
-      </span>
-    </div>`;
-    return UI.acc('setAccess', T('access.title'), `
-      <p style="color:var(--muted);font-size:13px">${T('access.desc')}</p>
-      <div class="acc-people">${list.length ? list.map(row).join('') : `<p class="hint">${T('access.none')}</p>`}</div>
-      <div class="row" style="flex:0;margin-top:10px;flex-wrap:wrap">
-        <button class="btn primary" id="accAdd">${T('access.addTitle')}</button>
-        <button class="btn" id="accImport">${T('access.fromSquad')}</button>
-        <button class="btn" id="accGoogle">${T('access.googleBtn')}</button>
-      </div>
-      <p class="hint">${T('access.hint')}</p>`);
-  }
-
   // ---- Screen layout ----
   // mobile.js decides on its own, but a coach on a big phone may want the
   // desktop shell anyway — and a tester on a laptop needs to see the phone one.
@@ -2039,21 +1902,14 @@ Views.settings = async function (mount) {
 
   UI.bindAcc(mount);
 
-  // The two cloud panels redraw themselves in place, so a sync does not fold
-  // every other card shut by re-rendering the whole page.
+  // The cloud panel redraws itself in place, so a sync does not fold every
+  // other card shut by re-rendering the whole page.
   function refreshCloud() {
     const host = mount.querySelector('#cloudCardHost');
     if (!host) return;
     host.innerHTML = cloudCard();
     UI.bindAcc(host);
     bindCloud();
-  }
-  function refreshAccess() {
-    const host = mount.querySelector('#accessCardHost');
-    if (!host || !staff) return;
-    host.innerHTML = accessCard();
-    UI.bindAcc(host);
-    bindAccess();
   }
   const on = (sel, fn) => { const el = mount.querySelector(sel); if (el) el.onclick = fn; };
   // Long enough for the toast to be read, then the app comes back on the new data.
@@ -2085,9 +1941,9 @@ Views.settings = async function (mount) {
       // Nothing can be created before Google is connected, so an unconfigured
       // coach is taken through the setup first instead of into an error.
       if (!await Drive.isConfigured()) return googleWizard(refreshCloud);
-      cloudCreateDialog(() => { refreshCloud(); refreshAccess(); });
+      cloudCreateDialog(refreshCloud);
     });
-    on('#clJoin', () => cloudJoinDialog(() => { refreshCloud(); refreshAccess(); App.render(); }));
+    on('#clJoin', () => cloudJoinDialog(() => { refreshCloud(); App.render(); }));
     on('#clReconnect', async () => {
       // Signed-in owner only: a code-less way back into a folder this same
       // Google account already made, for when a browser reset wiped the id
@@ -2096,7 +1952,7 @@ Views.settings = async function (mount) {
       if (!Drive.isConnected()) {
         try { await Drive.connect(); } catch (e) { return UI.toast(T('cloud.connectFailed'), 'error'); }
       }
-      cloudReconnectDialog(() => { refreshCloud(); refreshAccess(); App.render(); });
+      cloudReconnectDialog(() => { refreshCloud(); App.render(); });
     });
     on('#clCode', cloudCodeDialog);
     on('#clPolicy', () => sharePolicyDialog(refreshCloud));
@@ -2107,7 +1963,7 @@ Views.settings = async function (mount) {
     // A sync rewrites every store underneath the open views, so the app is
     // reloaded rather than left showing what was on screen before it.
     on('#clSync', () => busyRun('#clSync', () => TeamCloud.sync(), () => T('cloud.synced'), true));
-    on('#clOwnDb', () => cloudCreateDialog(() => { refreshCloud(); refreshAccess(); }, { ownCopy: true }));
+    on('#clOwnDb', () => cloudCreateDialog(refreshCloud, { ownCopy: true }));
     on('#clForget', () => UI.confirm(T('cloud.disconnectAsk'), async () => {
       await TeamCloud.forget();
       UI.toast(T('cloud.disconnected'), 'success');
@@ -2120,36 +1976,7 @@ Views.settings = async function (mount) {
     };
   }
 
-  function bindAccess() {
-    on('#accAdd', () => accessEditDialog(null, refreshAccess));
-    on('#accGoogle', googleUsersDialog);
-    on('#accImport', () => {
-      const known = new Set(Access.members().map(m => m.email));
-      const add = Access.suggestions().filter(s => !known.has(s.email));
-      if (!add.length) return UI.toast(T('access.nothingToImport'));
-      UI.confirm(T('access.fromSquadAsk').replace('{0}', add.length), async () => {
-        const added = [];
-        for (const s of add) added.push(await Access.grant(s));
-        UI.toast(T('access.imported').replace('{0}', add.length), 'success');
-        refreshAccess();
-        await autoInviteMembers(added);
-      });
-    });
-    mount.querySelectorAll('[data-acc-edit]').forEach(b => b.onclick = () => {
-      const m = Access.members().find(x => x.id === b.dataset.accEdit);
-      if (m) accessEditDialog(m, refreshAccess);
-    });
-    mount.querySelectorAll('[data-acc-rm]').forEach(b => b.onclick = () => {
-      const m = Access.members().find(x => x.id === b.dataset.accRm);
-      if (!m) return;
-      UI.confirm(T('access.removeAsk').replace('{0}', m.name || m.email), async () => {
-        await Access.revoke(m.id); UI.toast(T('access.removed'), 'success'); refreshAccess();
-      });
-    });
-  }
-
   bindCloud();
-  bindAccess();
   bindOffline();
 
   // ---- Offline ----
