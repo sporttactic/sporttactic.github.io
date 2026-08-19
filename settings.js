@@ -468,10 +468,15 @@ function cloudErrText(err) {
   // something a role or a permission fix can help with.
   if (/Failed to fetch|NetworkError|ERR_INTERNET_DISCONNECTED/i.test(s)) return T('cloud.syncFailedNet');
   if (/bad-api-key|developer key/i.test(s)) return T('cloud.badApiKey');
-  // Drive's own write permission belongs to whoever owns the file — nobody
-  // else's Google account can borrow it, code or no code, so this means "make
-  // your own database" (Settings → Cloud), not "something is broken".
-  if (/(?:Drive API|HTTP) 40[134]/.test(s)) return T('cloud.writeForbidden');
+  // A 401/403/404 means something different depending on who hit it: the
+  // owner's OWN push being refused is a genuine Drive problem, but writes are
+  // owner-gated now, so this almost always means a non-owner's READ of some
+  // shared file failed (not shared, or the owner's sharing broke) — "refused
+  // to save" would be actively misleading there, so it points at the actual
+  // fix (a database of their own) instead.
+  if (/(?:Drive API|HTTP) 40[134]/.test(s)) {
+    return (window.TeamCloud && TeamCloud.cfg().owner) ? T('cloud.writeForbidden') : T('cloud.needsOwnDb');
+  }
   return err;
 }
 
@@ -1678,6 +1683,20 @@ async function offerDriveConnect() {
   });
 }
 
+// A non-owner's read failing with 401/403/404 (see cloudErrText) means the
+// owner's sharing on some file is missing or broken — there is no fix for
+// that from this side, so this offers the one thing that actually works: a
+// database of this device's own, seeded with whatever data already made it
+// here, instead of leaving the coach stuck on a dead-end error every sync.
+function offerOwnDb(onDone) {
+  if (!window.TeamCloud || !window.Access) return false;
+  const c = TeamCloud.cfg();
+  if (!c.fileId || c.owner) return false;
+  if (Access.tier() === 'player' || !Access.can('cloud.write') || !Access.autoWriteEnabled(Access.role())) return false;
+  UI.confirm(T('cloud.needsOwnDbAsk'), () => cloudCreateDialog(onDone, { ownCopy: true }));
+  return true;
+}
+
 // Which squad this copy works with is the club's call, not the joining device's:
 // a squad word narrows Store.teams() to that one squad, so the copy simply
 // opens on what is left instead of being asked.
@@ -2049,7 +2068,11 @@ Views.settings = async function (mount) {
     }
     catch (e) {
       const s = String((e && e.message) || e);
-      UI.toast(cloudErrText(s).slice(0, 200), 'error');
+      // A 401/403/404 on a non-owner means some shared file is not readable
+      // on this account — offer the actual fix (a database of their own)
+      // right here instead of just a dead-end toast.
+      if (/(?:Drive API|HTTP) 40[134]/.test(s) && offerOwnDb(refreshCloud)) { /* dialog shown */ }
+      else UI.toast(cloudErrText(s).slice(0, 200), 'error');
     }
     finally { if (el) el.disabled = false; refreshCloud(); }
   };

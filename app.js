@@ -345,9 +345,13 @@ const App = (() => {
       if (!got) UI.toast(T('cloud.upToDate'), 'success');
     } catch (e) {
       // Drive's own permission belongs to whoever owns the file, and there is
-      // no per-account fix for that any more — a coach who wants to write
-      // makes their own database instead (Settings → Cloud).
-      if (e && e.needsGrant) { UI.toast(T('cloud.needsOwnDb'), 'error'); return; }
+      // no per-account fix for that any more — offer the one thing that does
+      // work (a database of this device's own) right where the coach is
+      // standing, instead of a dead-end toast.
+      if (e && e.needsGrant) {
+        if (typeof offerOwnDb !== 'function' || !offerOwnDb()) UI.toast(T('cloud.needsOwnDb'), 'error');
+        return;
+      }
       const key = e && e.oversize ? (TeamCloud.cfg().owner ? 'cloud.oversizeOwner' : 'cloud.oversize')
         : (e && e.message === 'signin') ? 'cloud.signinNeeded' : '';
       UI.toast(key ? T(key) : T('cloud.syncFail') + ' — ' + ((e && e.message) || e), 'error');
