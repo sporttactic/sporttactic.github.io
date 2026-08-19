@@ -486,6 +486,18 @@ const Drive = (() => {
       '?alt=media&_=' + now() + '&key=' + encodeURIComponent(apiKey.trim()));
   }
 
+  // The folder a publicly-shared file sits in, read with nothing but the API
+  // key — no OAuth, so this works even for a Google account that has never
+  // opened anything yet. This is what lets grantAccess offer the FOLDER
+  // picker (which covers every area file in one step) on the very first try,
+  // instead of only being able to fall back to picking the one manifest file.
+  async function publicGetParent(fileId, apiKey) {
+    if (!apiKey || !API_KEY_RE.test(apiKey.trim())) throw new Error('bad-api-key');
+    const r = await fetchJson('https://www.googleapis.com/drive/v3/files/' + encodeURIComponent(fileId) +
+      '?fields=parents&_=' + now() + '&key=' + encodeURIComponent(apiKey.trim()));
+    return (r && Array.isArray(r.parents) && r.parents[0]) || '';
+  }
+
   // ---- Backup / restore (private appDataFolder) ----
   function buildDump() {
     const dump = {};
@@ -667,7 +679,7 @@ const Drive = (() => {
     setupTeam, coachSend, coachReadAll, findMyChannels, playerSend, playerPushTraining,
     // Low-level helpers, used by cloud.js for the shared team database.
     ensureFolder, findFolder, listTeamFolders, findFile, uploadJson, downloadJson, listFiles, getParent,
-    shareAnyone, unshareAnyone, listPermissions, fileLink, publicDownload
+    shareAnyone, unshareAnyone, listPermissions, fileLink, publicDownload, publicGetParent
   };
 })();
 window.Drive = Drive;

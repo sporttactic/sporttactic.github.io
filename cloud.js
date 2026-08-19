@@ -764,6 +764,22 @@ const TeamCloud = (() => {
     if (c.folderId) return c.folderId;
     const remembered = await Drive.getTeamFolderId();
     if (remembered) return remembered;
+    // Works from nothing but the team's own API key (carried in the team
+    // code) — no sign-in, no prior grant needed at all, since it only reads
+    // metadata of a file already shared "anyone may view". This is what lets
+    // a brand-new coach's very first Grant Drive access offer the FOLDER
+    // picker (covers every area file in one step) instead of falling back to
+    // the single-file picker just because nothing has been opened yet.
+    if (c.apiKey && Drive.publicGetParent) {
+      try {
+        const parent = await Drive.publicGetParent(c.fileId, c.apiKey);
+        if (parent) {
+          await setCfg({ folderId: parent });
+          try { await Drive.setTeamFolderId(parent); } catch (e) { /* not fatal */ }
+          return parent;
+        }
+      } catch (e) { /* link sharing may be off; fall through to the OAuth path */ }
+    }
     if (!signedIn() || !Drive.getParent) return '';
     let parent = '';
     try { parent = await Drive.getParent(c.fileId); } catch (e) { return ''; }
@@ -927,16 +943,30 @@ const TeamCloud = (() => {
     if (!window.Drive || !Drive.grantAccess) throw new Error('not-supported');
     const c = cfg();
     if (!c.fileId) throw new Error('not-linked');
-    const folderId = await knownFolderId(c);
+    let folderId = await knownFolderId(c);
     const picked = folderId
       ? await Drive.grantAccess({ folderId, folderName: c.teamName || '', apiKey: c.apiKey })
       : await Drive.grantAccess({ fileId: c.fileId, fileName: MANIFEST_NAME, apiKey: c.apiKey });
+    if (!picked) return false;
     // Opening the folder/file only fixes drive.file scope VISIBILITY; Drive's
     // own permission on it is still whatever it was before (usually just the
     // "anyone may view" fallback). Without this, a coach could press this
     // button, see it succeed, and still get refused on the very next write.
-    if (picked) await ensureSelfWriteAccess(true).catch(() => false);
-    return picked;
+    await ensureSelfWriteAccess(true).catch(() => false);
+    // No team API key configured means the real folder id could not be found
+    // before anything was open (see knownFolderId), so the picker above could
+    // only ever offer the single manifest file — now that it IS open, the
+    // folder itself can finally be found too; picking it here as well covers
+    // every area file in the same action instead of leaving the coach to
+    // notice and press Grant Drive access a second time.
+    if (!folderId) {
+      folderId = await knownFolderId(c);
+      if (folderId) {
+        const gotFolder = await Drive.grantAccess({ folderId, folderName: c.teamName || '', apiKey: c.apiKey });
+        if (gotFolder) await ensureSelfWriteAccess(true).catch(() => false);
+      }
+    }
+    return true;
   }
 
   return {
