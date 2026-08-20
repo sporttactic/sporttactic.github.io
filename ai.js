@@ -1,14 +1,10 @@
-/* AI assistant (ChatGPT or Gemini) — one shared panel reused by every view.
-   API keys live in localStorage, NOT in the settings store, so they can
+/* AI assistant (ChatGPT) — one shared panel reused by every view.
+   The API key lives in localStorage, NOT in the settings store, so it can
    never leak through a full JSON backup. */
 window.AI = (() => {
-  // Each provider's own model and key slot. A third provider later only means
-  // an entry here plus its branch in callModel().
-  const PROVIDERS = {
-    openai: { label: 'ChatGPT', model: 'gpt-4o-mini', keyLs: 'stx_ai_key' },
-    gemini: { label: 'Gemini', model: 'gemini-2.5-flash', keyLs: 'stx_ai_key_gemini' }
-  };
-  const PROVIDER_LS = 'stx_ai_provider';
+  const ENDPOINT = 'https://api.openai.com/v1/chat/completions';
+  const MODEL = 'gpt-4o-mini';
+  const KEY_LS = 'stx_ai_key';
   const TOPICS = ['play', 'injuries', 'analytics', 'training'];
   const MAX_TURNS = 6;          // history turns sent back to the model
   const chats = {};             // topic -> [{role, content}], kept for the session
@@ -16,20 +12,8 @@ window.AI = (() => {
 
   const esc = s => UI.esc(String(s == null ? '' : s));
 
-  function getProvider() {
-    try { const p = localStorage.getItem(PROVIDER_LS) || ''; return PROVIDERS[p] ? p : 'openai'; }
-    catch (e) { return 'openai'; }
-  }
-  function setProvider(p) { try { localStorage.setItem(PROVIDER_LS, PROVIDERS[p] ? p : 'openai'); } catch (e) { } }
-  // Provider omitted on either means "whichever is active right now".
-  function getKey(p) {
-    const id = PROVIDERS[p] ? p : getProvider();
-    try { return localStorage.getItem(PROVIDERS[id].keyLs) || ''; } catch (e) { return ''; }
-  }
-  function setKey(p, v) {
-    const id = PROVIDERS[p] ? p : getProvider();
-    try { v ? localStorage.setItem(PROVIDERS[id].keyLs, v) : localStorage.removeItem(PROVIDERS[id].keyLs); } catch (e) { }
-  }
+  function getKey() { try { return localStorage.getItem(KEY_LS) || ''; } catch (e) { return ''; } }
+  function setKey(v) { try { v ? localStorage.setItem(KEY_LS, v) : localStorage.removeItem(KEY_LS); } catch (e) { } }
 
   // ---- Context: a compact snapshot of the club's own data ----
   function line(p, st) {
@@ -188,57 +172,10 @@ window.AI = (() => {
     root.querySelector('[data-ai-send]').disabled = !has || !!busy[topic];
     root.querySelector('[data-ai-input]').disabled = !has;
     root.querySelectorAll('[data-ai-topic]').forEach(b => { b.disabled = !has || !!busy[topic]; b.classList.toggle('active', b.dataset.aiTopic === topic); });
-    root.querySelectorAll('[data-ai-provider]').forEach(b => b.classList.toggle('active', b.dataset.aiProvider === getProvider()));
     root.querySelector('[data-ai-nokey]').hidden = has;
   }
 
   // ---- Request ----
-  // One HTTP call to whichever provider is active. Returns the answer text, or
-  // throws an Error whose message is already fit to show the coach.
-  async function callModel(messages, temperature, maxTokens) {
-    const provider = getProvider();
-    const cfg = PROVIDERS[provider];
-    const key = getKey(provider);
-    if (provider === 'gemini') {
-      // Gemini has no "system" role: instructions ride in their own field and
-      // history turns are 'user'/'model' instead of 'user'/'assistant'.
-      const sys = messages.filter(m => m.role === 'system').map(m => m.content).join('\n\n');
-      const contents = messages.filter(m => m.role !== 'system')
-        .map(m => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] }));
-      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${cfg.model}:generateContent`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
-        body: JSON.stringify({
-          systemInstruction: { parts: [{ text: sys }] },
-          contents,
-          generationConfig: { temperature, maxOutputTokens: maxTokens }
-        })
-      });
-      if (!res.ok) {
-        const s = res.status;
-        throw new Error(s === 400 || s === 403 ? T('ai.badKey') : s === 429 ? T('ai.rate') : `${T('ai.failed')} (${s})`);
-      }
-      const data = await res.json();
-      const parts = data && data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts;
-      const answer = parts ? parts.map(p => p.text || '').join('') : '';
-      // No candidate text usually means the prompt or the answer was filtered.
-      if (!answer) throw new Error(data && data.promptFeedback && data.promptFeedback.blockReason ? T('ai.blocked') : T('ai.failed'));
-      return answer;
-    }
-    const res = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key },
-      body: JSON.stringify({ model: cfg.model, temperature, max_tokens: maxTokens, messages })
-    });
-    if (!res.ok) {
-      throw new Error(res.status === 401 ? T('ai.badKey') : res.status === 429 ? T('ai.rate') : `${T('ai.failed')} (${res.status})`);
-    }
-    const data = await res.json();
-    const answer = data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
-    if (!answer) throw new Error(T('ai.failed'));
-    return answer;
-  }
-
   async function ask(root, question) {
     const topic = root.dataset.ai;
     const q = String(question || '').trim();
@@ -253,7 +190,23 @@ window.AI = (() => {
     renderLog(root); syncState(root);
 
     try {
-      const answer = await callModel([{ role: 'system', content: systemPrompt() }].concat(hist.slice(-MAX_TURNS)), 0.4, 700);
+      const res = await fetch(ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
+        body: JSON.stringify({
+          model: MODEL,
+          temperature: 0.4,
+          max_tokens: 700,
+          messages: [{ role: 'system', content: systemPrompt() }].concat(hist.slice(-MAX_TURNS))
+        })
+      });
+      if (!res.ok) {
+        const msg = res.status === 401 ? T('ai.badKey') : res.status === 429 ? T('ai.rate') : T('ai.failed') + ' (' + res.status + ')';
+        throw new Error(msg);
+      }
+      const data = await res.json();
+      const answer = data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+      if (!answer) throw new Error(T('ai.failed'));
       hist.push({ role: 'assistant', content: answer });
     } catch (err) {
       hist.pop();
@@ -264,25 +217,22 @@ window.AI = (() => {
     }
   }
 
-  // provider omitted opens the dialog for whichever provider is active.
-  function keyDialog(root, provider) {
-    const p = PROVIDERS[provider] ? provider : getProvider();
-    const cfg = PROVIDERS[p];
+  function keyDialog(root) {
     UI.modal({
-      title: T('ai.keyTitle').replace('{0}', cfg.label),
+      title: T('ai.keyTitle'),
       width: 520,
-      body: `<p style="color:var(--muted);font-size:13px">${esc(T('ai.keyIntro').replace(/\{0\}/g, cfg.label))}</p>
+      body: `<p style="color:var(--muted);font-size:13px">${esc(T('ai.keyIntro'))}</p>
         <label class="field"><span>${esc(T('ai.key'))}</span>
-          <input id="aiKeyIn" type="password" autocomplete="off" spellcheck="false" placeholder="${p === 'gemini' ? 'AIza...' : 'sk-...'}" value="${esc(getKey(p))}"></label>
+          <input id="aiKeyIn" type="password" autocomplete="off" spellcheck="false" placeholder="sk-..." value="${esc(getKey())}"></label>
         <p style="color:var(--muted);font-size:12px">${esc(T('ai.keyStore'))}</p>`,
       footer: `<button class="btn ghost" data-close2>${esc(T('common.cancel'))}</button>
         <button class="btn danger" data-ai-keydel>${esc(T('ai.keyRemove'))}</button>
         <button class="btn primary" data-ai-keysave>${esc(T('common.save'))}</button>`,
       onOpen: (m, close) => {
         m.querySelector('[data-close2]').onclick = close;
-        m.querySelector('[data-ai-keydel]').onclick = () => { setKey(p, ''); close(); if (root) syncState(root); UI.toast(T('ai.keyCleared'), 'success'); };
+        m.querySelector('[data-ai-keydel]').onclick = () => { setKey(''); close(); if (root) syncState(root); UI.toast(T('ai.keyCleared'), 'success'); };
         m.querySelector('[data-ai-keysave]').onclick = () => {
-          setKey(p, m.querySelector('#aiKeyIn').value.trim());
+          setKey(m.querySelector('#aiKeyIn').value.trim());
           close(); if (root) syncState(root); UI.toast(T('ai.keySaved'), 'success');
         };
       }
@@ -309,10 +259,22 @@ window.AI = (() => {
     // Every caller gets the language rule, whatever prompt it built.
     const sys = langLines().join('\n') + '\n' + String(system || '');
     try {
-      const answer = await callModel([{ role: 'system', content: sys }, { role: 'user', content: user }], 0.7, maxTokens || 600);
-      return String(answer || '').trim();
+      const res = await fetch(ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key },
+        body: JSON.stringify({
+          model: MODEL, temperature: 0.7, max_tokens: maxTokens || 600,
+          messages: [{ role: 'system', content: sys }, { role: 'user', content: user }]
+        })
+      });
+      if (!res.ok) {
+        UI.toast(res.status === 401 ? T('ai.badKey') : res.status === 429 ? T('ai.rate') : `${T('ai.failed')} (${res.status})`, 'error');
+        return null;
+      }
+      const data = await res.json();
+      return String((data.choices && data.choices[0] && data.choices[0].message.content) || '').trim();
     } catch (e) {
-      UI.toast(e && e.message ? e.message : T('ai.failed'), 'error');
+      UI.toast(T('ai.failed'), 'error');
       return null;
     }
   }
@@ -401,9 +363,6 @@ window.AI = (() => {
         <h4>${esc(T('ai.helpStepsTitle'))}</h4>
         <p><a class="btn sm primary" href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer">${esc(T('ai.helpLink'))}</a></p>
         <ol class="ai-guide ai-steps">${['ai.helpS1', 'ai.helpS2', 'ai.helpS3', 'ai.helpS4', 'ai.helpS5', 'ai.helpS6'].map(li).join('')}</ol>
-        <h4>${esc(T('ai.helpGeminiTitle'))}</h4>
-        <p><a class="btn sm primary" href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer">${esc(T('ai.helpGeminiLink'))}</a></p>
-        <ol class="ai-guide ai-steps">${['ai.helpGeminiS1', 'ai.helpGeminiS2', 'ai.helpGeminiS3', 'ai.helpGeminiS4'].map(li).join('')}</ol>
         <p class="ai-ready">${esc(T('ai.helpReady'))}</p>
         <h4>${esc(T('ai.helpCostTitle'))}</h4>
         <p>${esc(T('ai.helpCost'))}</p>
@@ -420,7 +379,6 @@ window.AI = (() => {
   // ---- Public: markup + wiring ----
   function section(topic = 'play') {
     const t = TOPICS.indexOf(topic) > -1 ? topic : 'play';
-    const provider = getProvider();
     return `
       <section class="card ai-card" data-ai="${t}">
         <div class="ai-head">
@@ -429,13 +387,9 @@ window.AI = (() => {
           </div>
           <div class="ai-head-acts">
             <button class="btn sm" data-ai-help type="button">❔ ${esc(T('ai.help'))}</button>
-            <button class="btn sm" data-ai-key="openai" type="button">🔑 ${esc(T('ai.keyBtn').replace('{0}', PROVIDERS.openai.label))}</button>
-            <button class="btn sm" data-ai-key="gemini" type="button">🔑 ${esc(T('ai.keyBtn').replace('{0}', PROVIDERS.gemini.label))}</button>
+            <button class="btn sm" data-ai-key type="button">🔑 ${esc(T('ai.key'))}</button>
             <button class="btn sm" data-ai-clear type="button">${esc(T('ai.clear'))}</button>
           </div>
-        </div>
-        <div class="ai-topics">
-          ${Object.keys(PROVIDERS).map(p => `<button class="pill ${p === provider ? 'active' : ''}" type="button" data-ai-provider="${p}">${esc(PROVIDERS[p].label)}</button>`).join('')}
         </div>
         <div class="ai-topics">
           ${TOPICS.map(k => `<button class="pill" type="button" data-ai-topic="${k}">${esc(T('ai.t.' + k))}</button>`).join('')}
@@ -455,7 +409,7 @@ window.AI = (() => {
     host.querySelectorAll('[data-ai]').forEach(root => {
       const input = root.querySelector('[data-ai-input]');
       root.querySelector('[data-ai-help]').onclick = () => helpDialog();
-      root.querySelectorAll('[data-ai-key]').forEach(b => b.onclick = () => keyDialog(root, b.dataset.aiKey));
+      root.querySelector('[data-ai-key]').onclick = () => keyDialog(root);
       root.querySelector('[data-ai-clear]').onclick = () => { chats[root.dataset.ai] = []; renderLog(root); };
       root.querySelector('[data-ai-send]').onclick = () => { const q = input.value; input.value = ''; ask(root, q); };
       input.onkeydown = e => {
@@ -468,10 +422,6 @@ window.AI = (() => {
         renderLog(root); syncState(root);
         ask(root, T('ai.q.' + b.dataset.aiTopic));
       });
-      root.querySelectorAll('[data-ai-provider]').forEach(b => b.onclick = () => {
-        setProvider(b.dataset.aiProvider);
-        syncState(root);
-      });
       renderLog(root);
       syncState(root);
     });
@@ -479,6 +429,6 @@ window.AI = (() => {
 
   return {
     section, bind, complete, report, videos, render: fmt, checkVideo, pickVideo,
-    keyDialog: p => keyDialog(null, p), hasKey: () => !!getKey()
+    keyDialog: () => keyDialog(), hasKey: () => !!getKey()
   };
 })();

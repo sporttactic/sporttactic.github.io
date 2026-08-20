@@ -19,7 +19,7 @@ const PREF_PREFIX = 'stx_';
 // preference copied out of someone else's device. stx_drive_token is a live
 // Google OAuth access token kept only so a page refresh does not force a fresh
 // sign-in — it must never ride along in a backup or export either.
-const PREF_SECRETS = ['stx_ai_key', 'stx_ai_key_gemini', 'stx_lock', 'stx_drive_token'];
+const PREF_SECRETS = ['stx_ai_key', 'stx_lock', 'stx_drive_token'];
 function readPrefs() {
   const out = {};
   try {

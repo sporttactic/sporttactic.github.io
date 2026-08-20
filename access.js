@@ -226,7 +226,7 @@ const Access = (() => {
   // open and change what they added there; the club's own rows and everything
   // else are refused. `row` is the record on its way in, or the stored one on a
   // delete.
-  function blocks(store, row) {
+  function blocks(store, row, opts) {
     if (!readMode()) return false;
     if (store === 'settings') {
       // A verified role password is the coach's own say-so, so those two writes
@@ -235,6 +235,10 @@ const Access = (() => {
       return FIXED_SETTINGS.indexOf(row && row.id) >= 0;
     }
     if (openStores().indexOf(store) < 0) return true;
+    // Re-tagging a drill's category is not the same as rewriting it — a member
+    // may do this to ANY drill the training exception already opened, not only
+    // the ones stamped as their own.
+    if (store === 'exercises' && opts && opts.categoryOnly) return false;
     // The stored row decides, never the incoming one, so an edit cannot claim
     // a club drill by sending the stamp along with it.
     const known = (row && row.id) ? Store.find(store, row.id) : null;

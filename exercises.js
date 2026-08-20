@@ -140,6 +140,24 @@ Views.exerciseLib = function (mount, opts) {
   // library that came down from the coach is looked at, not edited. The gate is
   // the one the store uses, so the button is offered exactly when it works.
   const mayChange = e => !Access.blocks('exercises', e);
+  // Re-tagging a drill is not the same as rewriting it: a member may move ANY
+  // drill to a different category — including the club's own — as long as the
+  // training exception is open, even one they may not otherwise touch.
+  const mayRecat = e => !mayChange(e) && !Access.blocks('exercises', e, { categoryOnly: true });
+  function recatHtml(e) {
+    if (!mayRecat(e)) return '';
+    const own = SPORTS.exerciseCategories(sportId);
+    const cats2 = e.category && own.indexOf(e.category) < 0 ? own.concat([e.category]) : own;
+    return `<select class="btn sm" data-recat="${e.id}" title="${UI.esc(T('exercises.recatHint'))}">
+      ${cats2.map(x => `<option value="${UI.esc(x)}" ${x === e.category ? 'selected' : ''}>${UI.esc(tt('cat', x))}</option>`).join('')}
+    </select>`;
+  }
+  async function saveRecat(e, category) {
+    if (!e || category === e.category) return;
+    await Store.save('exercises', Object.assign({}, e, { category }), { categoryOnly: true });
+    UI.toast(T('exercises.recatDone'), 'success');
+    done();
+  }
   function cardHtml(e) {
     return `
       <div class="card" data-card="${e.id}">
@@ -155,7 +173,7 @@ Views.exerciseLib = function (mount, opts) {
         ${animChips(e)}
         <button class="btn sm" data-show="${e.id}">${T('common.show')}</button>
         ${mayChange(e) ? `<button class="btn sm" data-edit="${e.id}">${T('common.edit')}</button>
-        <button class="btn sm danger" data-del="${e.id}">${T('common.delete')}</button>` : ''}
+        <button class="btn sm danger" data-del="${e.id}">${T('common.delete')}</button>` : recatHtml(e)}
       </div>`;
   }
 
@@ -200,11 +218,14 @@ Views.exerciseLib = function (mount, opts) {
         <h4 style="margin-bottom:6px">${T('training.anims')}</h4>
         ${ANIM.chipsHtml(e.animations)}
         <div style="margin-top:12px">${linksHtml(e)}</div>`,
-      footer: `<button class="btn ghost" data-close2>${T('common.close')}</button>${mayChange(e) ? `<button class="btn primary" data-edit>${T('common.edit')}</button>` : ''}`,
+      footer: `<button class="btn ghost" data-close2>${T('common.close')}</button>${mayChange(e) ? `<button class="btn primary" data-edit>${T('common.edit')}</button>` : recatHtml(e)}`,
       onOpen: (m, close) => {
         ANIM.bind(m);
         m.querySelector('[data-close2]').onclick = close;
-        m.querySelector('[data-edit]').onclick = () => { close(); form(e); };
+        const editBtn = m.querySelector('[data-edit]');
+        if (editBtn) editBtn.onclick = () => { close(); form(e); };
+        const recatSel = m.querySelector('[data-recat]');
+        if (recatSel) recatSel.onchange = () => { saveRecat(e, recatSel.value); close(); };
       }
     });
   }
@@ -333,8 +354,19 @@ Views.exerciseLib = function (mount, opts) {
     };
     mount.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => form(Store.find('exercises', b.dataset.edit)));
     mount.querySelectorAll('[data-show]').forEach(b => b.onclick = () => showDrill(Store.find('exercises', b.dataset.show)));
+    mount.querySelectorAll('[data-recat]').forEach(sel => sel.onchange = () => saveRecat(Store.find('exercises', sel.dataset.recat), sel.value));
     ANIM.bind(mount);
-    mount.querySelectorAll('[data-del]').forEach(b => b.onclick = () => UI.confirm(T('exercises.delExercise'), async () => { await Store.remove('exercises', b.dataset.del); done(); }));
+    // A session pointing at a deleted drill would render an empty tag row —
+    // the same cleanup the category and remove-all buttons already do.
+    mount.querySelectorAll('[data-del]').forEach(b => b.onclick = () => UI.confirm(T('exercises.delExercise'), async () => {
+      const id = b.dataset.del;
+      await Store.remove('exercises', id);
+      for (const s of Store.all('training')) {
+        const left = (s.exercises || []).filter(x => x !== id);
+        if (left.length !== (s.exercises || []).length) await Store.save('training', Object.assign({}, s, { exercises: left }));
+      }
+      done();
+    }));
     UI.bindShare(mount, 'exercises', done);
   }
 

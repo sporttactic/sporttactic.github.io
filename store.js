@@ -44,11 +44,11 @@ const Store = (() => {
     } catch (e) { /* private mode */ }
     emit();
   }
-  function blockWrite(store, row) {
+  function blockWrite(store, row, opts) {
     const lock = !!lockGuard && LOCK_FREE.indexOf(store) < 0;
     // The second read-only mode: a copy that joined with a team code the coach
     // handed out as look-only. Access decides; this only reports it.
-    const member = !lock && !!(window.Access && Access.blocks && Access.blocks(store, row));
+    const member = !lock && !!(window.Access && Access.blocks && Access.blocks(store, row, opts));
     if (!lock && !member) return false;
     const now = Date.now();
     if (!lockQuiet && now - lastNag > 2000 && window.UI && UI.toast) {
@@ -59,15 +59,17 @@ const Store = (() => {
     return true;
   }
 
-  async function save(store, obj) {
-    if (blockWrite(store, obj)) return obj;
+  async function save(store, obj, opts) {
+    if (blockWrite(store, obj, opts)) return obj;
     if (!obj.id) obj.id = uid(store.slice(0, 3));
     // Anything a team owns is stamped once, so no view has to remember to do it.
     if (TEAM_SCOPED.indexOf(store) >= 0 && !obj.teamId) obj.teamId = activeTeamId();
     // What a read-only member writes here is their own work, and stays theirs
     // to change or delete — the club's rows came down from the shared file.
     if (store !== 'settings' && window.Access && Access.readMode && Access.readMode()) {
-      obj[Access.MEMBER_STAMP] = true;
+      // A narrow allowance (recategorising a club drill) must not quietly
+      // upgrade into owning the whole row it was never allowed to rewrite.
+      if (!(opts && opts.categoryOnly && !obj[Access.MEMBER_STAMP])) obj[Access.MEMBER_STAMP] = true;
     }
     obj.updatedAt = Date.now();
     await DB.put(store, obj);
