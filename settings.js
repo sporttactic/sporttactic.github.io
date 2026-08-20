@@ -12,14 +12,14 @@ const MAX_BACKUP_BYTES = 96 * 1024 * 1024;
 // Everything the app keeps outside IndexedDB lives in localStorage under `stx_`:
 // the athlete name, the scouting focus areas, the progression filters, which
 // panels are folded open, the mail setup. A backup that skipped them restored a
-// half-configured app, so they travel with it — except the OpenAI key, which is
-// a credential and must never end up in a file that gets mailed around.
+// half-configured app, so they travel with it — except the AI API keys, which
+// are credentials and must never end up in a file that gets mailed around.
 const PREF_PREFIX = 'stx_';
 // stx_lock is decided by the guard inside the file being imported, never by a
 // preference copied out of someone else's device. stx_drive_token is a live
 // Google OAuth access token kept only so a page refresh does not force a fresh
 // sign-in — it must never ride along in a backup or export either.
-const PREF_SECRETS = ['stx_ai_key', 'stx_lock', 'stx_drive_token'];
+const PREF_SECRETS = ['stx_ai_key', 'stx_ai_key_gemini', 'stx_lock', 'stx_drive_token'];
 function readPrefs() {
   const out = {};
   try {

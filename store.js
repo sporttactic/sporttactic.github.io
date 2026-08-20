@@ -478,6 +478,10 @@ const Store = (() => {
     exercises: ['exercises'], training: ['training', 'exercises'], tactics: ['tactics'],
     personal: ['personal'], opponents: ['opponents'],
     matches: ['matches', 'events'], planner: ['planner'],
+    // The whole Training Planner page in one file: sessions, the drills they use,
+    // and personal training & max tests — Status & progression is a chart drawn
+    // from these same personal rows, so it travels with them for free.
+    trainingPlanner: ['training', 'exercises', 'personal'],
     // The team record comes first so the club and season it points at can be found.
     team: ['teams', 'clubs', 'seasons', 'players', 'coaches'],
     stats: ['players', 'matches', 'events'], video: ['videos']

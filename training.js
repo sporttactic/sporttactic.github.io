@@ -56,7 +56,10 @@ Views.training = function (mount) {
 
     mount.innerHTML = `
       ${AI.section('training')}
-      <div class="page-head"><div><h1>${T('training.title')}</h1><p>${T('training.subtitle')}</p></div></div>
+      <div class="page-head">
+        <div><h1>${T('training.title')}</h1><p>${T('training.subtitle')}</p></div>
+        ${Access.readMode() ? '' : `<div class="head-acts">${UI.shareBar('trainingPlanner', { exportLabel: T('training.exportBtn'), importLabel: T('training.importBtn') })}</div>`}
+      </div>
       ${UI.acc('sessions', T('training.sessions'), cards, {
       sub: T('training.sessionsHint'),
       actions: `${Access.readMode() ? '' : UI.shareBar('training')}
@@ -74,6 +77,7 @@ Views.training = function (mount) {
     if (genBtn) genBtn.onclick = () => aiSessionForm();
     UI.bindShare(mount, 'training', render);
     UI.bindShare(mount, 'personal', render);
+    UI.bindShare(mount, 'trainingPlanner', render);
     AI.bind(mount);
     mount.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => sessionForm(Store.find('training', b.dataset.edit)));
     mount.querySelectorAll('[data-show]').forEach(b => b.onclick = () => showSession(Store.find('training', b.dataset.show)));
