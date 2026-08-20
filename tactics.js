@@ -263,10 +263,12 @@ Views.tactics = function (mount, params) {
             </div>
             <button class="btn sm" id="animSend" disabled title="${T('tactics.animSendHint')}">👥 ${T('tactics.animSend')}</button>
             <button class="btn sm" id="animPlayAll" title="${T('tactics.animPlayAllHint')}">▶▶ ${T('tactics.animPlayAll')}</button>
+            <button class="btn sm" id="animGroupBtn" title="${T('tactics.animGroupHint')}">🗂 ${T('tactics.animGroup')}</button>
             <div class="tool-group anim-acts" style="margin-top:6px;gap:6px">
               <button class="btn sm" id="animExportBtn" title="${T('tactics.exportAnimsHint')}">⭳ ${T('tactics.exportAnims')}</button>
               <label class="btn sm" style="cursor:pointer" title="${T('tactics.importAnimsHint')}">⭱ ${T('tactics.importAnims')}<input id="animImportInput" type="file" accept="application/json" hidden></label>
             </div>
+            <div id="animGroupsList"></div>
             <div><span id="recDot" class="rec-dot hidden">REC <span id="recTime">0:00</span> · <span id="frameCount">0</span> ${T('tactics.framesCaptured')}</span></div>
             <div id="recExport" class="rec-export hidden"></div>
             <div id="facingWrap">
@@ -1815,6 +1817,13 @@ Views.tactics = function (mount, params) {
     return Store.all('tactics').filter(t => t.kind === 'system' && (t.sport || 'handball') === sportId
       && (!lock || !t.teamId || t.teamId === lock));
   }
+  // Named bundles of saved animations, sent to a squad as one parcel — same
+  // squad-scoping rule as a single animation.
+  function userGroups() {
+    const lock = (window.Access && Access.teamLock) ? Access.teamLock() : '';
+    return Store.all('tactics').filter(t => t.kind === 'group' && (t.sport || 'handball') === sportId
+      && (!lock || !t.teamId || t.teamId === lock));
+  }
   // Mirror of the saved systems, docked under the Save Animation button.
   function renderAnimList() {
     const box = mount.querySelector('#animList');
@@ -1928,6 +1937,7 @@ Views.tactics = function (mount, params) {
     mount.querySelector('#animEdit').onclick = () => { if (sel()) editSystem(sel()); };
     mount.querySelector('#animVideo').onclick = () => { if (sel()) playSystemVideo(sel()); };
     mount.querySelector('#animShare').onclick = () => { if (sel()) shareSystem(sel()); };
+    mount.querySelector('#animGroupBtn').onclick = groupDialog;
     mount.querySelector('#animDel').onclick = () => {
       const id = sel();
       if (id) UI.confirm(T('tactics.animDelAsk'), async () => {
@@ -2156,9 +2166,10 @@ Views.tactics = function (mount, params) {
   // under Teams & Players instead of hunting the whole library. Pick the squad,
   // then tick the ones that belong to it — the ticks follow the squad, so this
   // screen also shows what it already has and takes one away again.
-  // Hand ONE animation to a squad: it then shows up under Teams & Players →
-  // Squad → Animations for that team, and stays in the library here as well.
-  function sendToTeam(id) {
+  // Hand ONE animation — or one group of them — to a squad: it then shows up
+  // under Teams & Players → Squad → Animations for that team, and stays in the
+  // library here as well.
+  function sendToTeam(id, isGroup) {
     const s = Store.find('tactics', id);
     const teams = Store.teams();
     if (!s) return;
@@ -2181,7 +2192,7 @@ Views.tactics = function (mount, params) {
           await Store.save('tactics', Object.assign({}, s, { teamId }));
           close();
           UI.toast(T('tactics.animSent').replace('{0}', (team && team.name) || ''), 'success');
-          renderAnimList();
+          if (isGroup) renderGroups(); else renderAnimList();
           offerAnimShare();
         };
       }
@@ -2198,6 +2209,83 @@ Views.tactics = function (mount, params) {
       pol.groups.tactics = Object.assign({}, pol.groups.tactics, { share: true });
       await Privacy.save(pol);
       UI.toast(T('tactics.animShareOn'), 'success');
+    });
+  }
+  // Bundle several saved animations under one name, then hand the whole
+  // bundle to a squad in one go — a week's worth of plays sent as one parcel
+  // instead of one at a time.
+  function groupDialog() {
+    const mine = userSystems();
+    if (!mine.length) return UI.toast(T('tactics.noSavedAnims'), 'error');
+    const teams = Store.teams();
+    if (!teams.length) return UI.toast(T('tactics.animNoTeam'), 'error');
+    const box = mount.querySelector('#animList');
+    const preSel = box && (box.selectedOptions[0] || {}).value;
+    UI.modal({
+      title: T('tactics.animGroupTitle'),
+      width: 520,
+      body: `<label class="field"><span>${T('tactics.animGroupName')}</span>
+          <input id="grp_name" maxlength="60" placeholder="${UI.esc(T('tactics.animGroupNamePh'))}"></label>
+        <div class="field"><span>${T('tactics.animGroupPick')}</span>
+          <div class="menu-picker">${mine.map(s => `<label class="check-row menu-row">
+            <input type="checkbox" value="${UI.esc(s.id)}" ${s.id === preSel ? 'checked' : ''}>
+            <span>${UI.esc(s.name)} <span class="tag">${(s.frames || []).length} ${T('tactics.frameList')}</span></span>
+          </label>`).join('')}</div>
+          <p class="hint">${T('tactics.animGroupPickHint')}</p></div>
+        <label class="field"><span>${UI.esc(T('teams.activeTeam'))}</span>
+          <select id="grp_team">${teams.map(t => `<option value="${UI.esc(t.id)}" ${t.id === Store.activeTeamId() ? 'selected' : ''}>${UI.esc(t.name)}</option>`).join('')}</select></label>`,
+      footer: `<button class="btn ghost" data-close2>${T('common.cancel')}</button>
+        <button class="btn primary" data-go>${T('tactics.animSend')}</button>`,
+      onOpen: (m, close) => {
+        const inp = m.querySelector('#grp_name');
+        inp.focus();
+        m.querySelector('[data-close2]').onclick = close;
+        m.querySelector('[data-go]').onclick = async () => {
+          const name = inp.value.trim();
+          if (!name) return UI.toast(T('tactics.animGroupNeedName'), 'error');
+          const animIds = [...m.querySelectorAll('.menu-picker input:checked')].map(b => b.value);
+          if (!animIds.length) return UI.toast(T('tactics.animGroupNeedAnims'), 'error');
+          const teamId = m.querySelector('#grp_team').value;
+          const team = teams.find(t => t.id === teamId);
+          await Store.save('tactics', { kind: 'group', name, sport: sportId, animIds, teamId });
+          close();
+          UI.toast(T('tactics.animSent').replace('{0}', (team && team.name) || ''), 'success');
+          renderGroups();
+          offerAnimShare();
+        };
+      }
+    });
+  }
+  // The groups sent so far, each shown with its animations as playable chips
+  // (anim.js's own viewer — the same one Training Planner uses).
+  function renderGroups() {
+    const box = mount.querySelector('#animGroupsList');
+    if (!box) return;
+    const groups = userGroups();
+    box.innerHTML = !groups.length ? '' : `
+      <h4 class="anim-head">${T('tactics.animGroupsTitle')}</h4>
+      ${groups.map(g => `
+        <div class="card" style="padding:8px;margin-bottom:6px">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:6px">
+            <b>\ud83d\uddc2 ${UI.esc(g.name)}</b>
+            <span class="tag">${(g.animIds || []).length} ${T('tactics.animGroupItems')}</span>
+          </div>
+          ${window.ANIM ? ANIM.chipsHtml(g.animIds) : ''}
+          <div class="tool-group anim-acts" style="margin-top:6px">
+            <button class="btn sm" data-group-send="${UI.esc(g.id)}" title="${T('tactics.animSendHint')}">\ud83d\udc65 ${T('tactics.animSend')}</button>
+            <button class="btn sm danger" data-group-del="${UI.esc(g.id)}">\u2715</button>
+          </div>
+        </div>`).join('')}`;
+    if (window.ANIM) ANIM.bind(box);
+    box.querySelectorAll('[data-group-send]').forEach(b => b.onclick = () => sendToTeam(b.dataset.groupSend, true));
+    box.querySelectorAll('[data-group-del]').forEach(b => b.onclick = () => {
+      const g = Store.find('tactics', b.dataset.groupDel);
+      if (!g) return;
+      UI.confirm(T('tactics.animGroupDelAsk').replace('{0}', g.name || ''), async () => {
+        await Store.remove('tactics', g.id);
+        renderGroups();
+        UI.toast(T('tactics.animGroupDeleted'), 'success');
+      });
     });
   }
   // Store the current frame sequence under a title so it can be replayed later.
@@ -2312,6 +2400,7 @@ Views.tactics = function (mount, params) {
 
   setupBotMode();
   renderAnimList();
+  renderGroups();
   renderTools();
   renderProps();
   updateCourtModeUI();
