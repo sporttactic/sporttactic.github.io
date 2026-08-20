@@ -201,15 +201,18 @@ const Access = (() => {
   // Everything the app counts — totals, ratings, reports — is derived from the
   // scouting events, so hiding them at the source empties all of it at once.
   const hidesEvents = () => memberCopy();
-  // Is this module one the coach left open to a read-only copy?
+  // Is this module one the coach left open to a read-only copy? Training stays
+  // open on a team-code join even before (or without) a role word is claimed —
+  // an unproven role must not cost a player the one module that is theirs.
   function moduleOpen(route) {
-    return !readMode() || (!unclaimed() && profile().training && OPEN_ROUTES.indexOf(route) >= 0);
+    return !readMode() || (profile().training && OPEN_ROUTES.indexOf(route) >= 0);
   }
   const openStores = () => {
-    const base = (!unclaimed() && profile().training) ? OPEN_STORES : [];
+    const base = profile().training ? OPEN_STORES : [];
     // Whatever the club opened for contributions has to be writable here too,
     // or a member would have nothing to send back. Still only their own rows —
-    // blocks() keeps the club's records the club's.
+    // blocks() keeps the club's records the club's. Unproven role passwords
+    // still stop here, but never take the training exception above down with them.
     if (unclaimed() || !window.Privacy) return base;
     const pol = Privacy.policy();
     if (!Privacy.contributes(pol)) return base;
