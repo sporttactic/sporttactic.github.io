@@ -2261,12 +2261,14 @@ Views.tactics = function (mount, params) {
       }
     });
   }
-  // Rename a group or change which animations it bundles — unticking one here
-  // removes it from the group only, the animation itself stays in the library.
+  // Rename a group, change which animations it bundles, or re-target its
+  // squad — one save updates the group, every animation still in it (so the
+  // squad picked here always sees the current line-up), and the group list.
   function editGroup(id) {
     const g = Store.find('tactics', id);
     if (!g) return;
     const mine = userSystems();
+    const teams = Store.teams();
     UI.modal({
       title: T('tactics.animGroupEdit'),
       width: 520,
@@ -2277,7 +2279,9 @@ Views.tactics = function (mount, params) {
             <input type="checkbox" value="${UI.esc(s.id)}" ${(g.animIds || []).indexOf(s.id) > -1 ? 'checked' : ''}>
             <span>${UI.esc(s.name)} <span class="tag">${(s.frames || []).length} ${T('tactics.frameList')}</span></span>
           </label>`).join('')}</div>
-          <p class="hint">${T('tactics.animGroupPickHint')}</p></div>`,
+          <p class="hint">${T('tactics.animGroupPickHint')}</p></div>
+        ${teams.length ? `<label class="field"><span>${UI.esc(T('teams.activeTeam'))}</span>
+          <select id="grp_eteam">${teams.map(t => `<option value="${UI.esc(t.id)}" ${t.id === (g.teamId || Store.activeTeamId()) ? 'selected' : ''}>${UI.esc(t.name)}</option>`).join('')}</select></label>` : ''}`,
       footer: `<button class="btn ghost" data-close2>${T('common.cancel')}</button><button class="btn primary" data-save>${T('common.save')}</button>`,
       onOpen: (m, close) => {
         const inp = m.querySelector('#grp_ename');
@@ -2287,9 +2291,15 @@ Views.tactics = function (mount, params) {
           if (!name) return UI.toast(T('tactics.animGroupNeedName'), 'error');
           const animIds = [...m.querySelectorAll('.menu-picker input:checked')].map(b => b.value);
           if (!animIds.length) return UI.toast(T('tactics.animGroupNeedAnims'), 'error');
-          await Store.save('tactics', Object.assign({}, g, { name, animIds }));
-          await syncGroupAnims(Object.assign({}, g, { name, animIds }));
-          close(); renderGroups(); UI.toast(T('tactics.animSaved'), 'success');
+          const teamSel = m.querySelector('#grp_eteam');
+          const teamId = teamSel ? teamSel.value : g.teamId;
+          const sentElsewhere = teamSel && teamId !== (g.teamId || '');
+          await Store.save('tactics', Object.assign({}, g, { name, animIds, teamId }));
+          await syncGroupAnims({ animIds, teamId });
+          close(); renderGroups();
+          const team = teams.find(t => t.id === teamId);
+          UI.toast(sentElsewhere ? T('tactics.animSent').replace('{0}', (team && team.name) || '') : T('tactics.animSaved'), 'success');
+          if (sentElsewhere) offerAnimShare();
         };
         inp.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); commit(); } });
         m.querySelector('[data-close2]').onclick = close;
@@ -2303,21 +2313,26 @@ Views.tactics = function (mount, params) {
     const box = mount.querySelector('#animGroupsList');
     if (!box) return;
     const groups = userGroups();
+    const teams = Store.teams();
     box.innerHTML = !groups.length ? '' : `
       <h4 class="anim-head">${T('tactics.animGroupsTitle')}</h4>
-      ${groups.map(g => `
+      ${groups.map(g => {
+        const team = teams.find(t => t.id === g.teamId);
+        return `
         <div class="card" style="padding:8px;margin-bottom:6px">
           <div style="display:flex;justify-content:space-between;align-items:center;gap:6px">
             <b>\ud83d\uddc2 ${UI.esc(g.name)}</b>
             <span class="tag">${(g.animIds || []).length} ${T('tactics.animGroupItems')}</span>
           </div>
+          ${team ? `<span class="tag blue">\ud83d\udc65 ${UI.esc(team.name)}</span>` : ''}
           ${window.ANIM ? ANIM.chipsHtml(g.animIds) : ''}
           <div class="tool-group anim-acts" style="margin-top:6px">
             <button class="btn sm" data-group-send="${UI.esc(g.id)}" title="${T('tactics.animSendHint')}">\ud83d\udc65 ${T('tactics.animSend')}</button>
             <button class="btn sm" data-group-edit="${UI.esc(g.id)}" title="${UI.esc(T('common.edit'))}" aria-label="${UI.esc(T('common.edit'))}">\u270e</button>
             <button class="btn sm danger" data-group-del="${UI.esc(g.id)}">\u2715</button>
           </div>
-        </div>`).join('')}`;
+        </div>`;
+      }).join('')}`;
     if (window.ANIM) ANIM.bind(box);
     box.querySelectorAll('[data-group-send]').forEach(b => b.onclick = () => sendToTeam(b.dataset.groupSend, true));
     box.querySelectorAll('[data-group-edit]').forEach(b => b.onclick = () => editGroup(b.dataset.groupEdit));
