@@ -2166,7 +2166,14 @@ Views.tactics = function (mount, params) {
     if (!g || !g.teamId) return;
     for (const id of g.animIds || []) {
       const a = Store.find('tactics', id);
-      if (a && a.teamId !== g.teamId) await Store.save('tactics', Object.assign({}, a, { teamId: g.teamId }));
+      if (!a) continue;
+      // A squad may have removed this exact animation from its own list before —
+      // sending it again (on its own or bundled in this group) is the coach
+      // saying plainly that the squad should see it, so that hide is lifted.
+      const stillHidden = (a.hiddenFor || []).indexOf(g.teamId) > -1;
+      if (a.teamId !== g.teamId || stillHidden) {
+        await Store.save('tactics', Object.assign({}, a, { teamId: g.teamId, hiddenFor: (a.hiddenFor || []).filter(t => t !== g.teamId) }));
+      }
     }
   }
   // Hand ONE animation — or one group of them — to a squad: it then shows up
@@ -2192,7 +2199,8 @@ Views.tactics = function (mount, params) {
         m.querySelector('[data-go]').onclick = async () => {
           const teamId = m.querySelector('#send_team').value;
           const team = teams.find(t => t.id === teamId);
-          await Store.save('tactics', Object.assign({}, s, { teamId }));
+          // Sending it again must override an earlier removal from this same squad.
+          await Store.save('tactics', Object.assign({}, s, { teamId, hiddenFor: (s.hiddenFor || []).filter(t => t !== teamId) }));
           if (isGroup) await syncGroupAnims(Object.assign({}, s, { teamId }));
           close();
           UI.toast(T('tactics.animSent').replace('{0}', (team && team.name) || ''), 'success');

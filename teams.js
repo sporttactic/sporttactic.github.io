@@ -270,7 +270,8 @@ Views.teams = function (mount) {
   }
 
   // The animations a coach filed under this squad on the tactical board.
-  function animListDialog(team, anims) {    const row = a => `<div class="acc-person">
+  function animListDialog(team, anims) {
+    const row = a => `<div class="acc-person">
       <span class="acc-person-main">
         <b>${UI.esc(a.name || T('tactics.animTitle'))}</b>
         <span class="tag">${(a.frames || []).length} ${UI.esc(T('tactics.frameList'))}</span>
@@ -282,42 +283,50 @@ Views.teams = function (mount) {
         ${team ? `<button class="btn sm danger" data-anim-rm="${UI.esc(a.id)}">${T('teams.animRemove')}</button>` : ''}
       </span>
     </div>`;
+    const rowsHtml = list => list.length ? list.map(row).join('') : `<p class="hint">${UI.esc(T('teams.animsNone'))}</p>`;
     UI.modal({
       title: T('teams.anims') + (team ? ' — ' + team.name : ''),
       width: 620,
       body: `<p>${UI.esc(T('teams.animsIntro'))}</p>
         ${animShareOff() ? `<p class="hint warn">${UI.esc(T('teams.animsOff'))}</p>` : ''}
-        <div class="acc-people">${anims.length ? anims.map(row).join('') : `<p class="hint">${UI.esc(T('teams.animsNone'))}</p>`}</div>`,
+        <div class="acc-people">${rowsHtml(anims)}</div>`,
       footer: `<button class="btn" data-board>${UI.esc(T('teams.animsBoard'))}</button>
         <button class="btn primary" data-close2>${T('common.close')}</button>`,
       onOpen: (m, close) => {
         m.querySelector('[data-close2]').onclick = close;
         m.querySelector('[data-board]').onclick = () => { close(); App.go('tactics'); };
-        m.querySelectorAll('[data-anim-open]').forEach(b => b.onclick = () => {
-          close();
-          App.go('tactics', { animId: b.dataset.animOpen });
-        });
-        // Watch it here and now; the board is for working on it.
-        m.querySelectorAll('[data-anim-show]').forEach(b => b.onclick = () => {
-          const id = b.dataset.animShow;
-          close();
-          ANIM.open(id);
-        });
-        m.querySelectorAll('[data-anim-rm]').forEach(b => b.onclick = () => {
-          const a = Store.find('tactics', b.dataset.animRm);
-          if (!a || !team) return;
-          // The animation itself stays in the library — and, if some other
-          // squad still has it filed under them or open to everyone, in their
-          // list too. Only this squad's view of it changes.
-          UI.confirm(T('teams.animRemoveAsk').replace('{0}', a.name || ''), async () => {
-            const patch = { hiddenFor: (a.hiddenFor || []).filter(id => id !== team.id).concat(team.id) };
-            if (a.teamId === team.id) patch.teamId = ''; // sever the direct link too
-            await Store.save('tactics', Object.assign({}, a, patch));
+        // Re-run after every removal so the still-open dialog keeps working
+        // on the fresh list instead of the one it was first opened with.
+        const bind = () => {
+          m.querySelectorAll('[data-anim-open]').forEach(b => b.onclick = () => {
             close();
-            UI.toast(T('teams.animRemoved'), 'success');
-            render();
+            App.go('tactics', { animId: b.dataset.animOpen });
           });
-        });
+          // Watch it here and now; the board is for working on it.
+          m.querySelectorAll('[data-anim-show]').forEach(b => b.onclick = () => {
+            const id = b.dataset.animShow;
+            close();
+            ANIM.open(id);
+          });
+          m.querySelectorAll('[data-anim-rm]').forEach(b => b.onclick = () => {
+            const a = Store.find('tactics', b.dataset.animRm);
+            if (!a || !team) return;
+            // The animation itself stays in the library — and, if some other
+            // squad still has it filed under them or open to everyone, in their
+            // list too. Only this squad's view of it changes.
+            UI.confirm(T('teams.animRemoveAsk').replace('{0}', a.name || ''), async () => {
+              const patch = { hiddenFor: (a.hiddenFor || []).filter(id => id !== team.id).concat(team.id) };
+              if (a.teamId === team.id) patch.teamId = ''; // sever the direct link too
+              await Store.save('tactics', Object.assign({}, a, patch));
+              UI.toast(T('teams.animRemoved'), 'success');
+              render();                 // keeps the squad page's own badge/list in step
+              const box = m.querySelector('.acc-people');
+              if (box) box.innerHTML = rowsHtml(teamAnimations(team));
+              bind();                   // dialog stays open — rewire the refreshed rows
+            });
+          });
+        };
+        bind();
       }
     });
   }
