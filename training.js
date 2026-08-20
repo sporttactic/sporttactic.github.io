@@ -1022,6 +1022,10 @@ Views.training = function (mount) {
     // is a real category, so a "Shooting" session does not create "Warm-up" drills.
     const newCat = own.indexOf(focus) >= 0 ? focus : own[0];
     const sportName = SPORTS.name(sportId, 'en');
+    // The search field is what the coach actually reads on the fallback link,
+    // so it goes out in whichever language the app is set to, not always English.
+    const lang = I18N.getLang();
+    const searchLang = lang === 'da' ? 'Danish' : 'English';
     const system = [
       `You plan ${sportName} training sessions for a coach.`,
       'Answer with one JSON object and nothing else — no markdown, no code fence, no commentary.',
@@ -1040,7 +1044,7 @@ Views.training = function (mount) {
       'Write ONE entry for EVERY separate exercise the coach described or the session calls for — if the description names six drills, return six.'
       + ` Do not stop early and do not merge two drills into one. Up to ${MAX_NEW}, and their durations should add up to roughly the session length.`,
       'new[].description: setup and equipment, how it runs, 2-3 coaching points and one progression, as short lines, max 120 words.',
-      `new[].search: 3-6 English words for finding that drill on video, starting with the sport, e.g. "${sportName.toLowerCase()} ${String(newCat).toLowerCase()} drill".`,
+      `new[].search: 3-6 words in ${searchLang} for finding that drill on video, starting with the sport name in ${searchLang} then what the drill trains — written in ${searchLang}, matching the "${lang}" title above, never in English unless ${searchLang} is English.`,
       'new[].links: 1-3 full YouTube addresses (https://www.youtube.com/watch?v=…) of real, public videos that demonstrate that drill.'
       + ' Give only ones you are confident exist — every address is checked against YouTube and a dead one is thrown away.',
       `new[].intensity must be exactly one of: ${INT.join(', ')}.`,

@@ -543,6 +543,10 @@ Views.exerciseLib = function (mount, opts) {
     const { what, category: catPick, duration: dur, intensity } = opts;
     const n = Math.max(1, Math.min(5, count || 1));
     const sportName = SPORTS.name(sportId, 'en');
+    // The search field is what the coach actually reads on the fallback link,
+    // so it goes out in whichever language the app is set to, not always English.
+    const lang = I18N.getLang();
+    const searchLang = EN_LANG[lang] || lang;
     const own = SPORTS.exerciseCategories(sportId);
     // The club's own exercise videos — the model may reuse one of these links, nothing else.
     const lib = Store.all('exercises')
@@ -570,7 +574,7 @@ Views.exerciseLib = function (mount, opts) {
       'video: if one of the club videos listed below shows the same movement, copy its address here exactly. Otherwise leave it empty. Never invent, guess or shorten a link.',
       'links: 1-3 full YouTube addresses (https://www.youtube.com/watch?v=…) of real, public videos that demonstrate this exact drill.'
       + ' Give only ones you are confident exist — every address is checked against YouTube and a dead one is thrown away, so a wrong guess simply costs the coach the link.',
-      `search: 3-6 English words for finding this drill on video, starting with the sport, e.g. "${sportName.toLowerCase()} fast break finishing drill".`,
+      `search: 3-6 words in ${searchLang} for finding this drill on video, starting with "${SPORTS.name(sportId, lang).toLowerCase()}" then what the drill trains — written in ${searchLang}, matching the "${lang}" title above, never in English unless ${searchLang} is English.`,
       'Keep it safe for amateur athletes and say when to stop if there is pain.',
       lib.length ? 'Club videos:\n' + lib.map(e => `- ${e.title}: ${e.url}`).join('\n') : 'Club videos: none.'
     ].filter(Boolean).join('\n');
