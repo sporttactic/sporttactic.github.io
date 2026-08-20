@@ -244,13 +244,6 @@ Views.tactics = function (mount, params) {
               <button class="btn sm primary" id="recFramesBtn">● ${T('tactics.recFrames')}</button>
               <button class="btn sm" id="saveAnim">＋ ${T('tactics.saveAnim')}</button>
             </div>
-            <div id="framesToolsWrap">
-              <h4 class="anim-head">${T('tactics.tools')}</h4>
-              <div class="tool-group" id="framesTools"></div>
-              <div class="tool-group prop-colors" id="framesColors">
-                ${BOARD_COLORS.map(c => `<div class="tool-btn" data-color="${c}" style="background:${c}"></div>`).join('')}
-              </div>
-            </div>
             <h4 class="anim-head">${T('tactics.savedAnims')} <span class="tag" id="animCount">0</span></h4>
             <select class="anim-select" id="animList" size="6" aria-label="${T('tactics.savedAnims')}"></select>
             <p class="hint hidden" id="animHidden"></p>
@@ -1580,7 +1573,7 @@ Views.tactics = function (mount, params) {
     return ALL_TOOLS.slice(); // team sports: all tools
   }
   function renderTools() {
-    const conts = [...mount.querySelectorAll('#tools, #framesTools')];
+    const conts = [...mount.querySelectorAll('#tools')];
     if (!conts.length) return;
     const allowed = toolIdsFor(sportId);
     if (tool !== 'prop' && !allowed.includes(tool)) { tool = 'select'; aim = null; }
@@ -2256,6 +2249,41 @@ Views.tactics = function (mount, params) {
       }
     });
   }
+  // Rename a group or change which animations it bundles — unticking one here
+  // removes it from the group only, the animation itself stays in the library.
+  function editGroup(id) {
+    const g = Store.find('tactics', id);
+    if (!g) return;
+    const mine = userSystems();
+    UI.modal({
+      title: T('tactics.animGroupEdit'),
+      width: 520,
+      body: `<label class="field"><span>${T('tactics.animGroupName')}</span>
+          <input id="grp_ename" maxlength="60" value="${UI.esc(g.name || '')}"></label>
+        <div class="field"><span>${T('tactics.animGroupPick')}</span>
+          <div class="menu-picker">${mine.map(s => `<label class="check-row menu-row">
+            <input type="checkbox" value="${UI.esc(s.id)}" ${(g.animIds || []).indexOf(s.id) > -1 ? 'checked' : ''}>
+            <span>${UI.esc(s.name)} <span class="tag">${(s.frames || []).length} ${T('tactics.frameList')}</span></span>
+          </label>`).join('')}</div>
+          <p class="hint">${T('tactics.animGroupPickHint')}</p></div>`,
+      footer: `<button class="btn ghost" data-close2>${T('common.cancel')}</button><button class="btn primary" data-save>${T('common.save')}</button>`,
+      onOpen: (m, close) => {
+        const inp = m.querySelector('#grp_ename');
+        inp.focus(); inp.select();
+        const commit = async () => {
+          const name = inp.value.trim();
+          if (!name) return UI.toast(T('tactics.animGroupNeedName'), 'error');
+          const animIds = [...m.querySelectorAll('.menu-picker input:checked')].map(b => b.value);
+          if (!animIds.length) return UI.toast(T('tactics.animGroupNeedAnims'), 'error');
+          await Store.save('tactics', Object.assign({}, g, { name, animIds }));
+          close(); renderGroups(); UI.toast(T('tactics.animSaved'), 'success');
+        };
+        inp.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); commit(); } });
+        m.querySelector('[data-close2]').onclick = close;
+        m.querySelector('[data-save]').onclick = commit;
+      }
+    });
+  }
   // The groups sent so far, each shown with its animations as playable chips
   // (anim.js's own viewer — the same one Training Planner uses).
   function renderGroups() {
@@ -2273,11 +2301,13 @@ Views.tactics = function (mount, params) {
           ${window.ANIM ? ANIM.chipsHtml(g.animIds) : ''}
           <div class="tool-group anim-acts" style="margin-top:6px">
             <button class="btn sm" data-group-send="${UI.esc(g.id)}" title="${T('tactics.animSendHint')}">\ud83d\udc65 ${T('tactics.animSend')}</button>
+            <button class="btn sm" data-group-edit="${UI.esc(g.id)}" title="${UI.esc(T('common.edit'))}" aria-label="${UI.esc(T('common.edit'))}">\u270e</button>
             <button class="btn sm danger" data-group-del="${UI.esc(g.id)}">\u2715</button>
           </div>
         </div>`).join('')}`;
     if (window.ANIM) ANIM.bind(box);
     box.querySelectorAll('[data-group-send]').forEach(b => b.onclick = () => sendToTeam(b.dataset.groupSend, true));
+    box.querySelectorAll('[data-group-edit]').forEach(b => b.onclick = () => editGroup(b.dataset.groupEdit));
     box.querySelectorAll('[data-group-del]').forEach(b => b.onclick = () => {
       const g = Store.find('tactics', b.dataset.groupDel);
       if (!g) return;

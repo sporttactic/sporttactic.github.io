@@ -822,11 +822,6 @@ body.board-fs { overflow: hidden; }
 .anim-select option:disabled { color: var(--muted); }
 .frames-anim .tool-group.anim-acts { flex-direction: row; gap: 4px; }
 .anim-acts #animLoad { flex: 1; min-width: 0; }
-/* The same drawing tools as the left panel, sized for the narrow board column. */
-#framesToolsWrap { display: flex; flex-direction: column; gap: 6px; }
-#framesTools.tool-group { display: grid; grid-template-columns: repeat(auto-fill, minmax(50px, 1fr)); gap: 4px; align-items: stretch; }
-#framesTools .tool-btn { flex: none; min-width: 0; display: flex; align-items: center; justify-content: center; min-height: 30px; padding: 4px 3px; font-size: 11px; line-height: 1.15; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.frames-anim .tool-group#framesColors { flex-direction: row; flex-wrap: wrap; }
 #magnetWrap .check-row, #facingWrap .check-row { margin: 4px 0 0; align-items: flex-start; }
 #magnetWrap .check-row span, #facingWrap .check-row span { font-size: 12px; line-height: 1.25; }
 #magnetWrap .hint, #facingWrap .hint { margin: 4px 0 0; font-size: 11px; }
@@ -1069,7 +1064,6 @@ body { overscroll-behavior-y: contain; }
   .btn.sm { padding: 9px 12px; font-size: 13px; }
   .tool-btn { min-height: 46px; display: flex; align-items: center; justify-content: center; }
   #tools .tool-btn, #props .tool-btn { min-height: 46px; }
-  #framesTools .tool-btn { min-height: 40px; }
   .sport-btn { min-height: 48px; }
   .event-btn { min-height: 52px; display: flex; align-items: center; justify-content: center; text-align: center; }
   .play-item { padding: 12px; }
