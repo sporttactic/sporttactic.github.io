@@ -2159,6 +2159,16 @@ Views.tactics = function (mount, params) {
   // under Teams & Players instead of hunting the whole library. Pick the squad,
   // then tick the ones that belong to it — the ticks follow the squad, so this
   // screen also shows what it already has and takes one away again.
+  // A group is only as shared as the animations inside it — a squad that can
+  // see the group but not its clips would be stuck. Whenever the group is sent
+  // (or its line-up changes) every animation it bundles is stamped the same way.
+  async function syncGroupAnims(g) {
+    if (!g || !g.teamId) return;
+    for (const id of g.animIds || []) {
+      const a = Store.find('tactics', id);
+      if (a && a.teamId !== g.teamId) await Store.save('tactics', Object.assign({}, a, { teamId: g.teamId }));
+    }
+  }
   // Hand ONE animation — or one group of them — to a squad: it then shows up
   // under Teams & Players → Squad → Animations for that team, and stays in the
   // library here as well.
@@ -2183,6 +2193,7 @@ Views.tactics = function (mount, params) {
           const teamId = m.querySelector('#send_team').value;
           const team = teams.find(t => t.id === teamId);
           await Store.save('tactics', Object.assign({}, s, { teamId }));
+          if (isGroup) await syncGroupAnims(Object.assign({}, s, { teamId }));
           close();
           UI.toast(T('tactics.animSent').replace('{0}', (team && team.name) || ''), 'success');
           if (isGroup) renderGroups(); else renderAnimList();
@@ -2241,6 +2252,7 @@ Views.tactics = function (mount, params) {
           const teamId = m.querySelector('#grp_team').value;
           const team = teams.find(t => t.id === teamId);
           await Store.save('tactics', { kind: 'group', name, sport: sportId, animIds, teamId });
+          await syncGroupAnims({ animIds, teamId });
           close();
           UI.toast(T('tactics.animSent').replace('{0}', (team && team.name) || ''), 'success');
           renderGroups();
@@ -2276,6 +2288,7 @@ Views.tactics = function (mount, params) {
           const animIds = [...m.querySelectorAll('.menu-picker input:checked')].map(b => b.value);
           if (!animIds.length) return UI.toast(T('tactics.animGroupNeedAnims'), 'error');
           await Store.save('tactics', Object.assign({}, g, { name, animIds }));
+          await syncGroupAnims(Object.assign({}, g, { name, animIds }));
           close(); renderGroups(); UI.toast(T('tactics.animSaved'), 'success');
         };
         inp.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); commit(); } });
