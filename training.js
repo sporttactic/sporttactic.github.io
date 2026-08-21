@@ -84,9 +84,9 @@ Views.training = function (mount) {
     mount.querySelectorAll('[data-show]').forEach(b => b.onclick = () => showSession(Store.find('training', b.dataset.show)));
     mount.querySelectorAll('[data-srep]').forEach(b => b.onclick = () => sessionReportForm(Store.find('training', b.dataset.srep)));
     mount.querySelectorAll('[data-del]').forEach(b => b.onclick = () => UI.confirm(T('training.delSession'), async () => { await Store.remove('training', b.dataset.del); render(); }));
-    mount.querySelectorAll('[data-copy]').forEach(b => b.onclick = () => copySession(Store.find('training', b.dataset.copy)));
+    mount.querySelectorAll('[data-copy]').forEach(b => b.onclick = () => copySessionDialog(Store.find('training', b.dataset.copy)));
     const copyAllBtn = mount.querySelector('#copyAllSessions');
-    if (copyAllBtn) copyAllBtn.onclick = copyAllSessions;
+    if (copyAllBtn) copyAllBtn.onclick = copyAllSessionsDialog;
     bindPersonal();
     bindProgress();
     // The exercise library is its own section of this page.
@@ -95,27 +95,74 @@ Views.training = function (mount) {
 
   // A duplicate under a new id — MEMBER_STAMP is cleared so Store.save stamps
   // it fresh for whichever device makes the copy, not the one that made the
-  // original, and the title gets a suffix so the two are never mistaken.
-  function asCopy(s) {
+  // original. Landing on the SAME team as the source gets the "(copy)" suffix
+  // so the two are never mistaken; a different team does not need it.
+  function asCopy(s, teamId) {
     const copy = Object.assign({}, s);
     delete copy.id;
     delete copy[Access.MEMBER_STAMP];
-    copy.title = dt(s.title) + ' ' + T('training.copySuffix');
+    const sameTeam = !teamId || teamId === s.teamId;
+    copy.title = sameTeam ? dt(s.title) + ' ' + T('training.copySuffix') : s.title;
+    if (teamId) copy.teamId = teamId;
     return copy;
   }
-  async function copySession(s) {
+  // Pick one or more teams to copy this session to — ticking its own team
+  // too is how a coach still gets a plain same-team duplicate.
+  function copySessionDialog(s) {
     if (!s) return;
-    await Store.save('training', asCopy(s));
-    UI.toast(T('training.copied'), 'success');
-    render();
+    const teams = Store.teams();
+    if (!teams.length) return UI.toast(T('tactics.animNoTeam'), 'error');
+    UI.modal({
+      title: T('training.copyToTeamsTitle'),
+      width: 480,
+      body: `<p>${UI.esc(T('training.copyToTeamsIntro').replace('{0}', dt(s.title)))}</p>
+        <div class="menu-picker">${teams.map(t => `<label class="check-row menu-row">
+          <input type="checkbox" value="${UI.esc(t.id)}" ${t.id === s.teamId ? 'checked' : ''}>
+          <span>${UI.esc(t.name)}</span>
+        </label>`).join('')}</div>`,
+      footer: `<button class="btn ghost" data-close2>${T('common.cancel')}</button>
+        <button class="btn primary" data-go>${T('training.copySession')}</button>`,
+      onOpen: (m, close) => {
+        m.querySelector('[data-close2]').onclick = close;
+        m.querySelector('[data-go]').onclick = async () => {
+          const ids = [...m.querySelectorAll('.menu-picker input:checked')].map(b => b.value);
+          if (!ids.length) return UI.toast(T('training.copyNeedTeam'), 'error');
+          for (const id of ids) await Store.save('training', asCopy(s, id));
+          close();
+          const names = teams.filter(t => ids.indexOf(t.id) > -1).map(t => t.name).join(', ');
+          UI.toast(T('training.copiedTo').replace('{0}', names), 'success');
+          render();
+        };
+      }
+    });
   }
-  function copyAllSessions() {
+  function copyAllSessionsDialog() {
     const rows = Store.scoped('training').slice();
     if (!rows.length) return;
-    UI.confirm(T('training.copyAllAsk').replace('{0}', rows.length), async () => {
-      for (const s of rows) await Store.save('training', asCopy(s));
-      UI.toast(rows.length + ' ' + T('training.copiedAll'), 'success');
-      render();
+    const teams = Store.teams();
+    if (!teams.length) return UI.toast(T('tactics.animNoTeam'), 'error');
+    UI.modal({
+      title: T('training.copyAllToTeamsTitle'),
+      width: 480,
+      body: `<p>${UI.esc(T('training.copyAllToTeamsIntro').replace('{0}', rows.length))}</p>
+        <div class="menu-picker">${teams.map(t => `<label class="check-row menu-row">
+          <input type="checkbox" value="${UI.esc(t.id)}" ${team && t.id === team.id ? 'checked' : ''}>
+          <span>${UI.esc(t.name)}</span>
+        </label>`).join('')}</div>`,
+      footer: `<button class="btn ghost" data-close2>${T('common.cancel')}</button>
+        <button class="btn primary" data-go>${T('training.copyAll')}</button>`,
+      onOpen: (m, close) => {
+        m.querySelector('[data-close2]').onclick = close;
+        m.querySelector('[data-go]').onclick = async () => {
+          const ids = [...m.querySelectorAll('.menu-picker input:checked')].map(b => b.value);
+          if (!ids.length) return UI.toast(T('training.copyNeedTeam'), 'error');
+          for (const id of ids) for (const s of rows) await Store.save('training', asCopy(s, id));
+          close();
+          const names = teams.filter(t => ids.indexOf(t.id) > -1).map(t => t.name).join(', ');
+          UI.toast(T('training.copiedAllTo').replace('{0}', rows.length).replace('{1}', names), 'success');
+          render();
+        };
+      }
     });
   }
 
