@@ -158,23 +158,27 @@ Views.exerciseLib = function (mount, opts) {
     UI.toast(T('exercises.recatDone'), 'success');
     done();
   }
+  // Each drill is its own small accordion inside its category's — the header
+  // alone (title, length, intensity, the same actions as before) is enough to
+  // scan a long list; the rest only renders once that drill is opened.
   function cardHtml(e) {
-    return `
-      <div class="card" data-card="${e.id}">
-        <div style="display:flex;justify-content:space-between"><h3 style="margin:0">${UI.esc(exTitle(e))}</h3><span class="tag blue">${UI.esc(tt('cat', e.category))}</span></div>
-        <p style="color:var(--text-soft);margin:8px 0;font-size:13px">${UI.esc(exDesc(e))}</p>
-        ${embedHtml(e)}
-        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
-          <span class="tag">${e.duration || 0} ${T('training.min')}</span><span class="tag ${e.intensity === 'High' ? 'red' : e.intensity === 'Medium' ? 'amber' : 'green'}">${UI.esc(tt('intensity', e.intensity || 'Low'))}</span>
-          ${(e.muscles || []).map(m => `<span class="tag mus-tag" data-pick="${m}">${UI.esc(musLabel(m))}</span>`).join('')}
-          ${(e.tags || []).map(t => `<span class="tag">#${UI.esc(t)}</span>`).join('')}
-        </div>
-        ${linksHtml(e)}
-        ${animChips(e)}
-        <button class="btn sm" data-show="${e.id}">${T('common.show')}</button>
-        ${mayChange(e) ? `<button class="btn sm" data-edit="${e.id}">${T('common.edit')}</button>
-        <button class="btn sm danger" data-del="${e.id}">${T('common.delete')}</button>` : recatHtml(e)}
-      </div>`;
+    const acts = `<button class="btn sm" data-show="${e.id}">${T('common.show')}</button>
+      ${mayChange(e) ? `<button class="btn sm" data-edit="${e.id}">${T('common.edit')}</button>
+      <button class="btn sm danger" data-del="${e.id}">${T('common.delete')}</button>` : recatHtml(e)}`;
+    const body = `
+      <p style="color:var(--text-soft);margin:0 0 8px;font-size:13px">${UI.esc(exDesc(e))}</p>
+      ${embedHtml(e)}
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
+        <span class="tag ${e.intensity === 'High' ? 'red' : e.intensity === 'Medium' ? 'amber' : 'green'}">${UI.esc(tt('intensity', e.intensity || 'Low'))}</span>
+        ${(e.muscles || []).map(m => `<span class="tag mus-tag" data-pick="${m}">${UI.esc(musLabel(m))}</span>`).join('')}
+        ${(e.tags || []).map(t => `<span class="tag">#${UI.esc(t)}</span>`).join('')}
+      </div>
+      ${linksHtml(e)}
+      ${animChips(e)}`;
+    return UI.acc('exlibitem_' + e.id, exTitle(e), body, {
+      sub: `${e.duration || 0} ${T('training.min')} · ${tt('intensity', e.intensity || 'Low')}`,
+      actions: acts
+    });
   }
 
   // The drill's own videos, played inside the card. Only an id we could parse
@@ -299,8 +303,8 @@ Views.exerciseLib = function (mount, opts) {
     const clr = mount.querySelector('#clearMus');
     if (clr) clr.onclick = () => { muscle = ''; render(); };
     // Hovering a drill previews just that drill's muscles.
-    mount.querySelectorAll('[data-card]').forEach(c => {
-      const e = Store.find('exercises', c.dataset.card);
+    mount.querySelectorAll('details[data-acc^="exlibitem_"]').forEach(c => {
+      const e = Store.find('exercises', c.dataset.acc.slice('exlibitem_'.length));
       c.onmouseenter = () => paint(new Set((e && e.muscles) || []));
       c.onmouseleave = () => paint(focus);
     });
@@ -326,8 +330,9 @@ Views.exerciseLib = function (mount, opts) {
         done();
       });
     });
-    // The category folds are ordinary <details>, so open/close them all at once.
-    const folds = () => mount.querySelectorAll('details[data-acc^="exlibcat_"]');
+    // The category AND drill folds are ordinary <details>, so Expand/Collapse
+    // all opens or closes every level at once.
+    const folds = () => mount.querySelectorAll('details[data-acc^="exlibcat_"], details[data-acc^="exlibitem_"]');
     const setFolds = open => folds().forEach(d => {
       d.open = open;
       try { localStorage.setItem('stx_acc_' + d.dataset.acc, open ? '1' : '0'); } catch (err) { /* private mode */ }

@@ -50,7 +50,7 @@ Views.training = function (mount) {
               ${(s.exercises || []).map(id => { const e = Store.find('exercises', id); return e ? `<div class="tag" style="margin:2px">${UI.esc(ex(e))}</div>` : ''; }).join('') || `<span style="color:var(--muted)">${T('common.noData')}</span>`}
             </div>
             ${(s.animations || []).length ? `<div style="margin-top:8px"><span class="tag blue">▶ ${(s.animations || []).length} ${T('training.anims')}</span></div>` : ''}
-            <div style="margin-top:12px"><button class="btn sm" data-show="${s.id}">${T('common.show')}</button> <button class="btn sm" data-srep="${s.id}">📄 ${T('training.report')}</button>${mayChange(s) ? ` <button class="btn sm" data-edit="${s.id}">${T('common.edit')}</button> <button class="btn sm danger" data-del="${s.id}">${T('common.delete')}</button>` : ''}</div>
+            <div style="margin-top:12px"><button class="btn sm" data-show="${s.id}">${T('common.show')}</button> ${mayChange(null) ? `<button class="btn sm" data-copy="${s.id}">📋 ${T('training.copySession')}</button> ` : ''}<button class="btn sm" data-srep="${s.id}">📄 ${T('training.report')}</button>${mayChange(s) ? ` <button class="btn sm" data-edit="${s.id}">${T('common.edit')}</button> <button class="btn sm danger" data-del="${s.id}">${T('common.delete')}</button>` : ''}</div>
           </div>`).join('') || `<div class="empty"><div class="big">${UI.icon('calendar', 40)}</div>${T('training.noSessions')}</div>`}
       </div>`;
 
@@ -63,6 +63,7 @@ Views.training = function (mount) {
       ${UI.acc('sessions', T('training.sessions'), cards, {
       sub: T('training.sessionsHint'),
       actions: `${Access.readMode() ? '' : UI.shareBar('training')}
+          ${mayChange(null) && sessions.length ? `<button class="btn sm" id="copyAllSessions">📋 ${T('training.copyAll')}</button>` : ''}
           ${mayChange(null) ? `<button class="btn" id="genSession">🤖 ${T('training.aiSession')}</button>
           <button class="btn primary" id="addSession">+ ${T('training.newSession')}</button>` : ''}`
     })}
@@ -83,10 +84,39 @@ Views.training = function (mount) {
     mount.querySelectorAll('[data-show]').forEach(b => b.onclick = () => showSession(Store.find('training', b.dataset.show)));
     mount.querySelectorAll('[data-srep]').forEach(b => b.onclick = () => sessionReportForm(Store.find('training', b.dataset.srep)));
     mount.querySelectorAll('[data-del]').forEach(b => b.onclick = () => UI.confirm(T('training.delSession'), async () => { await Store.remove('training', b.dataset.del); render(); }));
+    mount.querySelectorAll('[data-copy]').forEach(b => b.onclick = () => copySession(Store.find('training', b.dataset.copy)));
+    const copyAllBtn = mount.querySelector('#copyAllSessions');
+    if (copyAllBtn) copyAllBtn.onclick = copyAllSessions;
     bindPersonal();
     bindProgress();
     // The exercise library is its own section of this page.
     Views.exerciseLib(mount.querySelector('#exLib'), { onChange: render });
+  }
+
+  // A duplicate under a new id — MEMBER_STAMP is cleared so Store.save stamps
+  // it fresh for whichever device makes the copy, not the one that made the
+  // original, and the title gets a suffix so the two are never mistaken.
+  function asCopy(s) {
+    const copy = Object.assign({}, s);
+    delete copy.id;
+    delete copy[Access.MEMBER_STAMP];
+    copy.title = dt(s.title) + ' ' + T('training.copySuffix');
+    return copy;
+  }
+  async function copySession(s) {
+    if (!s) return;
+    await Store.save('training', asCopy(s));
+    UI.toast(T('training.copied'), 'success');
+    render();
+  }
+  function copyAllSessions() {
+    const rows = Store.scoped('training').slice();
+    if (!rows.length) return;
+    UI.confirm(T('training.copyAllAsk').replace('{0}', rows.length), async () => {
+      for (const s of rows) await Store.save('training', asCopy(s));
+      UI.toast(rows.length + ' ' + T('training.copiedAll'), 'success');
+      render();
+    });
   }
 
   // ---- Personal training & max tests --------------------------------------
