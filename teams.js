@@ -35,11 +35,17 @@ Views.teams = function (mount) {
   // that removed one of the club's own from its own list must not have it come
   // straight back — hiddenFor tracks that per squad, without touching the
   // animation (or any other squad's view of it).
+  // teamIds is the list of squads that may see this animation; the older
+  // singular teamId still reads as a one-squad list, so nothing sent before
+  // this build goes missing.
+  function animTeams(rec) {
+    return Array.isArray(rec && rec.teamIds) ? rec.teamIds.filter(Boolean) : (rec && rec.teamId ? [rec.teamId] : []);
+  }
   function teamAnimations(team) {
     if (!team) return [];
     return Store.all('tactics').filter(t => t.kind === 'system'
       && (t.sport || 'handball') === sportId
-      && (t.teamId === team.id || !t.teamId)
+      && (!animTeams(t).length || animTeams(t).indexOf(team.id) > -1)
       && (t.hiddenFor || []).indexOf(team.id) === -1);
   }
 

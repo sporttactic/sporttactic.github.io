@@ -1172,8 +1172,10 @@ function memberModeDialog(onDone) {
       const tall = m.querySelector('#mm_tall');
       if (tall) tall.onclick = () => tboxes.forEach(b => { b.checked = true; });
       m.querySelector('[data-close2]').onclick = close;
-      m.querySelector('[data-go]').onclick = async () => {
+      const goBtn = m.querySelector('[data-go]');
+      goBtn.onclick = async () => {
         if (sharingLocked()) { UI.toast(T('mem.blocked'), 'error'); return; }
+        UI.busyBtn(goBtn, true, T('common.updating'));
         try {
           await Access.saveProfile({
             readOnly: read.checked,
@@ -1200,6 +1202,7 @@ function memberModeDialog(onDone) {
           App.applyMemberMode();
           if (onDone) onDone();
         } catch (e) {
+          UI.busyBtn(goBtn, false);
           UI.toast(String((e && e.message) || e).slice(0, 200), 'error');
         }
       };
@@ -1288,7 +1291,13 @@ async function roleKeysDialog(onDone) {
       });
     });
   }
-  const rows = teamRows;
+  // A separate word that is not kept to one squad, for whoever should follow
+  // every squad instead of just their own — handed out on top of the
+  // per-squad ones, never instead of them.
+  const allRow = (keys && keys.roles && keys.roles.Player)
+    ? [{ key: 'team:all', teamId: '', role: 'Player', label: Access.label('Player') + ' \u00b7 ' + T('rk.allTeams'), sub: T('rk.forAllTeams') }]
+    : [];
+  const rows = allRow.concat(teamRows);
   const row = r => `<div class="pol-row" data-key="${UI.esc(r.key)}">
     <span class="pol-name">${UI.esc(r.label)}
       <span class="share-n">${UI.esc(r.sub)}</span></span>
@@ -1302,10 +1311,12 @@ async function roleKeysDialog(onDone) {
       : `<span class="hint">${UI.esc(T(stale ? 'rk.stale' : made ? 'rk.elsewhere' : 'rk.none'))}</span>`}
     </span>
   </div>`;
-  // Each squad's word goes to that squad's own people.
+  // Each squad's word goes to that squad's own people; the all-squads word
+  // goes to every player in the club.
   const mailTo = r => (r.role === 'Coach'
-    ? Store.all('coaches').filter(c => c.teamId === r.teamId).map(c => c.email)
-    : Store.all('players').filter(p => p.teamId === r.teamId).map(p => p.email)).filter(Boolean).join(',');
+    ? Store.all('coaches').filter(c => c.teamId === r.teamId)
+    : (r.teamId ? Store.all('players').filter(p => p.teamId === r.teamId) : Store.all('players'))
+  ).map(p => p.email).filter(Boolean).join(',');
   // Drive's write permission belongs to whoever owns the file; a staff word
   // only proves this device is trusted locally. This is where that gap
   // actually gets closed: any device with team write access can spin up its
@@ -1363,9 +1374,9 @@ async function roleKeysDialog(onDone) {
       const btn = m.querySelector('[data-new]');
       if (btn) btn.onclick = () => {
         const go = async () => {
-          btn.disabled = true;
+          UI.busyBtn(btn, true, T('common.updating'));
           try { await Access.newRoleKeys(); }
-          catch (e) { btn.disabled = false; return UI.toast(T('rk.noCrypto'), 'error'); }
+          catch (e) { UI.busyBtn(btn, false); return UI.toast(T('rk.noCrypto'), 'error'); }
           // The hashes have to reach the shared file before the words are handed
           // out, or a device that syncs before it joins checks against the
           // previous set. Signing in here is fine: this is a button press.

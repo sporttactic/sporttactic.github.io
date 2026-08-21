@@ -365,6 +365,8 @@ body {
 .icon-btn.busy { pointer-events: none; opacity: .6; }
 .icon-btn.busy svg { animation: spin 1s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
+.btn.busy { pointer-events: none; opacity: .75; }
+.btn-spin { display: inline-block; width: 13px; height: 13px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; animation: spin .7s linear infinite; }
 #menuToggle { display: none; }
 .search-box { position: relative; flex: 1; max-width: 480px; }
 .search-box input {

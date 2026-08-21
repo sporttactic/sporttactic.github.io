@@ -162,6 +162,22 @@ const UI = (() => {
     });
   }
 
+  // Swaps a footer button to a spinner + label while an async save runs, and
+  // restores its original content and enabled state afterwards.
+  function busyBtn(btn, on, label) {
+    if (!btn) return;
+    if (on) {
+      if (btn.dataset.busyHtml === undefined) btn.dataset.busyHtml = btn.innerHTML;
+      btn.disabled = true;
+      btn.classList.add('busy');
+      btn.innerHTML = `<span class="btn-spin"></span>${esc(label)}`;
+    } else {
+      btn.disabled = false;
+      btn.classList.remove('busy');
+      if (btn.dataset.busyHtml !== undefined) { btn.innerHTML = btn.dataset.busyHtml; delete btn.dataset.busyHtml; }
+    }
+  }
+
   function fmtDate(ts) {
     if (!ts) return '—';
     return new Date(ts).toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' });
@@ -458,6 +474,6 @@ const UI = (() => {
     return true;
   }
 
-  return { esc, el, toast, modal, confirm, fmtDate, fmtClock, statCard, initials, icon, langText, langsOf, safeUrl, videoSrc, videosOf, videoEmbed, videoEditor, bindVideos, readVideos, shareBar, bindShare, acc, bindAcc, printDoc };
+  return { esc, el, toast, modal, confirm, busyBtn, fmtDate, fmtClock, statCard, initials, icon, langText, langsOf, safeUrl, videoSrc, videosOf, videoEmbed, videoEditor, bindVideos, readVideos, shareBar, bindShare, acc, bindAcc, printDoc };
 })();
 if (typeof window !== 'undefined') window.UI = UI;

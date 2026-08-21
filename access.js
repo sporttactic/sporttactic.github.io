@@ -300,6 +300,12 @@ const Access = (() => {
     const salt = crypto.getRandomValues(new Uint8Array(16));
     const set = b64(crypto.getRandomValues(new Uint8Array(6)));
     const words = {}, roles = {}, teams = {};
+    // One extra word that reads every squad at once, for whoever should not be
+    // kept to just one — handed out on top of the per-squad words, never
+    // instead of them.
+    const allWord = makeWord();
+    words['team:all'] = allWord;
+    roles.Player = await keyHash(allWord, salt, KEY_ITER);
     // Every squad in the club, whatever sport it plays under: one word for its
     // players, one for the coaches the club wants kept to that squad.
     for (const t of Store.all('teams')) {
@@ -328,7 +334,16 @@ const Access = (() => {
     const iter = +rec.iter || KEY_ITER;
     const teams = Object.assign({}, rec.teams || {});
     const words = Object.assign({}, held);
+    const roles = Object.assign({}, rec.roles || {});
     let added = 0;
+    // A set made before the all-squads word existed gets one now, without
+    // touching anything already handed out.
+    if (!roles.Player) {
+      const aw = makeWord();
+      words['team:all'] = aw;
+      roles.Player = await keyHash(aw, salt, iter);
+      added++;
+    }
     for (const t of Store.all('teams')) {
       const cur = teams[t.id];
       if (cur) {
@@ -355,7 +370,7 @@ const Access = (() => {
       };
       added++;
     }
-    await Store.setSetting(KEYS_KEY, Object.assign({}, rec, { teams }));
+    await Store.setSetting(KEYS_KEY, Object.assign({}, rec, { teams, roles }));
     await Store.setSetting(WORDS_KEY, { set: rec.set, words });
     return added;
   }
@@ -397,7 +412,8 @@ const Access = (() => {
         const t = ids.find(id => rec.teams[id] && rec.teams[id].hash === hash);
         if (t) { hit = 'Player'; teamId = t; }
       }
-      // A set made before player words were per squad had one for the club.
+      // The all-squads word (or an old set made before player words were per
+      // squad, which had one for the whole club the same way).
       if (!hit && rec.roles.Player === hash) hit = 'Player';
     }
     claiming = true;

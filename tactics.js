@@ -1801,6 +1801,16 @@ Views.tactics = function (mount, params) {
   }
   document.addEventListener('keydown', onKey);
 
+  // A saved animation or group can now be sent to more than one squad —
+  // teamIds is the list; teamId is kept in step as its first entry so a tab
+  // still on the previous build (before it refreshes) reads something sensible.
+  function animTeams(rec) {
+    return Array.isArray(rec && rec.teamIds) ? rec.teamIds.filter(Boolean) : (rec && rec.teamId ? [rec.teamId] : []);
+  }
+  function withTeams(rec, teamIds) {
+    const ids = [...new Set((teamIds || []).filter(Boolean))];
+    return Object.assign({}, rec, { teamIds: ids, teamId: ids[0] || '' });
+  }
   // ---- Saved animations: the coach's own `tactics` records tagged `kind:'system'` ----
   function userSystems() {
     // A copy tied to one squad stays out of the club's OTHER squads. An animation
@@ -1808,14 +1818,14 @@ Views.tactics = function (mount, params) {
     // a player sees an empty list, because saving one files it nowhere.
     const lock = (window.Access && Access.teamLock) ? Access.teamLock() : '';
     return Store.all('tactics').filter(t => t.kind === 'system' && (t.sport || 'handball') === sportId
-      && (!lock || !t.teamId || t.teamId === lock));
+      && (!lock || !animTeams(t).length || animTeams(t).indexOf(lock) > -1));
   }
   // Named bundles of saved animations, sent to a squad as one parcel — same
   // squad-scoping rule as a single animation.
   function userGroups() {
     const lock = (window.Access && Access.teamLock) ? Access.teamLock() : '';
     return Store.all('tactics').filter(t => t.kind === 'group' && (t.sport || 'handball') === sportId
-      && (!lock || !t.teamId || t.teamId === lock));
+      && (!lock || !animTeams(t).length || animTeams(t).indexOf(lock) > -1));
   }
   // Mirror of the saved systems, docked under the Save Animation button.
   function renderAnimList() {
@@ -2163,47 +2173,57 @@ Views.tactics = function (mount, params) {
   // see the group but not its clips would be stuck. Whenever the group is sent
   // (or its line-up changes) every animation it bundles is stamped the same way.
   async function syncGroupAnims(g) {
-    if (!g || !g.teamId) return;
-    for (const id of g.animIds || []) {
+    const want = animTeams(g);
+    if (!want.length) return;
+    for (const id of (g && g.animIds) || []) {
       const a = Store.find('tactics', id);
       if (!a) continue;
+      const have = animTeams(a);
+      const added = want.filter(t => have.indexOf(t) < 0);
       // A squad may have removed this exact animation from its own list before —
       // sending it again (on its own or bundled in this group) is the coach
       // saying plainly that the squad should see it, so that hide is lifted.
-      const stillHidden = (a.hiddenFor || []).indexOf(g.teamId) > -1;
-      if (a.teamId !== g.teamId || stillHidden) {
-        await Store.save('tactics', Object.assign({}, a, { teamId: g.teamId, hiddenFor: (a.hiddenFor || []).filter(t => t !== g.teamId) }));
+      const unhidden = (a.hiddenFor || []).filter(t => want.indexOf(t) < 0);
+      if (added.length || unhidden.length !== (a.hiddenFor || []).length) {
+        await Store.save('tactics', withTeams(Object.assign({}, a, { hiddenFor: unhidden }), have.concat(added)));
       }
     }
   }
-  // Hand ONE animation — or one group of them — to a squad: it then shows up
-  // under Teams & Players → Squad → Animations for that team, and stays in the
-  // library here as well.
+  // Hand ONE animation — or one group of them — to one or more squads: it then
+  // shows up under Teams & Players → Squad → Animations for every squad ticked,
+  // and stays in the library here as well. A squad already ticked stays ticked,
+  // so sending it on to one more squad never quietly drops another.
   function sendToTeam(id, isGroup) {
     const s = Store.find('tactics', id);
     const teams = Store.teams();
     if (!s) return;
     if (!teams.length) return UI.toast(T('tactics.animNoTeam'), 'error');
-    const on = s.teamId || Store.activeTeamId();
+    const on = animTeams(s);
     UI.modal({
       title: T('tactics.animSendTitle'),
       width: 480,
       body: `<p>${UI.esc(T('tactics.animSendIntro').replace('{0}', s.name || ''))}</p>
-        <label class="field"><span>${UI.esc(T('teams.activeTeam'))}</span>
-          <select id="send_team">${teams.map(t => `<option value="${UI.esc(t.id)}" ${t.id === on ? 'selected' : ''}>${UI.esc(t.name)}</option>`).join('')}</select></label>
+        <div class="field"><span>${UI.esc(T('teams.teams'))}</span>
+          <div class="menu-picker">${teams.map(t => `<label class="check-row menu-row">
+            <input type="checkbox" data-team-pick value="${UI.esc(t.id)}" ${on.indexOf(t.id) > -1 ? 'checked' : ''}>
+            <span>${UI.esc(t.name)}</span>
+          </label>`).join('')}</div></div>
         <p class="hint">${UI.esc(T('tactics.animSendHint'))}</p>`,
       footer: `<button class="btn ghost" data-close2>${T('common.cancel')}</button>
         <button class="btn primary" data-go>${UI.esc(T('tactics.animSend'))}</button>`,
       onOpen: (m, close) => {
         m.querySelector('[data-close2]').onclick = close;
         m.querySelector('[data-go]').onclick = async () => {
-          const teamId = m.querySelector('#send_team').value;
-          const team = teams.find(t => t.id === teamId);
-          // Sending it again must override an earlier removal from this same squad.
-          await Store.save('tactics', Object.assign({}, s, { teamId, hiddenFor: (s.hiddenFor || []).filter(t => t !== teamId) }));
-          if (isGroup) await syncGroupAnims(Object.assign({}, s, { teamId }));
+          const teamIds = [...m.querySelectorAll('[data-team-pick]:checked')].map(b => b.value);
+          if (!teamIds.length) return UI.toast(T('tactics.animNeedTeam'), 'error');
+          const added = teamIds.filter(t => on.indexOf(t) < 0);
+          const names = teams.filter(t => (added.length ? added : teamIds).indexOf(t.id) > -1).map(t => t.name).join(', ');
+          // Sending it again must override an earlier removal from any of these squads.
+          const rec = withTeams(Object.assign({}, s, { hiddenFor: (s.hiddenFor || []).filter(t => teamIds.indexOf(t) < 0) }), teamIds);
+          await Store.save('tactics', rec);
+          if (isGroup) await syncGroupAnims(rec);
           close();
-          UI.toast(T('tactics.animSent').replace('{0}', (team && team.name) || ''), 'success');
+          UI.toast(T('tactics.animSent').replace('{0}', names), 'success');
           if (isGroup) renderGroups(); else renderAnimList();
           offerAnimShare();
         };
@@ -2233,6 +2253,7 @@ Views.tactics = function (mount, params) {
     if (!teams.length) return UI.toast(T('tactics.animNoTeam'), 'error');
     const box = mount.querySelector('#animList');
     const preSel = box && (box.selectedOptions[0] || {}).value;
+    const on = [Store.activeTeamId()].filter(Boolean);
     UI.modal({
       title: T('tactics.animGroupTitle'),
       width: 520,
@@ -2240,12 +2261,15 @@ Views.tactics = function (mount, params) {
           <input id="grp_name" maxlength="60" placeholder="${UI.esc(T('tactics.animGroupNamePh'))}"></label>
         <div class="field"><span>${T('tactics.animGroupPick')}</span>
           <div class="menu-picker">${mine.map(s => `<label class="check-row menu-row">
-            <input type="checkbox" value="${UI.esc(s.id)}" ${s.id === preSel ? 'checked' : ''}>
+            <input type="checkbox" data-anim-pick value="${UI.esc(s.id)}" ${s.id === preSel ? 'checked' : ''}>
             <span>${UI.esc(s.name)} <span class="tag">${(s.frames || []).length} ${T('tactics.frameList')}</span></span>
           </label>`).join('')}</div>
           <p class="hint">${T('tactics.animGroupPickHint')}</p></div>
-        <label class="field"><span>${UI.esc(T('teams.activeTeam'))}</span>
-          <select id="grp_team">${teams.map(t => `<option value="${UI.esc(t.id)}" ${t.id === Store.activeTeamId() ? 'selected' : ''}>${UI.esc(t.name)}</option>`).join('')}</select></label>`,
+        <div class="field"><span>${UI.esc(T('teams.teams'))}</span>
+          <div class="menu-picker">${teams.map(t => `<label class="check-row menu-row">
+            <input type="checkbox" data-team-pick value="${UI.esc(t.id)}" ${on.indexOf(t.id) > -1 ? 'checked' : ''}>
+            <span>${UI.esc(t.name)}</span>
+          </label>`).join('')}</div></div>`,
       footer: `<button class="btn ghost" data-close2>${T('common.cancel')}</button>
         <button class="btn primary" data-go>${T('tactics.animSend')}</button>`,
       onOpen: (m, close) => {
@@ -2255,14 +2279,16 @@ Views.tactics = function (mount, params) {
         m.querySelector('[data-go]').onclick = async () => {
           const name = inp.value.trim();
           if (!name) return UI.toast(T('tactics.animGroupNeedName'), 'error');
-          const animIds = [...m.querySelectorAll('.menu-picker input:checked')].map(b => b.value);
+          const animIds = [...m.querySelectorAll('[data-anim-pick]:checked')].map(b => b.value);
           if (!animIds.length) return UI.toast(T('tactics.animGroupNeedAnims'), 'error');
-          const teamId = m.querySelector('#grp_team').value;
-          const team = teams.find(t => t.id === teamId);
-          await Store.save('tactics', { kind: 'group', name, sport: sportId, animIds, teamId });
-          await syncGroupAnims({ animIds, teamId });
+          const teamIds = [...m.querySelectorAll('[data-team-pick]:checked')].map(b => b.value);
+          if (!teamIds.length) return UI.toast(T('tactics.animNeedTeam'), 'error');
+          const names = teams.filter(t => teamIds.indexOf(t.id) > -1).map(t => t.name).join(', ');
+          const rec = withTeams({ kind: 'group', name, sport: sportId, animIds }, teamIds);
+          await Store.save('tactics', rec);
+          await syncGroupAnims(rec);
           close();
-          UI.toast(T('tactics.animSent').replace('{0}', (team && team.name) || ''), 'success');
+          UI.toast(T('tactics.animSent').replace('{0}', names), 'success');
           renderGroups();
           offerAnimShare();
         };
@@ -2277,6 +2303,7 @@ Views.tactics = function (mount, params) {
     if (!g) return;
     const mine = userSystems();
     const teams = Store.teams();
+    const on = animTeams(g);
     UI.modal({
       title: T('tactics.animGroupEdit'),
       width: 520,
@@ -2284,12 +2311,15 @@ Views.tactics = function (mount, params) {
           <input id="grp_ename" maxlength="60" value="${UI.esc(g.name || '')}"></label>
         <div class="field"><span>${T('tactics.animGroupPick')}</span>
           <div class="menu-picker">${mine.map(s => `<label class="check-row menu-row">
-            <input type="checkbox" value="${UI.esc(s.id)}" ${(g.animIds || []).indexOf(s.id) > -1 ? 'checked' : ''}>
+            <input type="checkbox" data-anim-pick value="${UI.esc(s.id)}" ${(g.animIds || []).indexOf(s.id) > -1 ? 'checked' : ''}>
             <span>${UI.esc(s.name)} <span class="tag">${(s.frames || []).length} ${T('tactics.frameList')}</span></span>
           </label>`).join('')}</div>
           <p class="hint">${T('tactics.animGroupPickHint')}</p></div>
-        ${teams.length ? `<label class="field"><span>${UI.esc(T('teams.activeTeam'))}</span>
-          <select id="grp_eteam">${teams.map(t => `<option value="${UI.esc(t.id)}" ${t.id === (g.teamId || Store.activeTeamId()) ? 'selected' : ''}>${UI.esc(t.name)}</option>`).join('')}</select></label>` : ''}`,
+        ${teams.length ? `<div class="field"><span>${UI.esc(T('teams.teams'))}</span>
+          <div class="menu-picker">${teams.map(t => `<label class="check-row menu-row">
+            <input type="checkbox" data-team-pick value="${UI.esc(t.id)}" ${on.indexOf(t.id) > -1 ? 'checked' : ''}>
+            <span>${UI.esc(t.name)}</span>
+          </label>`).join('')}</div></div>` : ''}`,
       footer: `<button class="btn ghost" data-close2>${T('common.cancel')}</button><button class="btn primary" data-save>${T('common.save')}</button>`,
       onOpen: (m, close) => {
         const inp = m.querySelector('#grp_ename');
@@ -2297,17 +2327,19 @@ Views.tactics = function (mount, params) {
         const commit = async () => {
           const name = inp.value.trim();
           if (!name) return UI.toast(T('tactics.animGroupNeedName'), 'error');
-          const animIds = [...m.querySelectorAll('.menu-picker input:checked')].map(b => b.value);
+          const animIds = [...m.querySelectorAll('[data-anim-pick]:checked')].map(b => b.value);
           if (!animIds.length) return UI.toast(T('tactics.animGroupNeedAnims'), 'error');
-          const teamSel = m.querySelector('#grp_eteam');
-          const teamId = teamSel ? teamSel.value : g.teamId;
-          const sentElsewhere = teamSel && teamId !== (g.teamId || '');
-          await Store.save('tactics', Object.assign({}, g, { name, animIds, teamId }));
-          await syncGroupAnims({ animIds, teamId });
+          const teamBoxes = [...m.querySelectorAll('[data-team-pick]')];
+          const teamIds = teamBoxes.length ? teamBoxes.filter(b => b.checked).map(b => b.value) : on;
+          if (teamBoxes.length && !teamIds.length) return UI.toast(T('tactics.animNeedTeam'), 'error');
+          const added = teamIds.filter(t => on.indexOf(t) < 0);
+          const rec = withTeams(Object.assign({}, g, { name, animIds }), teamIds);
+          await Store.save('tactics', rec);
+          await syncGroupAnims(rec);
           close(); renderGroups();
-          const team = teams.find(t => t.id === teamId);
-          UI.toast(sentElsewhere ? T('tactics.animSent').replace('{0}', (team && team.name) || '') : T('tactics.animSaved'), 'success');
-          if (sentElsewhere) offerAnimShare();
+          const names = teams.filter(t => added.indexOf(t.id) > -1).map(t => t.name).join(', ');
+          UI.toast(added.length ? T('tactics.animSent').replace('{0}', names) : T('tactics.animSaved'), 'success');
+          if (added.length) offerAnimShare();
         };
         inp.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); commit(); } });
         m.querySelector('[data-close2]').onclick = close;
@@ -2325,7 +2357,8 @@ Views.tactics = function (mount, params) {
     box.innerHTML = !groups.length ? '' : `
       <h4 class="anim-head">${T('tactics.animGroupsTitle')}</h4>
       ${groups.map(g => {
-        const team = teams.find(t => t.id === g.teamId);
+        const names = teams.filter(t => animTeams(g).indexOf(t.id) > -1).map(t => t.name).join(', ');
+        const team = names ? { name: names } : null;
         return `
         <div class="card" style="padding:8px;margin-bottom:6px">
           <div style="display:flex;justify-content:space-between;align-items:center;gap:6px">
