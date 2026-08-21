@@ -588,18 +588,18 @@ Views.exerciseLib = function (mount, opts) {
     // A live web search alongside the club's own library, so a fresh idea can
     // surface even where the library has nothing close to what was asked for.
     UI.toast(T('ai.searching'));
-    const found = await AI.webFindings(`${sportName} training drill ideas: ${what}` + (muscle ? `, targeting ${muscle}` : ''));
+    const found = await AI.webFindings(what + (muscle ? `, targeting the ${muscle}` : ''));
     const system = [
       `You design ${sportName} training exercises for a coach.`,
       'Answer with one JSON object and nothing else — no markdown, no code fence, no commentary.',
       `Shape: {"drills":[{"en":{"title":"","description":""},"da":{"title":"","description":""},"category":"","duration":0,"intensity":"","tags":[],"muscles":[],"video":"","links":[""],"search":""}]}`,
       'Every drill must carry BOTH language blocks: "en" in English and "da" in Danish. They are the same exercise written twice, not two different drills.',
       `Return exactly ${n} drill${n > 1 ? 's, each a different movement' : ''}.`,
-      muscle
-        ? `Every drill must load the ${muscle} as its main body part, and "muscles" must contain "${muscle}".`
-        : catPick
-          ? `These are ${sportName} drills for the "${catPick}" part of training — real ${sportName} work with the ball, the court and the players, not gym exercises, unless the category itself is physical.`
-          : `These are ${sportName} drills for what the coach describes — real ${sportName} work with the ball, the court and the players, not gym exercises.`,
+      'Base the KIND of exercise on what the coach actually describes below, whatever that is: real '
+      + `${sportName} work with the ball, the court and the players for a sport-specific drill, or a properly written`
+      + ' strength, mobility, conditioning or rehab exercise when the description calls for that instead — for example naming a muscle, joint or injury.'
+      + ' Follow the description over the category or sport: never force a strength or rehab request into a ball/court drill, and never force a sport-drill request into a gym exercise.',
+      muscle ? `Every drill must load the ${muscle} as its main body part, and "muscles" must contain "${muscle}".` : '',
       catPick
         ? `category must be exactly "${catPick}".`
         : `category: choose the one that fits each drill best, taken only from this list: ${own.join(', ')}.`,
