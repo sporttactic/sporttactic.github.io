@@ -766,7 +766,7 @@ Views.training = function (mount) {
     });
   }
 
-  function runMaxTest(p, s, goal) {
+  async function runMaxTest(p, s, goal) {
     // A solo athlete has no squad record, so entries are matched by the name.
     const who = p.name || ('#' + (p.number || '?') + ' ' + [p.firstName, p.lastName].filter(Boolean).join(' ')).trim();
     const history = Store.scoped('personal')
@@ -791,6 +791,10 @@ Views.training = function (mount) {
         : '',
       goal ? `The player wants: ${goal}` : ''
     ].filter(Boolean).join('\n');
+    // A live web search alongside the player's own numbers, so the advice can
+    // draw on something current even where nothing has been recorded yet.
+    UI.toast(T('ai.searching'));
+    const found = await AI.webFindings(goal || `${SPORTS.name(sportId, 'en')} max-test and training-load protocol ideas`);
 
     AI.report({
       title: T('personal.aiMax') + ' — ' + who,
@@ -826,6 +830,7 @@ Views.training = function (mount) {
         'TESTS: exercise name | unit; exercise name | reps; exercise name | cm',
         'Use only kg, reps, sec, m or cm as the unit. WORK lists the ordinary training exercises,'
         + ' TESTS lists only the exercises you told the player to max-test.',
+        ...(found ? [`Live web search, just run for this request — combine it with the player's own numbers and the plan above, and prefer a concrete idea from here when it fits:\n${found}`] : []),
         '',
         lines
       ].join('\n')
@@ -1026,6 +1031,10 @@ Views.training = function (mount) {
     // so it goes out in whichever language the app is set to, not always English.
     const lang = I18N.getLang();
     const searchLang = lang === 'da' ? 'Danish' : 'English';
+    // A live web search alongside the club's own library, so the session can
+    // suggest something concrete and current even where the library is thin.
+    UI.toast(T('ai.searching'));
+    const found = await AI.webFindings(`${sportName} training session ideas: ${what}`);
     const system = [
       `You plan ${sportName} training sessions for a coach.`,
       'Answer with one JSON object and nothing else — no markdown, no code fence, no commentary.',
@@ -1052,8 +1061,9 @@ Views.training = function (mount) {
       'Keep it safe for amateur athletes and say when to stop if there is pain.',
       lib.length
         ? 'Drill library (this sport only):\n' + lib.map(e => `- ${ex(e)} (${tt('cat', e.category)}, ${e.duration || 0} min, ${e.intensity || 'Low'})`).join('\n')
-        : 'Drill library: empty.'
-    ].join('\n');
+        : 'Drill library: empty.',
+      found ? `Live web search, just run for this request — combine it with your own knowledge and the club data, and prefer a concrete idea from here when it fits:\n${found}` : ''
+    ].filter(Boolean).join('\n');
     const user = `Session about: ${what}\nTotal length: ${dur} minutes\nFocus: ${focus}\nCategory for new drills: ${newCat}`;
 
     const raw = await AI.complete(system, user, 1200 + MAX_NEW * 320);

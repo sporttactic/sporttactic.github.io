@@ -585,6 +585,10 @@ Views.exerciseLib = function (mount, opts) {
       .map(e => ({ title: exTitle(e), url: videoList(e)[0] || '' }))
       .filter(e => e.url).slice(0, 30);
     const known = new Set(lib.map(e => e.url));
+    // A live web search alongside the club's own library, so a fresh idea can
+    // surface even where the library has nothing close to what was asked for.
+    UI.toast(T('ai.searching'));
+    const found = await AI.webFindings(`${sportName} training drill ideas: ${what}` + (muscle ? `, targeting ${muscle}` : ''));
     const system = [
       `You design ${sportName} training exercises for a coach.`,
       'Answer with one JSON object and nothing else — no markdown, no code fence, no commentary.',
@@ -608,6 +612,7 @@ Views.exerciseLib = function (mount, opts) {
       + ' Give only ones you are confident exist — every address is checked against YouTube and a dead one is thrown away, so a wrong guess simply costs the coach the link.',
       `search: 3-6 words in ${searchLang} for finding this drill on video, starting with "${SPORTS.name(sportId, lang).toLowerCase()}" then what the drill trains — written in ${searchLang}, matching the "${lang}" title above, never in English unless ${searchLang} is English.`,
       'Keep it safe for amateur athletes and say when to stop if there is pain.',
+      found ? `Live web search, just run for this request — combine it with your own knowledge and the club data, and prefer a concrete idea from here when it fits:\n${found}` : '',
       lib.length ? 'Club videos:\n' + lib.map(e => `- ${e.title}: ${e.url}`).join('\n') : 'Club videos: none.'
     ].filter(Boolean).join('\n');
     const user = `Train: ${what}` + (catPick ? `\nCategory: ${catPick}` : '')

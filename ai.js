@@ -354,6 +354,37 @@ window.AI = (() => {
     return '';
   }
 
+  // A live web search, folded into a drill/session prompt as one more source
+  // alongside the club's own data. Silent on failure — the generator still
+  // works from the club's own information alone.
+  const SEARCH_MODEL = 'gpt-5-search-api';
+  async function webFindings(query) {
+    const key = getKey();
+    if (!key || navigator.onLine === false || !String(query || '').trim()) return '';
+    try {
+      const res = await fetch(ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key },
+        body: JSON.stringify({
+          model: SEARCH_MODEL,
+          web_search_options: {},
+          messages: [
+            { role: 'system', content: 'Search the web for this. Answer in short, concrete bullet points only — no preamble, max 150 words.' },
+            { role: 'user', content: String(query).slice(0, 300) }
+          ]
+        })
+      });
+      if (!res.ok) return '';
+      const data = await res.json();
+      const msg = data && data.choices && data.choices[0] && data.choices[0].message;
+      const text = String((msg && msg.content) || '').trim();
+      if (!text) return '';
+      // The sources the search just cited are worth keeping alongside the summary.
+      const urls = [...new Set((msg.annotations || []).map(a => a && a.url_citation && a.url_citation.url).filter(Boolean))].slice(0, 5);
+      return text + (urls.length ? '\nSources: ' + urls.join(', ') : '');
+    } catch (e) { return ''; }
+  }
+
   function helpDialog() {
     const li = k => `<li>${esc(T(k))}</li>`;
     UI.modal({
@@ -428,7 +459,7 @@ window.AI = (() => {
   }
 
   return {
-    section, bind, complete, report, videos, render: fmt, checkVideo, pickVideo,
+    section, bind, complete, report, videos, render: fmt, checkVideo, pickVideo, webFindings,
     keyDialog: () => keyDialog(), hasKey: () => !!getKey()
   };
 })();

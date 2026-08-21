@@ -314,22 +314,37 @@ Views.teams = function (mount) {
             close();
             ANIM.open(id);
           });
+          // Asks right inside the row instead of a popup — there is only one
+          // modal host in the app, so opening a second dialog on top of this
+          // one would tear this one down instead of stacking on it.
           m.querySelectorAll('[data-anim-rm]').forEach(b => b.onclick = () => {
             const a = Store.find('tactics', b.dataset.animRm);
             if (!a || !team) return;
-            // The animation itself stays in the library — and, if some other
-            // squad still has it filed under them or open to everyone, in their
-            // list too. Only this squad's view of it changes.
-            UI.confirm(T('teams.animRemoveAsk').replace('{0}', a.name || ''), async () => {
-              const patch = { hiddenFor: (a.hiddenFor || []).filter(id => id !== team.id).concat(team.id) };
-              if (a.teamId === team.id) patch.teamId = ''; // sever the direct link too
+            const acts = b.closest('.bm-acts');
+            if (!acts) return;
+            acts.innerHTML = `<span class="hint">${UI.esc(T('teams.animRemoveAsk').replace('{0}', a.name || ''))}</span>
+              <button type="button" class="btn sm ghost" data-anim-rm-no>${T('common.cancel')}</button>
+              <button type="button" class="btn sm danger" data-anim-rm-yes>${T('common.confirm')}</button>`;
+            const reset = () => {
+              const box = m.querySelector('.acc-people');
+              if (box) box.innerHTML = rowsHtml(teamAnimations(team));
+              bind();
+            };
+            acts.querySelector('[data-anim-rm-no]').onclick = reset;
+            acts.querySelector('[data-anim-rm-yes]').onclick = async () => {
+              // The animation itself stays in the library — and, if some other
+              // squad still has it filed under them or open to everyone, in their
+              // list too. Only this squad's view of it changes.
+              const ids = animTeams(a).filter(t => t !== team.id);
+              const patch = {
+                hiddenFor: (a.hiddenFor || []).filter(id => id !== team.id).concat(team.id),
+                teamIds: ids, teamId: ids[0] || ''
+              };
               await Store.save('tactics', Object.assign({}, a, patch));
               UI.toast(T('teams.animRemoved'), 'success');
               render();                 // keeps the squad page's own badge/list in step
-              const box = m.querySelector('.acc-people');
-              if (box) box.innerHTML = rowsHtml(teamAnimations(team));
-              bind();                   // dialog stays open — rewire the refreshed rows
-            });
+              reset();                  // dialog stays open — rewire the refreshed rows
+            };
           });
         };
         bind();
