@@ -8,7 +8,7 @@
 
    BUMP `VERSION` and the matching `?v=` entries in SHELL whenever an asset changes.
 */
-const VERSION = 'v264';
+const VERSION = 'v265';
 const CACHE = 'sporttactic-' + VERSION;
 
 const SHELL = [
@@ -35,7 +35,7 @@ const SHELL = [
   './mail.js?v=12',
   './ai.js?v=16',
   './dashboard.js?v=18',
-  './teams.js?v=55',
+  './teams.js?v=56',
   './matches.js?v=25',
   './planner.js?v=12',
   './scouting.js?v=31',

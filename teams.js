@@ -102,8 +102,11 @@ Views.teams = function (mount) {
         ${UI.statCard(coaches.length, T('teams.staff'))}
         ${UI.statCard(players.filter(p => p.status === 'active').length, T('status.available'))}
       </div>
-      <label class="field wide" style="margin-bottom:12px"><span>${T('teams.squadComment')}</span>
+      <label class="field wide"><span>${T('teams.squadComment')}</span>
         <textarea id="squadComment" rows="2" maxlength="500" placeholder="${UI.esc(T('teams.squadCommentPh'))}" ${team ? '' : 'disabled'}>${UI.esc((team && team.squadComment) || '')}</textarea></label>
+      <div class="row" style="flex:0;margin:-4px 0 12px">
+        <button class="btn sm" id="saveSquadComment" ${team ? '' : 'disabled'}>${T('common.save')}</button>
+      </div>
       ${editing ? `<p class="hint">${T('teams.editHint')}</p>` : ''}
       <div class="table-wrap">
         <table class="compact stack${editing ? ' squad-edit' : ''}">
@@ -182,11 +185,12 @@ Views.teams = function (mount) {
     if (editBtn) editBtn.onclick = () => team ? teamForm(team) : UI.toast(T('teams.noTeamFirst'), 'error');
     q('#addStaff').onclick = () => team ? staffForm(team) : UI.toast(T('teams.noTeamFirst'), 'error');
 
-    // One free-text note for the whole squad — saved the moment you click away,
-    // same as any other team field.
+    // One free-text note for the whole squad — saved only when the coach
+    // presses the button beside it.
     const comment = q('#squadComment');
-    if (comment) comment.onchange = async () => {
-      if (!team) return;
+    const saveComment = q('#saveSquadComment');
+    if (saveComment) saveComment.onclick = async () => {
+      if (!team || !comment) return;
       await Store.save('teams', Object.assign({}, team, { squadComment: comment.value.trim().slice(0, 500) }));
       UI.toast(T('common.save'), 'success');
     };
