@@ -228,7 +228,11 @@ Views.tactics = function (mount, params) {
               <button class="btn sm primary" id="recFramesBtn">● ${T('tactics.recFrames')}</button>
               <button class="btn sm" id="saveAnim">＋ ${T('tactics.saveAnim')}</button>
             </div>
-            <h4 class="anim-head">${T('tactics.savedAnims')} <span class="tag" id="animCount">0</span></h4>
+            <div><span id="recDot" class="rec-dot hidden">REC <span id="recTime">0:00</span> · <span id="frameCount">0</span> ${T('tactics.framesCaptured')}</span></div>
+            <div id="recExport" class="rec-export hidden"></div>
+            `, { open: true })}
+            ${UI.acc('tacticsSavedAnims', T('tactics.savedAnims'), `
+            <span class="tag" id="animCount">0</span>
             <select class="anim-select" id="animList" size="6" aria-label="${T('tactics.savedAnims')}"></select>
             <p class="hint hidden" id="animHidden"></p>
             <div class="tool-group anim-acts">
@@ -240,14 +244,14 @@ Views.tactics = function (mount, params) {
             </div>
             <button class="btn sm" id="animSend" disabled title="${T('tactics.animSendHint')}">👥 ${T('tactics.animSend')}</button>
             <button class="btn sm" id="animPlayAll" title="${T('tactics.animPlayAllHint')}">▶▶ ${T('tactics.animPlayAll')}</button>
-            <button class="btn sm" id="animGroupBtn" title="${T('tactics.animGroupHint')}">🗂 ${T('tactics.animGroup')}</button>
-            <div id="animGroupsList"></div>
-            <div><span id="recDot" class="rec-dot hidden">REC <span id="recTime">0:00</span> · <span id="frameCount">0</span> ${T('tactics.framesCaptured')}</span></div>
-            <div id="recExport" class="rec-export hidden"></div>
             <div class="tool-group anim-acts" style="margin-top:6px;gap:6px">
               <button class="btn sm" id="animExportBtn" title="${T('tactics.exportAnimsHint')}">⭳ ${T('tactics.exportAnims')}</button>
               <label class="btn sm" style="cursor:pointer" title="${T('tactics.importAnimsHint')}">⭱ ${T('tactics.importAnims')}<input id="animImportInput" type="file" accept="application/json" hidden></label>
             </div>
+            `, { open: true })}
+            ${UI.acc('tacticsAnimGroups', T('tactics.animGroupsTitle'), `
+            <button class="btn sm" id="animGroupBtn" title="${T('tactics.animGroupHint')}">🗂 ${T('tactics.animGroup')}</button>
+            <div id="animGroupsList"></div>
             `, { open: true })}
             ${UI.acc('tacticsSpeed', T('tactics.speedGroup'), `
             <h4 class="anim-head">${T('tactics.speed')}</h4>
@@ -264,18 +268,11 @@ Views.tactics = function (mount, params) {
             </div>
             <p class="hint">${T('tactics.pspeedHint')}</p>
             `, { open: true })}
+            ${UI.acc('tacticsAids', T('tactics.boardAids'), `
             <div id="facingWrap">
               <h4 class="anim-head">${T('tactics.facing')}</h4>
               <label class="check-row"><input type="checkbox" id="facingToggle" checked><span>${T('tactics.facingShow')}</span></label>
               <p class="hint">${T('tactics.facingHint')}</p>
-            </div>
-            <div id="rotWrap" class="hidden">
-              <h4 class="anim-head">${T('tactics.rotation')}</h4>
-              <div class="tool-group anim-acts">
-                <button class="btn sm" id="rotLeft" title="${T('tactics.rotLeft')}">\u21BA</button>
-                <button class="btn sm" id="rotRight" title="${T('tactics.rotRight')}">\u21BB</button>
-                <button class="btn sm" id="rotClear" title="${T('tactics.rotClear')}">\u2715</button>
-              </div>
             </div>
             <div id="magnetWrap">
               <h4 class="anim-head">${T('tactics.magnet')}</h4>
@@ -288,6 +285,15 @@ Views.tactics = function (mount, params) {
               <h4 class="anim-head">${T('tactics.keeper')}</h4>
               <button class="btn sm hidden" id="keeperToggle" title="${T('tactics.keeperHint')}"></button>
               <p class="hint">${T('tactics.keeperHint')}</p>
+            </div>
+            `, { open: true })}
+            <div id="rotWrap" class="hidden">
+              <h4 class="anim-head">${T('tactics.rotation')}</h4>
+              <div class="tool-group anim-acts">
+                <button class="btn sm" id="rotLeft" title="${T('tactics.rotLeft')}">\u21BA</button>
+                <button class="btn sm" id="rotRight" title="${T('tactics.rotRight')}">\u21BB</button>
+                <button class="btn sm" id="rotClear" title="${T('tactics.rotClear')}">\u2715</button>
+              </div>
             </div>
             </div>
             <div class="timeline" id="timeline"></div>
@@ -2355,7 +2361,6 @@ Views.tactics = function (mount, params) {
     const groups = userGroups();
     const teams = Store.teams();
     box.innerHTML = !groups.length ? '' : `
-      <h4 class="anim-head">${T('tactics.animGroupsTitle')}</h4>
       ${groups.map(g => {
         const names = teams.filter(t => animTeams(g).indexOf(t.id) > -1).map(t => t.name).join(', ');
         const team = names ? { name: names } : null;

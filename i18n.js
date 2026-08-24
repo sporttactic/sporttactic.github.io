@@ -178,7 +178,7 @@ const I18N = (() => {
       'stats.aiPlayer': 'AI training advice', 'stats.aiTrain': 'Train',
       // Tactics
       'tactics.title': 'Tactical Board', 'tactics.subtitle': 'Design plays, shoot the ball, animate & record',
-      'tactics.sport': 'Sport', 'tactics.tools': 'Tools', 'tactics.color': 'Color', 'tactics.frames': 'Frames & Animation',
+      'tactics.sport': 'Sport', 'tactics.tools': 'Tools', 'tactics.color': 'Color', 'tactics.frames': 'Frames',
       'tactics.record': 'Record Video', 'tactics.save': 'Save', 'tactics.addFrame': 'Add Frame', 'tactics.duplicate': 'Duplicate',
       'tactics.play': 'Play', 'tactics.clearDraw': 'Clear Drawings', 'tactics.recBtn': 'Record', 'tactics.stop': 'Stop',
       'tactics.deleteFrame': 'Delete Frame', 'tactics.frame': 'Frame', 'tactics.frameList': 'Frames', 'tactics.saved': 'Tactic saved',
@@ -211,6 +211,7 @@ const I18N = (() => {
       'tactics.magnetSnapDef': 'Snap ball to red player',
       'tactics.magnetDefHint': 'With this on, a red player you drag picks the ball up as well — use it to walk a turnover out of defence.',
       'tactics.magnetDefOn': 'Red players pick the ball up', 'tactics.magnetDefOff': 'Only the selected player picks the ball up',
+      'tactics.boardAids': 'Board aids',
       'tactics.nameTitle': 'Player name', 'tactics.nameLabel': 'Name', 'tactics.namePlaceholder': 'e.g. Mikkel', 'tactics.nameHint': 'Long-press a player to rename. Leave the field empty to remove the name.',
       'tactics.playerName': 'Player Name', 'tactics.addName': 'Add name', 'tactics.saveName': 'Save name', 'tactics.cancelAddName': 'Cancel add name', 'tactics.selectToName': 'Select a player, then Add name.',
       'tactics.speedGroup': 'Speed',
@@ -1153,7 +1154,7 @@ const I18N = (() => {
       'stats.aiPlayer': 'AI-træningsråd', 'stats.aiTrain': 'Træn',
       // Tactics
       'tactics.title': 'Taktiktavle', 'tactics.subtitle': 'Design spil, skyd bolden, animér & optag',
-      'tactics.sport': 'Sportsgren', 'tactics.tools': 'Værktøjer', 'tactics.color': 'Farve', 'tactics.frames': 'Frames & Animation',
+      'tactics.sport': 'Sportsgren', 'tactics.tools': 'Værktøjer', 'tactics.color': 'Farve', 'tactics.frames': 'Frames',
       'tactics.record': 'Optag Video', 'tactics.save': 'Gem', 'tactics.addFrame': 'Tilføj Frame', 'tactics.duplicate': 'Dupliker',
       'tactics.play': 'Afspil', 'tactics.clearDraw': 'Ryd Tegninger', 'tactics.recBtn': 'Optag', 'tactics.stop': 'Stop',
       'tactics.deleteFrame': 'Slet Frame', 'tactics.frame': 'Frame', 'tactics.frameList': 'Frames', 'tactics.saved': 'Taktik gemt',
@@ -1186,6 +1187,7 @@ const I18N = (() => {
       'tactics.magnetSnapDef': 'Sæt bolden på rød spiller',
       'tactics.magnetDefHint': 'Med denne slået til samler en rød spiller, du trækker, også bolden op — brug den til at spille et boldtab ud af forsvaret.',
       'tactics.magnetDefOn': 'Røde spillere samler bolden op', 'tactics.magnetDefOff': 'Kun den valgte spiller samler bolden op',
+      'tactics.boardAids': 'Hjælpemidler',
       'tactics.nameTitle': 'Spillernavn', 'tactics.nameLabel': 'Navn', 'tactics.namePlaceholder': 'f.eks. Mikkel', 'tactics.nameHint': 'Hold på en spiller for at omdøbe. Lad feltet stå tomt for at fjerne navnet.',
       'tactics.playerName': 'Spillernavn', 'tactics.addName': 'Tilføj navn', 'tactics.saveName': 'Gem navn', 'tactics.cancelAddName': 'Annuller navn', 'tactics.selectToName': 'Vælg en spiller, og tryk Tilføj navn.',
       'tactics.speedGroup': 'Hastighed',
