@@ -1558,10 +1558,6 @@ Views.tactics = function (mount, params) {
     if (row) row.classList.toggle('court-big', courtScale > 1);
     canvas.style.width = Math.round(w) + 'px';
     canvas.style.height = Math.round(h) + 'px';
-    // Beside the court the column is stretched by the row, and the row is as tall
-    // as its tallest child — so without a cap it grows on every added frame and
-    // never scrolls. Pin it to the court and let it scroll.
-    if (side) side.style.maxHeight = beside ? Math.round(h) + 'px' : '';
     draw();
   }
   const roResize = () => fitCanvas();

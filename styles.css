@@ -813,7 +813,9 @@ body.board-fs { overflow: hidden; }
 .board-side { flex: 0 0 clamp(260px, 32%, 520px); width: clamp(260px, 32%, 520px); align-self: stretch; display: flex; flex-direction: column; gap: 12px; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
 .board-side::-webkit-scrollbar { width: 8px; }
 .board-side::-webkit-scrollbar-thumb { background: var(--border); border-radius: 8px; }
-.frames-anim { flex: 0 0 auto; width: 100%; display: flex; flex-direction: column; align-items: stretch; gap: 8px; margin: 0; }
+/* Same height budget as .tool-panel, so the settings column is as full and
+   scrolls the same way instead of being pinned to the (often shorter) court. */
+.frames-anim { flex: 0 0 auto; width: 100%; display: flex; flex-direction: column; align-items: stretch; gap: 8px; margin: 0; max-height: calc(100vh - 160px); min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 .frames-anim > .acc { margin-bottom: 0; }
 .frames-anim .tool-group { flex: 0 0 auto; flex-direction: column; align-items: stretch; }
 .rec-export { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); }
@@ -842,6 +844,7 @@ body.board-fs { overflow: hidden; }
   /* Wrapped under the board the column would be a 600px tall stack and would eat
      the court's whole height budget — flow the blocks into columns instead. */
   .board-side { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); align-items: start; flex: 1 1 100%; width: 100%; order: 2; margin-top: 10px; max-height: none !important; overflow: visible; }
+  .frames-anim { max-height: none; overflow: visible; }
   .frames-anim .tool-group { flex-direction: row; }
   .anim-select { flex: 1 1 240px; width: auto; max-width: 320px; }
   /* Back to a wide strip under the board when the columns wrap. */
