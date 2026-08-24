@@ -296,7 +296,7 @@ Views.tactics = function (mount, params) {
               </div>
             </div>
             </div>
-            <div class="timeline" id="timeline"></div>
+            ${UI.acc('tacticsTimeline', T('tactics.frameList'), '<div class="timeline" id="timeline"></div>', { open: true })}
           </div>
           <canvas id="tacticalCanvas" width="700" height="560"></canvas>
         </div>

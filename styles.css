@@ -834,10 +834,11 @@ body.board-fs { overflow: hidden; }
 #rotWrap .tool-group.anim-acts { margin-top: 4px; }
 #rotWrap .tool-group.anim-acts .btn { flex: 1; min-width: 0; }
 /* Frame strip, first block of the column to the LEFT of the court. */
-.board-side > .timeline { flex: 0 0 auto; width: 100%; margin-top: 0; display: flex; flex-direction: column; min-height: 0; }
-.board-side > .timeline .tl-head { flex-direction: column; align-items: stretch; gap: 6px; }
-.board-side > .timeline .tl-actions { flex-direction: column; }
-.board-side > .timeline .tl-grid { grid-template-columns: 1fr; max-height: 168px; min-height: 60px; overflow-y: auto; align-content: start; }
+.timeline { flex: 0 0 auto; width: 100%; margin-top: 0; display: flex; flex-direction: column; min-height: 0; }
+.timeline .tl-head { flex-direction: column; align-items: stretch; gap: 6px; }
+.timeline .tl-actions { flex-direction: column; }
+.timeline .tl-grid { grid-template-columns: 1fr; max-height: 168px; min-height: 60px; overflow-y: auto; align-content: start; }
+.board-side > .acc { margin-bottom: 0; }
 @media (max-width: 1100px) {
   .stage-row { flex-wrap: wrap; }
   .stage-row #tacticalCanvas { order: 1; }
@@ -848,10 +849,10 @@ body.board-fs { overflow: hidden; }
   .frames-anim .tool-group { flex-direction: row; }
   .anim-select { flex: 1 1 240px; width: auto; max-width: 320px; }
   /* Back to a wide strip under the board when the columns wrap. */
-  .board-side > .timeline { margin-top: 0; }
-  .board-side > .timeline .tl-head { flex-direction: row; align-items: center; }
-  .board-side > .timeline .tl-actions { flex-direction: row; }
-  .board-side > .timeline .tl-grid { grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); max-height: 148px; }
+  .timeline { margin-top: 0; }
+  .timeline .tl-head { flex-direction: row; align-items: center; }
+  .timeline .tl-actions { flex-direction: row; }
+  .timeline .tl-grid { grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); max-height: 148px; }
 }
 
 /* Playbook — tactical systems */
