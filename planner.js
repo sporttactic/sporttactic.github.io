@@ -88,6 +88,7 @@ Views.planner = function (mount) {
       actions: UI.shareBar('planner', { exportLabel: T('planner.exportBtn'), importLabel: T('planner.importBtn') })
         + (events.length ? `<button class="btn sm danger" id="clearPlanner">🗑 ${T('planner.clearAll')}</button>` : '')
         + (mine(events).length && Store.teams().length > 1 ? `<button class="btn sm" id="shareEvents">📤 ${T('planner.shareBtn')}</button>` : '')
+        + `<button class="btn sm" id="aiNewEvent">🤖 ${T('planner.aiNew')}</button>`
         + `<button class="btn primary" id="addEvent">+ ${T('planner.newEvent')}</button>`
     })}`;
 
@@ -95,6 +96,7 @@ Views.planner = function (mount) {
     // The file carries the squad you are looking at, and lands back in it.
     UI.bindShare(mount, 'planner', render, { scoped: true });
     mount.querySelector('#addEvent').onclick = () => form();
+    mount.querySelector('#aiNewEvent').onclick = () => aiEventForm();
     const clear = mount.querySelector('#clearPlanner');
     if (clear) clear.onclick = () => clearAll(events);
     const share = mount.querySelector('#shareEvents');
@@ -210,6 +212,68 @@ Views.planner = function (mount) {
         m.querySelector('[data-edit]').onclick = () => { close(); form(ev); };
       }
     });
+  }
+
+  // ---- AI-drafted event ---------------------------------------------------
+  // One free-text description becomes a full draft — opened in the normal
+  // form so nothing is saved before the coach checks it.
+  function aiEventForm() {
+    UI.modal({
+      title: T('planner.aiNew'),
+      width: 560,
+      body: `<p style="color:var(--muted);font-size:13px">${T('planner.aiNewIntro')}</p>
+        <label class="field"><span>${T('planner.aiNewWhat')}</span>
+          <textarea id="ap_desc" rows="4" maxlength="400" placeholder="${UI.esc(T('planner.aiNewPh'))}"></textarea></label>`,
+      footer: `<button class="btn ghost" data-close2>${T('common.cancel')}</button><button class="btn primary" data-gen>${T('training.aiGenerate')}</button>`,
+      onOpen: (m, close) => {
+        const inp = m.querySelector('#ap_desc');
+        inp.focus();
+        m.querySelector('[data-close2]').onclick = close;
+        const btn = m.querySelector('[data-gen]');
+        btn.onclick = async () => {
+          const desc = inp.value.trim();
+          if (!desc) return UI.toast(T('planner.aiNewReq'), 'error');
+          btn.disabled = true; btn.textContent = T('ai.asking');
+          const draft = await draftEvent(desc);
+          btn.disabled = false; btn.textContent = T('training.aiGenerate');
+          if (draft) { close(); form(draft); UI.toast(T('planner.aiNewReady'), 'success'); }
+        };
+      }
+    });
+  }
+
+  async function draftEvent(desc) {
+    const lang = I18N.getLang() === 'da' ? 'Danish' : 'English';
+    const today = new Date().toISOString().slice(0, 10);
+    const system = [
+      "You write ONE event for a sports team's event planner \u2014 training camps, meetings, travel, tournaments, socials, club duties, anything the squad must turn up for that is not a match.",
+      'Answer with one JSON object and nothing else \u2014 no markdown, no code fence, no commentary.',
+      'Shape: {"title":"","kind":"","date":"YYYY-MM-DD","time":"HH:MM","place":"","who":"","status":"","notes":""}',
+      `kind must be exactly one of: ${PLANNER_KINDS.join(', ')}.`,
+      `status must be exactly one of: ${PLANNER_STATUS.join(', ')} \u2014 use "planned" unless told otherwise.`,
+      `date must be a real calendar date, YYYY-MM-DD, today (${today}) or later \u2014 work out weekdays such as "next Friday" from today.`,
+      'time is 24-hour HH:MM, or "" if none is given.',
+      'title, place and who are short, max 80 characters each; place and who are "" if not given.',
+      'notes is 1-3 short lines expanding on the description, max 400 characters, "" if there is nothing to add.',
+      `Write title, place, who and notes in ${lang}.`
+    ].join('\n');
+
+    const raw = await AI.complete(system, desc, 400);
+    if (!raw) return null;
+    let d;
+    try { d = JSON.parse(raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1)); }
+    catch { UI.toast(T('planner.aiBad'), 'error'); return null; }
+    const dt = new Date(d.date);
+    return {
+      title: String(d.title || '').trim().slice(0, 80) || T('planner.newEvent'),
+      kind: PLANNER_KINDS.indexOf(d.kind) >= 0 ? d.kind : 'training',
+      status: PLANNER_STATUS.indexOf(d.status) >= 0 ? d.status : 'planned',
+      date: isNaN(dt.getTime()) ? Date.now() : dt.getTime(),
+      time: /^([01]\d|2[0-3]):[0-5]\d$/.test(d.time || '') ? d.time : '',
+      place: String(d.place || '').trim().slice(0, 80),
+      who: String(d.who || '').trim().slice(0, 80),
+      notes: String(d.notes || '').trim().slice(0, 600)
+    };
   }
 
   function form(ev = {}) {
