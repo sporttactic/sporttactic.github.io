@@ -102,6 +102,8 @@ Views.teams = function (mount) {
         ${UI.statCard(coaches.length, T('teams.staff'))}
         ${UI.statCard(players.filter(p => p.status === 'active').length, T('status.available'))}
       </div>
+      <label class="field wide" style="margin-bottom:12px"><span>${T('teams.squadComment')}</span>
+        <textarea id="squadComment" rows="2" maxlength="500" placeholder="${UI.esc(T('teams.squadCommentPh'))}" ${team ? '' : 'disabled'}>${UI.esc((team && team.squadComment) || '')}</textarea></label>
       ${editing ? `<p class="hint">${T('teams.editHint')}</p>` : ''}
       <div class="table-wrap">
         <table class="compact stack${editing ? ' squad-edit' : ''}">
@@ -179,6 +181,15 @@ Views.teams = function (mount) {
     const editBtn = q('#editTeamBtn');
     if (editBtn) editBtn.onclick = () => team ? teamForm(team) : UI.toast(T('teams.noTeamFirst'), 'error');
     q('#addStaff').onclick = () => team ? staffForm(team) : UI.toast(T('teams.noTeamFirst'), 'error');
+
+    // One free-text note for the whole squad — saved the moment you click away,
+    // same as any other team field.
+    const comment = q('#squadComment');
+    if (comment) comment.onchange = async () => {
+      if (!team) return;
+      await Store.save('teams', Object.assign({}, team, { squadComment: comment.value.trim().slice(0, 500) }));
+      UI.toast(T('common.save'), 'success');
+    };
 
     const pick = q('#teamPick');
     if (pick) pick.onchange = () => { Store.setActiveTeam(pick.value); App.populateTeamPicker(); render(); };
@@ -312,6 +323,9 @@ Views.teams = function (mount) {
           m.querySelectorAll('[data-anim-show]').forEach(b => b.onclick = () => {
             const id = b.dataset.animShow;
             close();
+            // Only one modal host exists, so the list has to close first — closing
+            // the preview then reopens it instead of leaving no dialog at all.
+            document.addEventListener('modalclosed', () => animListDialog(team, teamAnimations(team)), { once: true });
             ANIM.open(id);
           });
           // Asks right inside the row instead of a popup — there is only one

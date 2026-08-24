@@ -117,6 +117,7 @@ const I18N = (() => {
       // Teams
       'teams.title': 'Teams & Players', 'teams.noTeam': 'No team', 'teams.addPlayer': 'Add Player',
       'teams.squad': 'Squad', 'teams.squadHint': 'Registered for',
+      'teams.squadComment': 'Squad comment', 'teams.squadCommentPh': 'e.g. reminders, kit colours, travel plans for this squad',
       'teams.number': 'No.', 'teams.name': 'Name', 'teams.position': 'Position', 'teams.height': 'Height', 'teams.email': 'Email',
       'teams.size': 'H / W',
       'teams.status': 'Status', 'teams.actions': 'Actions',
@@ -1084,6 +1085,7 @@ const I18N = (() => {
       // Teams
       'teams.title': 'Hold & Spillere', 'teams.noTeam': 'Intet hold', 'teams.addPlayer': 'Tilføj Spiller',
       'teams.squad': 'Trup', 'teams.squadHint': 'Registreret til',
+      'teams.squadComment': 'Trup-kommentar', 'teams.squadCommentPh': 'f.eks. huskeliste, trøjefarver, rejseplaner for truppen',
       'teams.number': 'Nr.', 'teams.name': 'Navn', 'teams.position': 'Position', 'teams.height': 'Højde', 'teams.email': 'E-mail',
       'teams.size': 'H / V',
       'teams.status': 'Status', 'teams.actions': 'Handlinger',
