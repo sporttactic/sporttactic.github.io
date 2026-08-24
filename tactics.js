@@ -235,7 +235,7 @@ Views.tactics = function (mount, params) {
             <span class="tag" id="animCount">0</span>
             <select class="anim-select" id="animList" size="6" aria-label="${T('tactics.savedAnims')}"></select>
             <p class="hint hidden" id="animHidden"></p>
-            <div class="tool-group anim-acts">
+            <div class="tool-group anim-acts" style="margin-top:8px">
               <button class="btn sm" id="animLoad" disabled>↺ ${T('tactics.animLoad')}</button>
               <button class="btn sm" id="animEdit" disabled title="${T('tactics.animEdit')}">✎</button>
               <button class="btn sm" id="animShare" disabled title="${T('tactics.animShare')}">📤</button>
@@ -251,7 +251,7 @@ Views.tactics = function (mount, params) {
             `, { open: true })}
             ${UI.acc('tacticsAnimGroups', T('tactics.animGroupsTitle'), `
             <button class="btn sm" id="animGroupBtn" title="${T('tactics.animGroupHint')}">🗂 ${T('tactics.animGroup')}</button>
-            <div id="animGroupsList"></div>
+            <div id="animGroupsList" style="margin-top:8px"></div>
             `, { open: true })}
             ${UI.acc('tacticsSpeed', T('tactics.speedGroup'), `
             <h4 class="anim-head">${T('tactics.speed')}</h4>
@@ -2356,25 +2356,25 @@ Views.tactics = function (mount, params) {
     if (!box) return;
     const groups = userGroups();
     const teams = Store.teams();
-    box.innerHTML = !groups.length ? '' : `
-      ${groups.map(g => {
+    // Each group's own id is the accordion key, so two groups can never share
+    // one — even if a coach gives them the same name.
+    box.innerHTML = groups.map(g => {
         const names = teams.filter(t => animTeams(g).indexOf(t.id) > -1).map(t => t.name).join(', ');
         const team = names ? { name: names } : null;
-        return `
-        <div class="card" style="padding:8px;margin-bottom:6px">
+        return UI.acc('animGroup_' + g.id, '\ud83d\uddc2 ' + (g.name || T('tactics.animGroupTitle')), `
           <div style="display:flex;justify-content:space-between;align-items:center;gap:6px">
-            <b>\ud83d\uddc2 ${UI.esc(g.name)}</b>
             <span class="tag">${(g.animIds || []).length} ${T('tactics.animGroupItems')}</span>
+            ${team ? `<span class="tag blue">\ud83d\udc65 ${UI.esc(team.name)}</span>` : ''}
           </div>
-          ${team ? `<span class="tag blue">\ud83d\udc65 ${UI.esc(team.name)}</span>` : ''}
           ${window.ANIM ? ANIM.chipsHtml(g.animIds) : ''}
           <div class="tool-group anim-acts" style="margin-top:6px">
             <button class="btn sm" data-group-send="${UI.esc(g.id)}" title="${T('tactics.animSendHint')}">\ud83d\udc65 ${T('tactics.animSend')}</button>
             <button class="btn sm" data-group-edit="${UI.esc(g.id)}" title="${UI.esc(T('common.edit'))}" aria-label="${UI.esc(T('common.edit'))}">\u270e</button>
             <button class="btn sm danger" data-group-del="${UI.esc(g.id)}">\u2715</button>
           </div>
-        </div>`;
-      }).join('')}`;
+        `);
+      }).join('');
+    UI.bindAcc(box);
     if (window.ANIM) ANIM.bind(box);
     box.querySelectorAll('[data-group-send]').forEach(b => b.onclick = () => sendToTeam(b.dataset.groupSend, true));
     box.querySelectorAll('[data-group-edit]').forEach(b => b.onclick = () => editGroup(b.dataset.groupEdit));
