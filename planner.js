@@ -190,6 +190,9 @@ Views.planner = function (mount) {
     if (!ev) return;
     const label = (grp, v) => { const k = grp + '.' + v; const r = T(k); return r === k ? v : r; };
     const line = (lbl, val) => `<tr><th>${UI.esc(lbl)}</th><td>${UI.esc(val || '\u2014')}</td></tr>`;
+    // A plain search link — no API key needed, and it works whether the place
+    // is a full address or just a venue name.
+    const mapLink = place => place ? `<br><a href="${UI.esc('https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(place))}" target="_blank" rel="noopener">\ud83d\udccd ${UI.esc(T('planner.openMap'))}</a>` : '';
     UI.modal({
       title: UI.esc(ev.title || T('planner.titleField')),
       width: 560,
@@ -198,7 +201,7 @@ Views.planner = function (mount) {
           \u00b7 <span class="tag blue">${UI.esc(label('plannerKind', ev.kind))}</span>
           <span class="tag ${ev.status === 'done' ? 'green' : ev.status === 'cancelled' ? 'warn' : 'amber'}">${UI.esc(label('plannerStatus', ev.status))}</span></p>
         <table class="show-table">
-          ${line(T('planner.place'), ev.place)}
+          <tr><th>${UI.esc(T('planner.place'))}</th><td>${UI.esc(ev.place || '\u2014')}${mapLink(ev.place)}</td></tr>
           ${line(T('planner.who'), ev.who)}
           ${team ? line(T('teams.activeTeam'), team.name) : ''}
           ${line(T('planner.access'), ev.allTeams ? T('planner.allTeams')
