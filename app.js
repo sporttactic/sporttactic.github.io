@@ -3,6 +3,9 @@ const App = (() => {
   let currentRoute = 'dashboard';
   let cleanup = null;
   let currentSport = 'handball';
+  // Set while a data-refresh offer has to wait for an open dialog or a live
+  // view to clear, so it is not lost — only deferred.
+  let pendingDataRefresh = 0;
   const ROUTES = ['dashboard', 'teams', 'matches', 'planner', 'scouting', 'statistics', 'tactics', 'video', 'training', 'opponents', 'reports', 'settings'];
   // A strength discipline has no court to draw on, so only the board is dropped.
   const SOLO_SPORTS = ['crossfit', 'bodybuilding'];
@@ -120,9 +123,37 @@ const App = (() => {
     const ret = Views[route](view, params);
     if (typeof ret === 'function') cleanup = ret;
     document.getElementById('sidebar').classList.remove('open');
+    // Data that landed while a live view held the screen gets offered the
+    // moment it is safe, instead of being lost the moment that view was left.
+    if (pendingDataRefresh && LIVE_ROUTES.indexOf(route) < 0) askDataRefresh(pendingDataRefresh);
   }
 
   function render() { go(currentRoute); }
+
+  // Same dialog pattern as the app-version updater below: an explicit choice
+  // instead of a redraw sprung on whoever is looking at the screen.
+  function askDataRefresh(n) {
+    pendingDataRefresh = 0;
+    const host = document.getElementById('modalHost');
+    if (host && !host.classList.contains('hidden')) { pendingDataRefresh = n; return; }
+    if (!window.UI || !UI.modal) { UI.toast(T('cloud.freshened').replace('{0}', n), 'success'); render(); return; }
+    UI.modal({
+      title: T('cloud.freshTitle'),
+      body: '<p>' + T('cloud.freshened').replace('{0}', n) + '</p>',
+      footer: '<button class="btn ghost" data-later>' + T('update.later') + '</button>'
+        + '<button class="btn primary" data-now>' + T('cloud.freshNow') + '</button>',
+      onOpen: (m, close) => {
+        m.querySelector('[data-later]').onclick = close;
+        m.querySelector('[data-now]').onclick = () => { close(); render(); };
+      }
+    });
+  }
+  // A dialog that was open when the data landed gets asked again as soon as
+  // it closes, the same way the version updater retries.
+  document.addEventListener('modalclosed', () => {
+    if (!pendingDataRefresh || LIVE_ROUTES.indexOf(currentRoute) >= 0) return;
+    askDataRefresh(pendingDataRefresh);
+  });
 
   function setTheme(t) {
     document.documentElement.setAttribute('data-theme', t);
@@ -433,15 +464,16 @@ const App = (() => {
       }
       if (info && info.revoked) { UI.toast(T('cloud.revoked'), 'error'); render(); return; }
       // Rows landed from a background pull, so the view on screen was built
-      // from the old ones. Redraw it — but not over a dialog, and not over the
-      // modules that hold live work a redraw would throw away: a running match
-      // clock, an unsaved play, a video with drawings on it.
+      // from the old ones. Offer a refresh — but not over a dialog, and not
+      // over the modules that hold live work a redraw would throw away: a
+      // running match clock, an unsaved play, a video with drawings on it.
       if (!info || !info.pulled) return;
-      UI.toast(T('cloud.freshened').replace('{0}', info.pulled), 'success');
       const host = document.getElementById('modalHost');
-      if (host && !host.classList.contains('hidden')) return;
-      if (LIVE_ROUTES.indexOf(currentRoute) >= 0) return;
-      render();
+      if ((host && !host.classList.contains('hidden')) || LIVE_ROUTES.indexOf(currentRoute) >= 0) {
+        pendingDataRefresh = info.pulled;
+        return;
+      }
+      askDataRefresh(info.pulled);
     });
     startAutosave();
     if (window.AUTOBK) AUTOBK.start();   // unattended backups, if the coach turned them on
