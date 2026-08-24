@@ -103,9 +103,9 @@ Views.teams = function (mount) {
         ${UI.statCard(players.filter(p => p.status === 'active').length, T('status.available'))}
       </div>
       <label class="field wide"><span>${T('teams.squadComment')}</span>
-        <textarea id="squadComment" rows="2" maxlength="500" placeholder="${UI.esc(T('teams.squadCommentPh'))}" ${team ? '' : 'disabled'}>${UI.esc((team && team.squadComment) || '')}</textarea></label>
+        <textarea id="squadComment" rows="2" maxlength="500" placeholder="${UI.esc(T('teams.squadCommentPh'))}" ${!team ? 'disabled' : (Store.locked() || Access.readMode() ? 'readonly' : '')}>${UI.esc((team && team.squadComment) || '')}</textarea></label>
       <div class="row" style="flex:0;margin:-4px 0 12px">
-        <button class="btn sm" id="saveSquadComment" ${team ? '' : 'disabled'}>${T('common.save')}</button>
+        <button class="btn sm" id="saveSquadComment" data-write ${(!team || Store.locked() || Access.readMode()) ? 'disabled' : ''}>${T('common.save')}</button>
       </div>
       ${editing ? `<p class="hint">${T('teams.editHint')}</p>` : ''}
       <div class="table-wrap">
@@ -186,11 +186,12 @@ Views.teams = function (mount) {
     q('#addStaff').onclick = () => team ? staffForm(team) : UI.toast(T('teams.noTeamFirst'), 'error');
 
     // One free-text note for the whole squad — saved only when the coach
-    // presses the button beside it.
+    // presses the button beside it. Blocked the same way any other write is
+    // in a locked backup or a read-only team-code copy.
     const comment = q('#squadComment');
     const saveComment = q('#saveSquadComment');
     if (saveComment) saveComment.onclick = async () => {
-      if (!team || !comment) return;
+      if (!team || !comment || Store.locked() || Access.readMode()) return;
       await Store.save('teams', Object.assign({}, team, { squadComment: comment.value.trim().slice(0, 500) }));
       UI.toast(T('common.save'), 'success');
     };
