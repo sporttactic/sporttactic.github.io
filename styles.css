@@ -812,7 +812,7 @@ body.board-fs { overflow: hidden; }
 .board-side::-webkit-scrollbar { width: 8px; }
 .board-side::-webkit-scrollbar-thumb { background: var(--border); border-radius: 8px; }
 .frames-anim { flex: 0 0 auto; width: 100%; display: flex; flex-direction: column; align-items: stretch; gap: 8px; margin: 0; }
-.frames-anim h3 { margin: 0; font-size: 14px; }
+.frames-anim > .acc { margin-bottom: 0; }
 .frames-anim .tool-group { flex: 0 0 auto; flex-direction: column; align-items: stretch; }
 .rec-export { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); }
 .rec-export .hint { margin: 0; }
@@ -840,8 +840,6 @@ body.board-fs { overflow: hidden; }
   /* Wrapped under the board the column would be a 600px tall stack and would eat
      the court's whole height budget — flow the blocks into columns instead. */
   .board-side { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); align-items: start; flex: 1 1 100%; width: 100%; order: 2; margin-top: 10px; max-height: none !important; overflow: visible; }
-  .frames-anim { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); align-items: start; }
-  .frames-anim > h3 { grid-column: 1 / -1; }
   .frames-anim .tool-group { flex-direction: row; }
   .anim-select { flex: 1 1 240px; width: auto; max-width: 320px; }
   /* Back to a wide strip under the board when the columns wrap. */
@@ -1487,7 +1485,6 @@ body[data-mobile="1"] .scoreboard .clock { font-size: 18px; }
 .fold-btn { display: none; }
 body[data-mobile="1"] .fold-btn { display: flex; width: 100%; justify-content: center; margin: 8px 0 0; }
 body[data-mobile="1"] .tool-panel.folded #toolsFold ~ * { display: none; }
-body[data-mobile="1"] .frames-anim.folded #framesFold ~ * { display: none; }
 body[data-mobile="1"] .tool-panel { padding: 10px; }
 body[data-mobile="1"] .board-actions input { width: 100%; }
 /* A tool grid that fits five across is reachable without scrolling the panel. */

@@ -193,21 +193,6 @@ Views.tactics = function (mount, params) {
           <div class="tool-group">
             ${BOARD_COLORS.map(c => `<div class="tool-btn" data-color="${c}" style="background:${c};min-width:30px;height:30px"></div>`).join('')}
           </div>
-          <div id="speedWrap" style="margin-top:8px">
-            <h3 style="margin:0 0 6px">${T('tactics.speed')}</h3>
-            <div class="tool-group" id="speedGroup">
-              <button class="btn sm" data-speed="slow">${T('tactics.speedSlow')}</button>
-              <button class="btn sm" data-speed="medium">${T('tactics.speedMedium')}</button>
-              <button class="btn sm" data-speed="fast">${T('tactics.speedFast')}</button>
-            </div>
-            <h3 style="margin:10px 0 6px">${T('tactics.pspeed')}</h3>
-            <div class="tool-group" id="pspeedGroup">
-              <button class="btn sm" data-pspeed="slow">${T('tactics.speedSlow')}</button>
-              <button class="btn sm" data-pspeed="medium">${T('tactics.speedMedium')}</button>
-              <button class="btn sm" data-pspeed="fast">${T('tactics.speedFast')}</button>
-            </div>
-            <p class="hint">${T('tactics.pspeedHint')}</p>
-          </div>
           <button class="btn sm danger" id="clearShapes" style="margin-top:8px">${T('tactics.eraseTools')}</button>
           <div id="courtSizeWrap" style="margin-top:12px">
             <h3 style="margin:0 0 6px">${T('tactics.courtSize')}</h3>
@@ -237,8 +222,7 @@ Views.tactics = function (mount, params) {
         <div class="stage-row">
           <div class="board-side" id="boardSide">
             <div class="frames-anim" id="framesAnim">
-            <h3>${T('tactics.frames')}</h3>
-            <button type="button" class="btn sm fold-btn" id="framesFold" aria-expanded="false"></button>
+            ${UI.acc('tacticsFrames', T('tactics.frames'), `
             <div class="tool-group">
               <button class="btn sm" id="playAnim">▶ ${T('tactics.play')}</button>
               <button class="btn sm primary" id="recFramesBtn">● ${T('tactics.recFrames')}</button>
@@ -257,13 +241,29 @@ Views.tactics = function (mount, params) {
             <button class="btn sm" id="animSend" disabled title="${T('tactics.animSendHint')}">👥 ${T('tactics.animSend')}</button>
             <button class="btn sm" id="animPlayAll" title="${T('tactics.animPlayAllHint')}">▶▶ ${T('tactics.animPlayAll')}</button>
             <button class="btn sm" id="animGroupBtn" title="${T('tactics.animGroupHint')}">🗂 ${T('tactics.animGroup')}</button>
+            <div id="animGroupsList"></div>
+            <div><span id="recDot" class="rec-dot hidden">REC <span id="recTime">0:00</span> · <span id="frameCount">0</span> ${T('tactics.framesCaptured')}</span></div>
+            <div id="recExport" class="rec-export hidden"></div>
             <div class="tool-group anim-acts" style="margin-top:6px;gap:6px">
               <button class="btn sm" id="animExportBtn" title="${T('tactics.exportAnimsHint')}">⭳ ${T('tactics.exportAnims')}</button>
               <label class="btn sm" style="cursor:pointer" title="${T('tactics.importAnimsHint')}">⭱ ${T('tactics.importAnims')}<input id="animImportInput" type="file" accept="application/json" hidden></label>
             </div>
-            <div id="animGroupsList"></div>
-            <div><span id="recDot" class="rec-dot hidden">REC <span id="recTime">0:00</span> · <span id="frameCount">0</span> ${T('tactics.framesCaptured')}</span></div>
-            <div id="recExport" class="rec-export hidden"></div>
+            `, { open: true })}
+            ${UI.acc('tacticsSpeed', T('tactics.speedGroup'), `
+            <h4 class="anim-head">${T('tactics.speed')}</h4>
+            <div class="tool-group anim-acts" id="speedGroup">
+              <button class="btn sm" data-speed="slow">${T('tactics.speedSlow')}</button>
+              <button class="btn sm" data-speed="medium">${T('tactics.speedMedium')}</button>
+              <button class="btn sm" data-speed="fast">${T('tactics.speedFast')}</button>
+            </div>
+            <h4 class="anim-head" style="margin-top:8px">${T('tactics.pspeed')}</h4>
+            <div class="tool-group anim-acts" id="pspeedGroup">
+              <button class="btn sm" data-pspeed="slow">${T('tactics.speedSlow')}</button>
+              <button class="btn sm" data-pspeed="medium">${T('tactics.speedMedium')}</button>
+              <button class="btn sm" data-pspeed="fast">${T('tactics.speedFast')}</button>
+            </div>
+            <p class="hint">${T('tactics.pspeedHint')}</p>
+            `, { open: true })}
             <div id="facingWrap">
               <h4 class="anim-head">${T('tactics.facing')}</h4>
               <label class="check-row"><input type="checkbox" id="facingToggle" checked><span>${T('tactics.facingShow')}</span></label>
@@ -302,6 +302,7 @@ Views.tactics = function (mount, params) {
         </div>
       </div>
     </div>`;
+  UI.bindAcc(mount);
 
   const canvas = mount.querySelector('#tacticalCanvas');
   const ctx = canvas.getContext('2d');
@@ -1689,7 +1690,6 @@ Views.tactics = function (mount, params) {
     paint();
   }
   fold('toolsFold', '.tool-panel');
-  fold('framesFold', '.frames-anim');
   const addNameBtn = mount.querySelector('#addNameBtn');
   if (addNameBtn) addNameBtn.onclick = () => { if (naming) commitName(); else startNaming(); };
   const cancelNameBtn = mount.querySelector('#cancelNameBtn');
