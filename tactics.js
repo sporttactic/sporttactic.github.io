@@ -2483,12 +2483,24 @@ Views.tactics = function (mount, params) {
       title: UI.esc(s.name),
       width: 720,
       body: `<video src="${show.url}" class="sys-video" controls autoplay muted playsinline></video>
-        <p class="hint sys-video-err hidden">${T('tactics.animVideoPlayFail')}</p>`,
+        <p class="hint sys-video-err hidden">${T('tactics.animVideoPlayFail')}</p>
+        <div class="tool-group" style="margin-top:8px">
+          <button type="button" class="btn sm" data-vspd="slow">${T('tactics.speedSlow')}</button>
+          <button type="button" class="btn sm" data-vspd="medium">${T('tactics.speedMedium')}</button>
+          <button type="button" class="btn sm" data-vspd="fast">${T('tactics.speedFast')}</button>
+        </div>`,
       footer: `<button class="btn ghost" data-close2>${T('common.close')}</button>` + items.map((i, n) => `<button class="btn" data-dl="${n}">⬇ ${i.ext.toUpperCase()}</button>`).join(''),
       onOpen: (m, close) => {
         const v = m.querySelector('.sys-video');
         // Some engines can encode a container but not decode it back.
         v.onerror = () => { v.classList.add('hidden'); m.querySelector('.sys-video-err').classList.remove('hidden'); };
+        // The clip always starts at medium — the coach can slow it down or
+        // speed it up from here without that choice sticking to the next watch.
+        const spdBtns = m.querySelectorAll('[data-vspd]');
+        const markSpd = spd => spdBtns.forEach(b => b.classList.toggle('primary', b.dataset.vspd === spd));
+        v.playbackRate = PLAYER_SPEEDS.medium;
+        markSpd('medium');
+        spdBtns.forEach(b => b.onclick = () => { v.playbackRate = PLAYER_SPEEDS[b.dataset.vspd] || 1; markSpd(b.dataset.vspd); });
         m.querySelector('[data-close2]').onclick = close;
         m.querySelectorAll('[data-dl]').forEach(b => b.onclick = () => {
           const i = items[+b.dataset.dl];
