@@ -58,7 +58,7 @@ Views.teams = function (mount) {
 
     const readRow = p => `
       <tr data-p="${p.id}">
-        <td data-label="${UI.esc(T('teams.name'))}" class="wide no-label"><div class="sq-who"><span class="avatar">${UI.initials(p.firstName, p.lastName)}</span><span class="sq-no">${UI.esc(p.number || '?')}</span><span class="sq-nm">${UI.esc(p.firstName)} ${UI.esc(p.lastName)}</span></div>${p.comment ? `<div class="player-comment">${UI.esc(p.comment)}</div>` : ''}</td>
+        <td data-label="${UI.esc(T('teams.name'))}" class="wide no-label"><div class="sq-who"><span class="avatar">${UI.initials(p.firstName, p.lastName)}</span><span class="sq-no">${UI.esc(p.number || '?')}</span><span class="sq-nm">${UI.esc(p.firstName)} ${UI.esc(p.lastName)}</span></div>${(Access.isStaff() && p.comment) ? `<div class="player-comment">${UI.esc(p.comment)}</div>` : ''}</td>
         <td data-label="${UI.esc(T('teams.position'))}"><span class="sq-val">${posBadgeHtml(p.position)}<span class="sq-pos">${UI.esc(tt('pos', p.position))}</span></span></td>
         <td data-label="${UI.esc(T('teams.size'))}" class="sq-num">${p.height || '—'} / ${p.weight || '—'}</td>
         <td data-label="${UI.esc(T('teams.status'))}">
@@ -387,8 +387,8 @@ Views.teams = function (mount) {
           <span class="hint">${T('teams.phoneHint')}</span></label>
         <label class="field"><span>${T('teams.email')}</span><input id="f_em" type="email" value="${UI.esc(p.email || '')}" placeholder="${UI.esc(T('teams.emailPh'))}">
           <span class="hint">${T('teams.emailHint')}</span></label>
-        <label class="field"><span>${T('teams.comment')}</span>
-          <textarea id="f_comment" rows="2" placeholder="${UI.esc(T('teams.commentPh'))}">${UI.esc(p.comment || '')}</textarea></label>
+        ${Access.isStaff() ? `<label class="field"><span>${T('teams.comment')}</span>
+          <textarea id="f_comment" rows="2" placeholder="${UI.esc(T('teams.commentPh'))}">${UI.esc(p.comment || '')}</textarea></label>` : ''}
         <label class="field" id="f_noteWrap" style="display:${p.status === 'injured' ? 'block' : 'none'}"><span>${T('teams.injuryNote')}</span>
           <textarea id="f_note" rows="3" placeholder="${UI.esc(T('teams.injuryNotePh'))}">${UI.esc(p.injuryNote || '')}</textarea>
           <span class="hint">${T('teams.injuryNoteHint')}</span></label>`,
@@ -417,9 +417,11 @@ Views.teams = function (mount) {
             phone,
             email,
             status: st.value,
-            comment: m.querySelector('#f_comment').value.trim(),
             injuryNote: injured ? m.querySelector('#f_note').value.trim() : ''
           });
+          // Not staff: the field never rendered, so the existing value is left as is.
+          const commentInp = m.querySelector('#f_comment');
+          if (commentInp) obj.comment = commentInp.value.trim();
           if (!obj.firstName) return UI.toast(T('teams.reqName'), 'error');
           if (raw && !phone) return UI.toast(T('teams.badPhone'), 'error');
           if (rawMail && !email) return UI.toast(T('teams.badEmail'), 'error');
