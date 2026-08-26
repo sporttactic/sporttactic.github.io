@@ -142,6 +142,7 @@ body {
 .sport-btn svg { display: block; }
 
 /* Sidebar sport picker */
+.sidebar-cloud-actions { padding: 10px 16px 0; display: flex; align-items: center; gap: 8px; }
 .sport-picker { padding: 10px 16px; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 6px; }
 .sport-picker label { font-size: 11px; text-transform: uppercase; letter-spacing: .4px; color: var(--muted); font-weight: 600; }
 /* Active-team switcher — scopes squad, matches, opponents and training. */
