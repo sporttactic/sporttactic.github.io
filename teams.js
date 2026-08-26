@@ -387,7 +387,8 @@ Views.teams = function (mount) {
           <span class="hint">${T('teams.phoneHint')}</span></label>
         <label class="field"><span>${T('teams.email')}</span><input id="f_em" type="email" value="${UI.esc(p.email || '')}" placeholder="${UI.esc(T('teams.emailPh'))}">
           <span class="hint">${T('teams.emailHint')}</span></label>
-        ${Access.isStaff() ? `<label class="field"><span>${T('teams.comment')}</span>
+        ${Access.isStaff() ? `<hr class="field-sep">
+        <label class="field"><span>${T('teams.comment')}</span>
           <textarea id="f_comment" rows="2" placeholder="${UI.esc(T('teams.commentPh'))}">${UI.esc(p.comment || '')}</textarea></label>` : ''}
         <label class="field" id="f_noteWrap" style="display:${p.status === 'injured' ? 'block' : 'none'}"><span>${T('teams.injuryNote')}</span>
           <textarea id="f_note" rows="3" placeholder="${UI.esc(T('teams.injuryNotePh'))}">${UI.esc(p.injuryNote || '')}</textarea>
