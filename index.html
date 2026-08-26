@@ -120,7 +120,7 @@ Show focus areas
 Produce video clips.">
   <link rel="apple-touch-icon" href="logo.svg?v=6" />
   <title>SportTactic</title>
-  <link rel="stylesheet" href="styles.css?v=117">
+  <link rel="stylesheet" href="styles.css?v=119">
   <link rel="manifest" href="manifest.webmanifest?v=2" />
   <style>
     /* Boot splash — inline so it paints before styles.css / the app scripts run.
@@ -217,10 +217,6 @@ Produce video clips.">
           <span data-i18n="brand.tagline">SportsPlatForm</span>
         </div>
       </div>
-      <div class="sidebar-cloud-actions" id="sidebarCloudActions">
-        <button type="button" id="topPull" class="icon-btn hidden" title="Retrieve"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 13v8"/><path d="m8 17 4 4 4-4"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg></button>
-        <button type="button" id="topPush" class="icon-btn hidden" title="Upload"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 13v8"/><path d="m8 17 4-4 4 4"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg></button>
-      </div>
       <div class="sport-picker">
         <label id="sportSelectLabel" data-i18n="sport.choose">Choose Sport</label>
         <div class="sport-select" id="sportSelect"></div>
@@ -273,6 +269,8 @@ Produce video clips.">
               <span>DA</span>
             </button>
           </div>
+          <button type="button" id="topPull" class="icon-btn hidden" title="Retrieve from Cloud"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 13v8"/><path d="m8 17 4 4 4-4"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg></button>
+          <button type="button" id="topPush" class="icon-btn hidden" title="Save to Cloud"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 13v8"/><path d="m8 17 4-4 4 4"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg></button>
           <button type="button" id="topSignIn" class="icon-btn hidden" title="Sign in to Google"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><path d="M10 17l5-5-5-5"/><path d="M15 12H3"/></svg></button>
           <button type="button" id="donateBtn" class="donate-btn" title="Support SportTactic">
             <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1.1 1.1L12 21.2l7.7-7.7 1.1-1.1a5.5 5.5 0 0 0 0-7.8z"/></svg>
@@ -300,19 +298,19 @@ Produce video clips.">
   <!-- Loads first: beforeinstallprompt can fire the moment the page is
        interactive, and an event that is not caught cannot be asked for again. -->
   <script src="install.js?v=1"></script>
-  <script src="i18n.js?v=192"></script>
+  <script src="i18n.js?v=194"></script>
   <script src="sports.js?v=20"></script>
   <script src="playbook.js?v=12"></script>
   <script src="store.js?v=38"></script>
-  <script src="ui.js?v=50"></script>
-  <script src="access.js?v=39"></script>
-  <script src="privacy.js?v=20"></script>
-  <script src="drive.js?v=31"></script>
-  <script src="cloud.js?v=44"></script>
+  <script src="ui.js?v=52"></script>
+  <script src="access.js?v=41"></script>
+  <script src="privacy.js?v=22"></script>
+  <script src="drive.js?v=33"></script>
+  <script src="cloud.js?v=46"></script>
   <script src="mail.js?v=12"></script>
   <script src="ai.js?v=16"></script>
   <script src="dashboard.js?v=18"></script>
-  <script src="teams.js?v=57"></script>
+  <script src="teams.js?v=58"></script>
   <script src="matches.js?v=25"></script>
   <script src="planner.js?v=13"></script>
   <script src="scouting.js?v=31"></script>
@@ -323,15 +321,15 @@ Produce video clips.">
   <script src="backgammon.js?v=13"></script>
   <script src="tactics.js?v=93"></script>
   <script src="anim.js?v=8"></script>
-  <script src="video.js?v=43"></script>
+  <script src="video.js?v=45"></script>
   <script src="training.js?v=45"></script>
   <script src="exercises.js?v=41"></script>
   <script src="opponents.js?v=22"></script>
   <script src="reports.js?v=23"></script>
-  <script src="settings.js?v=122"></script>
+  <script src="settings.js?v=124"></script>
   <script src="backup.js?v=2"></script>
   <script src="messenger.js?v=18"></script>
-  <script src="app.js?v=63"></script>
+  <script src="app.js?v=65"></script>
   <!-- Phone layout. Loads last: it reads the sidebar App has already wired and
        drives App.go, so both must exist before it runs. -->
   <script src="mobile.js?v=3"></script>

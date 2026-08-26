@@ -8,7 +8,7 @@
 
    BUMP `VERSION` and the matching `?v=` entries in SHELL whenever an asset changes.
 */
-const VERSION = 'v267';
+const VERSION = 'v269';
 const CACHE = 'sporttactic-' + VERSION;
 
 const SHELL = [
@@ -20,22 +20,22 @@ const SHELL = [
   './manifest.webmanifest',
   './logo.svg?v=6',
   './icon-maskable.svg?v=1',
-  './styles.css?v=117',
+  './styles.css?v=119',
   './db.js?v=14',
   './install.js?v=1',
-  './i18n.js?v=192',
+  './i18n.js?v=194',
   './sports.js?v=20',
   './playbook.js?v=12',
   './store.js?v=38',
-  './ui.js?v=50',
-  './access.js?v=39',
-  './privacy.js?v=20',
-  './drive.js?v=31',
-  './cloud.js?v=44',
+  './ui.js?v=52',
+  './access.js?v=41',
+  './privacy.js?v=22',
+  './drive.js?v=33',
+  './cloud.js?v=46',
   './mail.js?v=12',
   './ai.js?v=16',
   './dashboard.js?v=18',
-  './teams.js?v=57',
+  './teams.js?v=58',
   './matches.js?v=25',
   './planner.js?v=13',
   './scouting.js?v=31',
@@ -46,15 +46,15 @@ const SHELL = [
   './backgammon.js?v=13',
   './tactics.js?v=93',
   './anim.js?v=8',
-  './video.js?v=43',
+  './video.js?v=45',
   './training.js?v=45',
   './exercises.js?v=41',
   './opponents.js?v=22',
   './reports.js?v=23',
-  './settings.js?v=122',
+  './settings.js?v=124',
   './backup.js?v=2',
   './messenger.js?v=18',
-  './app.js?v=63',
+  './app.js?v=65',
   './mobile.js?v=3'
 ];
 
