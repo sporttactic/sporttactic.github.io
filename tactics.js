@@ -2433,7 +2433,11 @@ Views.tactics = function (mount, params) {
       const outs = [];
       const recs = [];
       let pending = 0, settled = false, guard = null;
-      const done = () => { if (settled) return; settled = true; clearTimeout(guard); resolve(outs.filter(o => o.blob && o.blob.size)); };
+      // The clip is for sharing, so it always captures at medium pace — restored
+      // once the take is done, regardless of what the coach has picked for
+      // on-screen review.
+      const savedSpeed = playerSpeed;
+      const done = () => { if (settled) return; settled = true; clearTimeout(guard); playerSpeed = savedSpeed; resolve(outs.filter(o => o.blob && o.blob.size)); };
       const finish = () => { if (--pending <= 0) done(); };
       const halt = () => {
         let live = false;
@@ -2453,6 +2457,7 @@ Views.tactics = function (mount, params) {
         outs.push(out); recs.push(r); pending++;
       });
       if (!pending) return resolve([]);
+      playerSpeed = 'medium';
       // Never leave the save hanging if an encoder stalls.
       guard = setTimeout(halt, current.frames.length * 1400 / (PLAYER_SPEEDS[playerSpeed] || 1) + 5000);
       stopAnimation();
