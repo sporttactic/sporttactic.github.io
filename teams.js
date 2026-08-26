@@ -58,7 +58,7 @@ Views.teams = function (mount) {
 
     const readRow = p => `
       <tr data-p="${p.id}">
-        <td data-label="${UI.esc(T('teams.name'))}" class="wide no-label"><div class="sq-who"><span class="avatar">${UI.initials(p.firstName, p.lastName)}</span><span class="sq-no">#${UI.esc(p.number || '?')}</span><span class="sq-nm">${UI.esc(p.firstName)} ${UI.esc(p.lastName)}</span></div>${p.comment ? `<div class="player-comment">${UI.esc(p.comment)}</div>` : ''}</td>
+        <td data-label="${UI.esc(T('teams.name'))}" class="wide no-label"><div class="sq-who"><span class="avatar">${UI.initials(p.firstName, p.lastName)}</span><span class="sq-no">${UI.esc(p.number || '?')}</span><span class="sq-nm">${UI.esc(p.firstName)} ${UI.esc(p.lastName)}</span></div>${p.comment ? `<div class="player-comment">${UI.esc(p.comment)}</div>` : ''}</td>
         <td data-label="${UI.esc(T('teams.position'))}"><span class="sq-val">${posBadgeHtml(p.position)}<span class="sq-pos">${UI.esc(tt('pos', p.position))}</span></span></td>
         <td data-label="${UI.esc(T('teams.size'))}" class="sq-num">${p.height || '—'} / ${p.weight || '—'}</td>
         <td data-label="${UI.esc(T('teams.status'))}">

@@ -170,6 +170,8 @@ const App = (() => {
     document.querySelectorAll('#langSwitch button').forEach(b => b.classList.toggle('active', b.dataset.lang === l));
     populateSportPicker();
     populateTeamPicker();
+    refreshPullBtn();
+    refreshPushBtn();
     Store.getSetting('role', 'Coach').then(role => {
       const rb = document.getElementById('roleBadge'); if (rb) rb.textContent = T('role.' + role) || role;
     });
