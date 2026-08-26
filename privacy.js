@@ -39,6 +39,7 @@ const Privacy = (() => {
     { id: 'phone', stores: ['players', 'coaches'], kind: 'phone', def: 'mask' },
     { id: 'lastName', stores: ['players', 'coaches'], kind: 'name', def: 'keep' },
     { id: 'injuryNote', stores: ['players'], kind: 'text', def: 'remove' },
+    { id: 'comment', stores: ['players'], kind: 'text', def: 'remove' },
     { id: 'height', stores: ['players'], kind: 'num', def: 'keep' },
     { id: 'weight', stores: ['players'], kind: 'num', def: 'keep' },
     { id: 'notes', stores: ['personal'], kind: 'text', def: 'remove' }

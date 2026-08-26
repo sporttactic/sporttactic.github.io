@@ -103,10 +103,10 @@ Views.planner = function (mount) {
     if (share) share.onclick = () => shareDialog(mine(events));
     const sync = mount.querySelector('#planSync');
     if (sync) sync.onclick = async () => {
-      sync.disabled = true;
+      UI.busyBtn(sync, true, T('cloud.working'));
       try { await TeamCloud.sync(); UI.toast(T('cloud.synced'), 'success'); }
       catch (e) { UI.toast(String((e && e.message) || e).slice(0, 200), 'error'); }
-      finally { sync.disabled = false; render(); }
+      finally { UI.busyBtn(sync, false); render(); }
     };
     mount.querySelectorAll('[data-show]').forEach(b => b.onclick = () => show(Store.find('planner', b.dataset.show)));
     mount.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => form(Store.find('planner', b.dataset.edit)));

@@ -942,7 +942,7 @@ function sharePolicyDialog(onDone) {
   // A live example, so "partial" or "fake" is something you can see rather than
   // a word you have to trust.
   const sample = (f, mode) => {
-    const demo = { email: 'anna.nielsen@klub.dk', phone: '+45 20 30 40 50', lastName: 'Nielsen', injuryNote: 'Knee, back in 3 weeks', height: 182, weight: 78, notes: 'Shoulder rehab' }[f.id];
+    const demo = { email: 'anna.nielsen@klub.dk', phone: '+45 20 30 40 50', lastName: 'Nielsen', injuryNote: 'Knee, back in 3 weeks', height: 182, weight: 78, notes: 'Shoulder rehab', comment: 'Strong on the left wing, quiet leader' }[f.id];
     const v = Privacy.redactValue(demo, f.kind, mode, 7);
     return v === undefined ? T('pol.gone') : String(v);
   };
@@ -1451,7 +1451,7 @@ function cloudCreateDialog(onDone, opts) {
         go.disabled = true;
         state.textContent = T('cloud.working');
         try {
-          if (!Drive.isConnected()) await Drive.connect();
+          if (!Drive.isConnected()) { await Drive.connect(); if (onDone) onDone(); }
           // Made before the file is written, so the hashes are in it from the
           // first byte. A browser without WebCrypto simply gets no passwords.
           try { if (!Access.roleKeys()) await Access.newRoleKeys(); } catch (e) { /* no crypto here */ }
@@ -1871,7 +1871,7 @@ Views.settings = async function (mount) {
   const reloadSoon = () => setTimeout(() => location.reload(), 900);
   const busyRun = async (sel, fn, okKey, reload) => {
     const el = mount.querySelector(sel);
-    if (el) el.disabled = true;
+    UI.busyBtn(el, true, T('cloud.working'));
     try {
       const r = await fn();
       UI.toast(typeof okKey === 'function' ? okKey(r) : T(okKey), 'success');
@@ -1885,7 +1885,7 @@ Views.settings = async function (mount) {
       if (/(?:Drive API|HTTP) 40[134]/.test(s) && offerOwnDb(refreshCloud)) { /* dialog shown */ }
       else UI.toast(cloudErrText(s).slice(0, 200), 'error');
     }
-    finally { if (el) el.disabled = false; refreshCloud(); }
+    finally { UI.busyBtn(el, false); refreshCloud(); }
   };
 
   function bindCloud() {
@@ -1906,6 +1906,9 @@ Views.settings = async function (mount) {
       if (!await Drive.isConfigured()) return googleWizard(refreshCloud);
       if (!Drive.isConnected()) {
         try { await Drive.connect(); } catch (e) { return UI.toast(T('cloud.connectFailed'), 'error'); }
+        // Verified this instant — the tag behind the dialog should not wait
+        // for the rest of the flow to finish before it says so.
+        refreshCloud();
       }
       cloudReconnectDialog(() => { refreshCloud(); App.render(); });
     });

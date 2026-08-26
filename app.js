@@ -348,26 +348,37 @@ const App = (() => {
       : () => { if (window.Backup && Backup.unlock) Backup.unlock(); };
   }
 
-  // The one button a player needs: everybody who follows a shared file gets it
-  // in the topbar, next to the language switch.
-  function refreshSyncBtn() {
-    const b = document.getElementById('topSync');
+  // Retrieve: everybody following a shared file gets it in the topbar, next
+  // to the language switch — pulls only, so a read-only member can use it too.
+  function refreshPullBtn() {
+    const b = document.getElementById('topPull');
     if (!b) return;
     const on = !!(window.TeamCloud && TeamCloud.cfg().fileId);
     b.classList.toggle('hidden', !on);
     if (!on) return;
-    b.title = T('cloud.syncNow');
-    b.setAttribute('aria-label', T('cloud.syncNow'));
+    b.title = T('cloud.retrieve');
+    b.setAttribute('aria-label', T('cloud.retrieve'));
   }
 
-  async function runTopSync() {
-    const b = document.getElementById('topSync');
+  // Upload: only the owner's account may write to the shared file.
+  function refreshPushBtn() {
+    const b = document.getElementById('topPush');
+    if (!b) return;
+    const on = !!(window.TeamCloud && TeamCloud.cfg().fileId && TeamCloud.cfg().owner);
+    b.classList.toggle('hidden', !on);
+    if (!on) return;
+    b.title = T('cloud.upload');
+    b.setAttribute('aria-label', T('cloud.upload'));
+  }
+
+  async function runTopPull() {
+    const b = document.getElementById('topPull');
     if (!b || b.classList.contains('busy')) return;
     b.classList.add('busy');
     try {
       // Anything that came down is announced by the onChange handler above, so
       // this only speaks up when there was nothing to say.
-      const got = await TeamCloud.sync();
+      const got = await TeamCloud.pull('merge');
       if (!got) UI.toast(T('cloud.upToDate'), 'success');
     } catch (e) {
       // Drive's own permission belongs to whoever owns the file, and there is
@@ -379,6 +390,20 @@ const App = (() => {
         return;
       }
       const key = e && e.oversize ? (TeamCloud.cfg().owner ? 'cloud.oversizeOwner' : 'cloud.oversize')
+        : (e && e.message === 'signin') ? 'cloud.signinNeeded' : '';
+      UI.toast(key ? T(key) : T('cloud.syncFail') + ' — ' + ((e && e.message) || e), 'error');
+    } finally { b.classList.remove('busy'); }
+  }
+
+  async function runTopPush() {
+    const b = document.getElementById('topPush');
+    if (!b || b.classList.contains('busy')) return;
+    b.classList.add('busy');
+    try {
+      await TeamCloud.push('merge');
+      UI.toast(T('cloud.synced'), 'success');
+    } catch (e) {
+      const key = e && e.oversize ? 'cloud.oversizeOwner'
         : (e && e.message === 'signin') ? 'cloud.signinNeeded' : '';
       UI.toast(key ? T(key) : T('cloud.syncFail') + ' — ' + ((e && e.message) || e), 'error');
     } finally { b.classList.remove('busy'); }
@@ -405,7 +430,7 @@ const App = (() => {
       if (TeamCloud.cfg().fileId) { TeamCloud.start(); await TeamCloud.sync().catch(() => { /* reported by its own toast */ }); }
     } catch (e) {
       UI.toast(T('cloud.connectFailed') + ' — ' + String((e && e.message) || e).slice(0, 160), 'error');
-    } finally { b.classList.remove('busy'); refreshSignInBtn(); refreshSyncBtn(); }
+    } finally { b.classList.remove('busy'); refreshSignInBtn(); refreshPullBtn(); refreshPushBtn(); }
   }
 
   async function boot() {
@@ -435,9 +460,12 @@ const App = (() => {
     refreshLockBadge();
     Store.onChange(refreshLockBadge);
     Store.onChange(syncMemberMode);
-    refreshSyncBtn();
-    const sb = document.getElementById('topSync');
-    if (sb) sb.onclick = runTopSync;
+    refreshPullBtn();
+    refreshPushBtn();
+    const pullBtn = document.getElementById('topPull');
+    if (pullBtn) pullBtn.onclick = runTopPull;
+    const pushBtn = document.getElementById('topPush');
+    if (pushBtn) pushBtn.onclick = runTopPush;
     refreshSignInBtn();
     const gb = document.getElementById('topSignIn');
     if (gb) gb.onclick = runSignIn;
@@ -451,7 +479,8 @@ const App = (() => {
     if (window.TeamCloud) TeamCloud.onChange(info => {
       refreshLockBadge();
       applyMemberMode();
-      refreshSyncBtn();
+      refreshPullBtn();
+      refreshPushBtn();
       refreshSignInBtn();
       if (info && info.coachSyncing) {
         UI.toast(T('cloud.coachSyncing'), 'info');
