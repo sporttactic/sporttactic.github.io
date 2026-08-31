@@ -564,8 +564,8 @@ Views.messenger = function (mount, params) {
       <div class="msg-list" id="msgList"></div>
       <div class="composer">
         <label class="btn sm" style="cursor:pointer">${tx('attach')}<input id="fileInput" type="file" hidden></label>
-        <button class="btn sm" id="btnVoice" disabled title="${tx('voiceCall')}">📞</button>
-        <button class="btn sm" id="btnVideo" disabled title="${tx('videoCall')}">🎥</button>
+        <button class="btn sm" id="btnVoice" data-nospin disabled title="${tx('voiceCall')}">📞</button>
+        <button class="btn sm" id="btnVideo" data-nospin disabled title="${tx('videoCall')}">🎥</button>
         <input id="msgInput" type="text" placeholder="${tx('typeMsg')}" autocomplete="off">
         <button class="btn primary" id="btnSend">${tx('send')}</button>
       </div>`;

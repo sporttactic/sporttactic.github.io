@@ -128,9 +128,9 @@ Views.opponents = function (mount) {
         btn.onclick = async () => {
           const name = m.querySelector('#ao_name').value;
           const notes = m.querySelector('#ao_notes').value.trim().slice(0, 400);
-          btn.disabled = true; btn.textContent = T('ai.asking');
+          UI.busyBtn(btn, true, T('ai.asking'));
           const draft = await draftOpponent(name, notes);
-          btn.disabled = false; btn.textContent = T('training.aiGenerate');
+          UI.busyBtn(btn, false);
           if (draft) { close(); form(draft); UI.toast(T('opponents.aiNewReady'), 'success'); }
         };
       }

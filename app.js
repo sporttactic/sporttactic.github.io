@@ -42,7 +42,13 @@ const App = (() => {
   // It has to be re-read after ANY change — the role, the profile and the file
   // being followed all move it, and they move on their own screens.
   let memberState = null;
+  // The stylesheet needs to know whether the module on screen is one a read-only
+  // copy may still work in: those keep their own buttons.
+  function syncOpenRoute(route) {
+    document.body.dataset.memberOpen = (window.Access && Access.moduleOpen(route)) ? '1' : '';
+  }
   function syncMemberMode() {
+    syncOpenRoute(currentRoute);
     const read = !!(window.Access && Access.readMode());
     const sig = (read ? 'read' : '') + '|' + (window.Access ? Access.hiddenModules().join(',') : '');
     if (sig === memberState) return false;
@@ -117,6 +123,7 @@ const App = (() => {
     // The stylesheet needs to know which module is on screen: the one a
     // read-only copy may still work in keeps its own buttons.
     document.body.dataset.route = route;
+    syncOpenRoute(route);
     document.querySelectorAll('.nav-item').forEach(n => n.classList.toggle('active', n.dataset.route === route));
     const view = document.getElementById('view');
     view.innerHTML = '';
@@ -283,6 +290,10 @@ const App = (() => {
   }
 
   function bindChrome() {
+    // Every button in a view that saves, syncs or generates gets a spinner for
+    // as long as its work runs. Bound once on the shell: views are redrawn into
+    // it, so buttons that appear later are covered too.
+    UI.bindBusyClicks(document.getElementById('view'));
     document.getElementById('mainNav').addEventListener('click', e => {
       const item = e.target.closest('.nav-item'); if (item) go(item.dataset.route);
     });

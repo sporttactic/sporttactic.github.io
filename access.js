@@ -121,6 +121,10 @@ const Access = (() => {
   // drills they write for it and their own records.
   const OPEN_ROUTES = ['training'];
   const OPEN_STORES = ['training', 'exercises', 'personal'];
+  // The second exception, off until the coach ticks it: the video desk and the
+  // bookmark list it keeps.
+  const VIDEO_ROUTES = ['video'];
+  const VIDEO_STORES = ['videos'];
   // Live scouting is the coach's tool at the table, so it is never on a player
   // copy — not the module, and not the events it writes.
   const NEVER_ROUTES = ['scouting'];
@@ -140,6 +144,8 @@ const Access = (() => {
       // that never opened this screen still hands out a look-only copy.
       readOnly: v.readOnly !== false,
       training: v.training !== false,
+      // Off unless the coach says otherwise: the video desk is their own bench.
+      video: v.video === true,
       hide: routes(v.hide),
       // The areas kept off a coach who was let in with one squad's word. Empty
       // by default: a coach is a coach, just on that squad only.
@@ -154,6 +160,7 @@ const Access = (() => {
     await Store.setSetting(PROFILE_KEY, {
       readOnly: !!(p && p.readOnly),
       training: !(p && p.training === false),
+      video: !!(p && p.video),
       hide: Array.isArray(p && p.hide) ? p.hide.slice() : [],
       coachHide: Array.isArray(p && p.coachHide) ? p.coachHide.slice() : [],
       coachTeams: (p && p.coachTeams && typeof p.coachTeams === 'object') ? p.coachTeams : cur.coachTeams
@@ -205,10 +212,13 @@ const Access = (() => {
   // open on a team-code join even before (or without) a role word is claimed —
   // an unproven role must not cost a player the one module that is theirs.
   function moduleOpen(route) {
-    return !readMode() || (profile().training && OPEN_ROUTES.indexOf(route) >= 0);
+    if (!readMode()) return true;
+    const p = profile();
+    return (p.training && OPEN_ROUTES.indexOf(route) >= 0) || (p.video && VIDEO_ROUTES.indexOf(route) >= 0);
   }
   const openStores = () => {
-    const base = profile().training ? OPEN_STORES : [];
+    const p = profile();
+    const base = (p.training ? OPEN_STORES : []).concat(p.video ? VIDEO_STORES : []);
     // Whatever the club opened for contributions has to be writable here too,
     // or a member would have nothing to send back. Still only their own rows —
     // blocks() keeps the club's records the club's. Unproven role passwords
@@ -239,6 +249,10 @@ const Access = (() => {
     // may do this to ANY drill the training exception already opened, not only
     // the ones stamped as their own.
     if (store === 'exercises' && opts && opts.categoryOnly) return false;
+    // The video desk keeps one list for the whole module, so own-rows-only would
+    // leave the tools unusable. A copy that joined with a code can never write
+    // the club's file, so what a player marks stays on their own device.
+    if (profile().video && VIDEO_STORES.indexOf(store) >= 0) return false;
     // The stored row decides, never the incoming one, so an edit cannot claim
     // a club drill by sending the stamp along with it.
     const known = (row && row.id) ? Store.find(store, row.id) : null;
@@ -476,7 +490,7 @@ const Access = (() => {
   return {
     ROLES, GRANTABLE, normRole, role, tier, can, isAdmin, isStaff, driveRole, label,
     members, findMember, saveMembers, grant, revoke, markInvited, suggestions, normEmail,
-    OPEN_ROUTES, MEMBER_STAMP,
+    OPEN_ROUTES, VIDEO_ROUTES, MEMBER_STAMP,
     profile, saveProfile, memberCopy, following, readMode, hiddenModules, moduleOpen, blocks, hidesEvents,
     coachHidden, saveCoachAreas,
     roleKeys, roleKeyWords, newRoleKeys, ensureTeamKeys, pruneTeamKeys, claimRole, claimedRole, claimedTeam: teamLock,

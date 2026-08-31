@@ -495,11 +495,11 @@ Views.exerciseLib = function (mount, opts) {
           const rounds = [];
           (picked.length ? picked : ['']).forEach(c => parts2.forEach(p => rounds.push({ category: c, muscle: p })));
           for (let i = 0; i < rounds.length; i++) {
-            btn.textContent = T('ai.asking') + (rounds.length > 1 ? ` ${i + 1}/${rounds.length}` : '');
+            UI.busyBtn(btn, true, T('ai.asking') + (rounds.length > 1 ? ` ${i + 1}/${rounds.length}` : ''));
             const got = await generate(Object.assign({}, base, { category: rounds[i].category }), rounds[i].muscle, per);
             if (got) drafts.push(...got);
           }
-          btn.disabled = false; btn.textContent = T('training.aiGenerate');
+          UI.busyBtn(btn, false);
           if (!drafts.length) return;
           drafts.forEach(d => { d.animations = anims.slice(); });
           close();

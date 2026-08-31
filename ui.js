@@ -85,6 +85,7 @@ const UI = (() => {
     host.appendChild(m);
     host.classList.remove('hidden');
     host.setAttribute('data-locked', '1');
+    bindBusyClicks(m);
     const detachFs = fullscreen ? setupModalFullscreen(m) : null;
     const close = () => {
       if (detachFs) detachFs();
@@ -162,20 +163,47 @@ const UI = (() => {
     });
   }
 
-  // Swaps a footer button to a spinner + label while an async save runs, and
-  // restores its original content and enabled state afterwards.
+  // Swaps a button to a spinner + label while an async save runs, and restores
+  // its original content and enabled state afterwards. Without a label the
+  // button keeps what it already said and only gains the spinner.
   function busyBtn(btn, on, label) {
     if (!btn) return;
+    // An icon button has no room for a second glyph: its own icon spins instead.
+    const icon = btn.classList.contains('icon-btn');
     if (on) {
-      if (btn.dataset.busyHtml === undefined) btn.dataset.busyHtml = btn.innerHTML;
+      if (!icon && btn.dataset.busyHtml === undefined) btn.dataset.busyHtml = btn.innerHTML;
       btn.disabled = true;
       btn.classList.add('busy');
-      btn.innerHTML = `<span class="btn-spin"></span>${esc(label)}`;
+      if (!icon) btn.innerHTML = `<span class="btn-spin"></span>${label == null ? btn.dataset.busyHtml : esc(label)}`;
     } else {
       btn.disabled = false;
       btn.classList.remove('busy');
       if (btn.dataset.busyHtml !== undefined) { btn.innerHTML = btn.dataset.busyHtml; delete btn.dataset.busyHtml; }
     }
+  }
+
+  // Gives any button whose click handler works asynchronously a spinner for as
+  // long as that work runs, so a save that takes a moment cannot look like
+  // nothing happened. Wrapping happens on the way down to the button, so a
+  // dialog that rewrites its own buttons is covered as well. A button that ends
+  // its own work disabled (a call, say) opts out with data-nospin.
+  function bindBusyClicks(root) {
+    root.addEventListener('click', e => {
+      const btn = e.target && e.target.closest ? e.target.closest('button') : null;
+      if (!btn || !root.contains(btn) || btn.dataset.spin || typeof btn.onclick !== 'function') return;
+      btn.dataset.spin = btn.hasAttribute('data-nospin') ? 'off' : 'on';
+      if (btn.dataset.spin === 'off') return;
+      const handler = btn.onclick;
+      btn.onclick = function (ev) {
+        const r = handler.call(this, ev);
+        if (!r || typeof r.then !== 'function' || btn.classList.contains('busy')) return r;
+        busyBtn(btn, true);
+        return r.then(
+          v => { busyBtn(btn, false); return v; },
+          err => { busyBtn(btn, false); throw err; }
+        );
+      };
+    }, true);
   }
 
   function fmtDate(ts) {
@@ -474,6 +502,6 @@ const UI = (() => {
     return true;
   }
 
-  return { esc, el, toast, modal, confirm, busyBtn, fmtDate, fmtClock, statCard, initials, icon, langText, langsOf, safeUrl, videoSrc, videosOf, videoEmbed, videoEditor, bindVideos, readVideos, shareBar, bindShare, acc, bindAcc, printDoc };
+  return { esc, el, toast, modal, confirm, busyBtn, bindBusyClicks, fmtDate, fmtClock, statCard, initials, icon, langText, langsOf, safeUrl, videoSrc, videosOf, videoEmbed, videoEditor, bindVideos, readVideos, shareBar, bindShare, acc, bindAcc, printDoc };
 })();
 if (typeof window !== 'undefined') window.UI = UI;

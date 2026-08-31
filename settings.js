@@ -1097,6 +1097,7 @@ function memberLabel() {
 function memberModeDialog(onDone) {
   const p = Access.profile();
   const open = Access.OPEN_ROUTES.map(r => T('nav.' + r)).join(', ');
+  const openVideo = Access.VIDEO_ROUTES.map(r => T('nav.' + r)).join(', ');
   // A profile saved by an earlier build has no coach list at all.
   const coachHide = Array.isArray(p.coachHide) ? p.coachHide : [];
   const moduleRow = r => `<label class="check-row menu-row">
@@ -1124,6 +1125,8 @@ function memberModeDialog(onDone) {
         <span>${UI.esc(T('mem.readOnly'))}<span class="share-n">${UI.esc(T('mem.readOnlyHint'))}</span></span></label>
       <label class="check-row"><input type="checkbox" id="mm_train" ${p.training ? 'checked' : ''} ${p.readOnly ? '' : 'disabled'}>
         <span>${UI.esc(T('mem.training').replace('{0}', open))}<span class="share-n">${UI.esc(T('mem.trainingHint'))}</span></span></label>
+      <label class="check-row"><input type="checkbox" id="mm_video" ${p.video ? 'checked' : ''} ${p.readOnly ? '' : 'disabled'}>
+        <span>${UI.esc(T('mem.video').replace('{0}', openVideo))}<span class="share-n">${UI.esc(T('mem.videoHint'))}</span></span></label>
       <h4 class="pol-h">${UI.esc(T('mem.modules'))}</h4>
       <p class="hint">${UI.esc(T('mem.modulesHint'))}</p>
       <div class="menu-picker">${App.ROUTES.map(moduleRow).join('')}</div>
@@ -1150,9 +1153,10 @@ function memberModeDialog(onDone) {
     onOpen: (m, close) => {
       const read = m.querySelector('#mm_read');
       const train = m.querySelector('#mm_train');
+      const video = m.querySelector('#mm_video');
       const boxes = [...m.querySelectorAll('[data-mod]')];
-      // The exception only means anything while the copy is read-only.
-      read.onchange = () => { train.disabled = !read.checked; };
+      // The exceptions only mean anything while the copy is read-only.
+      read.onchange = () => { train.disabled = !read.checked; video.disabled = !read.checked; };
       const pick = keep => boxes.forEach(b => {
         if (b.disabled) return;
         b.checked = keep.indexOf(b.dataset.mod) >= 0;
@@ -1180,6 +1184,7 @@ function memberModeDialog(onDone) {
           await Access.saveProfile({
             readOnly: read.checked,
             training: train.checked,
+            video: video.checked,
             hide: boxes.filter(b => !b.checked).map(b => b.dataset.mod),
             coachHide: cboxes.filter(b => !b.checked).map(b => b.dataset.cmod)
           });

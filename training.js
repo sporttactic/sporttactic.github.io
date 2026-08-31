@@ -1036,9 +1036,9 @@ Views.training = function (mount) {
           if (!what) return UI.toast(T('training.aiSessionReq'), 'error');
           const anim = m.querySelector('#s_anim');
           const picked = anim ? [...anim.selectedOptions].map(o => o.value) : [];
-          btn.disabled = true; btn.textContent = T('ai.asking');
+          UI.busyBtn(btn, true, T('ai.asking'));
           const plan = await generateSession(what, +m.querySelector('#s_dur').value, m.querySelector('#s_focus').value);
-          btn.disabled = false; btn.textContent = T('training.aiGenerate');
+          UI.busyBtn(btn, false);
           if (plan) showPlan(m, close, plan, picked);
         };
       }

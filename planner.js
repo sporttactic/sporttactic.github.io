@@ -236,9 +236,9 @@ Views.planner = function (mount) {
         btn.onclick = async () => {
           const desc = inp.value.trim();
           if (!desc) return UI.toast(T('planner.aiNewReq'), 'error');
-          btn.disabled = true; btn.textContent = T('ai.asking');
+          UI.busyBtn(btn, true, T('ai.asking'));
           const draft = await draftEvent(desc);
-          btn.disabled = false; btn.textContent = T('training.aiGenerate');
+          UI.busyBtn(btn, false);
           if (draft) { close(); form(draft); UI.toast(T('planner.aiNewReady'), 'success'); }
         };
       }

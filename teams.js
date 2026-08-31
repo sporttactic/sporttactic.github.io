@@ -460,9 +460,9 @@ Views.teams = function (mount) {
           const names = m.querySelector('#as_names').value.split(/[\n;]+/)
             .map(s => s.replace(/^\s*[\d.,)#-]+\s*/, '').trim()).filter(Boolean).slice(0, 40);
           if (!names.length) return UI.toast(T('teams.aiSquadReq'), 'error');
-          btn.disabled = true; btn.textContent = T('ai.asking');
+          UI.busyBtn(btn, true, T('ai.asking'));
           const drafts = await generateSquad(names, m.querySelector('#as_level').value.trim(), positions, taken);
-          btn.disabled = false; btn.textContent = T('training.aiGenerate');
+          UI.busyBtn(btn, false);
           if (!drafts || !drafts.length) return;
           close();
           aiSquadReview(team, drafts);

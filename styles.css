@@ -468,6 +468,8 @@ body {
 .btn.sm { padding: 6px 10px; font-size: 12px; }
 .btn:disabled { opacity: .45; cursor: not-allowed; }
 .btn:disabled:hover { background: var(--surface-2); }
+/* A button that is working is disabled too — it must not fade like a dead one. */
+.btn.busy:disabled { opacity: .75; cursor: progress; }
 .btn.danger:disabled:hover { background: var(--danger); }
 
 table { width: 100%; border-collapse: collapse; }
@@ -498,26 +500,27 @@ table.compact .acts-cell { width: 1%; white-space: nowrap; text-align: right; }
 /* Read-only badge: a guarded backup can be read but not changed. */
 .lock-badge { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 999px; border: 1px solid var(--warning); background: transparent; color: var(--warning); font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap; }
 .lock-badge:hover { background: var(--surface-2); }
-/* A copy that joined with a look-only team code. Outside the one module the
+/* A copy that joined with a look-only team code. Outside the modules the
    coach left open, the buttons that would change something — or send something
    to somebody — are not offered at all. The store and MAIL.compose refuse them
    anyway; this keeps the app from looking broken.
+   data-member-open is set by app.js for a module the coach opened up.
    The primary button of a card header is always its "add" action.
    data-member-ok marks the few a member must keep, such as leaving the team. */
-body[data-member="read"]:not([data-route="training"]) #view [data-del],
-body[data-member="read"]:not([data-route="training"]) #view [data-rm],
-body[data-member="read"]:not([data-route="training"]) #view [data-pdel],
-body[data-member="read"]:not([data-route="training"]) #view [data-edit],
-body[data-member="read"]:not([data-route="training"]) #view [data-editstaff],
-body[data-member="read"]:not([data-route="training"]) #view [data-delstaff],
-body[data-member="read"]:not([data-route="training"]) #view [data-catdel],
+body[data-member="read"]:not([data-member-open="1"]) #view [data-del],
+body[data-member="read"]:not([data-member-open="1"]) #view [data-rm],
+body[data-member="read"]:not([data-member-open="1"]) #view [data-pdel],
+body[data-member="read"]:not([data-member-open="1"]) #view [data-edit],
+body[data-member="read"]:not([data-member-open="1"]) #view [data-editstaff],
+body[data-member="read"]:not([data-member-open="1"]) #view [data-delstaff],
+body[data-member="read"]:not([data-member-open="1"]) #view [data-catdel],
 body[data-member="read"] #view [data-write],
-body[data-member="read"]:not([data-route="training"]) #view .acc-acts .btn.primary:not([data-member-ok]),
-body[data-member="read"]:not([data-route="training"]) #view .btn.danger:not([data-member-ok]),
-body[data-member="read"]:not([data-route="training"]) #modalHost [data-del],
-body[data-member="read"]:not([data-route="training"]) #modalHost [data-rm],
-body[data-member="read"]:not([data-route="training"]) #modalHost [data-edit],
-body[data-member="read"]:not([data-route="training"]) #modalHost .btn.danger:not([data-member-ok]),
+body[data-member="read"]:not([data-member-open="1"]) #view .acc-acts .btn.primary:not([data-member-ok]),
+body[data-member="read"]:not([data-member-open="1"]) #view .btn.danger:not([data-member-ok]),
+body[data-member="read"]:not([data-member-open="1"]) #modalHost [data-del],
+body[data-member="read"]:not([data-member-open="1"]) #modalHost [data-rm],
+body[data-member="read"]:not([data-member-open="1"]) #modalHost [data-edit],
+body[data-member="read"]:not([data-member-open="1"]) #modalHost .btn.danger:not([data-member-ok]),
 body[data-member="read"] #view [data-mail],
 body[data-member="read"] #view #mailSquad,
 body[data-member="read"] #view #emailAll,
