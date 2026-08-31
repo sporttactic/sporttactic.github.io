@@ -220,9 +220,11 @@ const Access = (() => {
   // Everything the app counts — totals, ratings, reports — is derived from the
   // scouting events, so hiding them at the source empties all of it at once.
   const hidesEvents = () => memberCopy() && !extrasOn().some(x => x.events);
-  // A drill the coach marked as staff work. Kept off a player copy wherever the
+  // A record the coach marked as staff work. Kept off a player copy wherever the
   // app lists or names one; the row itself still syncs like any other.
-  const hidesDrill = e => !!(e && e.coachOnly) && memberCopy();
+  const COACH_ONLY_STORES = ['exercises', 'training', 'personal'];
+  const hidesRow = (store, row) => !!(row && row.coachOnly)
+    && COACH_ONLY_STORES.indexOf(store) >= 0 && memberCopy();
   // Is this module one the coach left open to a read-only copy? Training stays
   // open on a team-code join even before (or without) a role word is claimed —
   // an unproven role must not cost a player the one module that is theirs.
@@ -506,7 +508,7 @@ const Access = (() => {
     ROLES, GRANTABLE, normRole, role, tier, can, isAdmin, isStaff, driveRole, label,
     members, findMember, saveMembers, grant, revoke, markInvited, suggestions, normEmail,
     EXTRAS, MEMBER_STAMP,
-    profile, saveProfile, memberCopy, following, readMode, hiddenModules, moduleOpen, blocks, hidesEvents, hidesDrill,
+    profile, saveProfile, memberCopy, following, readMode, hiddenModules, moduleOpen, blocks, hidesEvents, hidesRow, COACH_ONLY_STORES,
     coachHidden, saveCoachAreas,
     roleKeys, roleKeyWords, newRoleKeys, ensureTeamKeys, pruneTeamKeys, claimRole, claimedRole, claimedTeam: teamLock,
     unclaimed, wordsStale, adoptRoleKeys, teamLock, squadCoach

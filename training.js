@@ -44,7 +44,10 @@ Views.training = function (mount) {
           <div class="card">
             <div style="display:flex;justify-content:space-between;align-items:start">
               <div><h3 style="margin:0">${UI.esc(dt(s.title))}</h3><p style="color:var(--muted)">${UI.fmtDate(s.date)} · ${s.duration} ${T('training.min')}</p></div>
-              <span class="tag blue">${UI.esc(focusLabel(s.focus))}</span>
+              <div style="text-align:right">
+                <span class="tag blue">${UI.esc(focusLabel(s.focus))}</span>
+                ${s.coachOnly ? `<span class="tag amber">${T('exercises.coachOnlyTag')}</span>` : ''}
+              </div>
             </div>
             <div style="margin-top:10px">
               ${(s.exercises || []).map(id => { const e = Store.find('exercises', id); return e ? `<div class="tag" style="margin:2px">${UI.esc(ex(e))}</div>` : ''; }).join('') || `<span style="color:var(--muted)">${T('common.noData')}</span>`}
@@ -195,6 +198,7 @@ Views.training = function (mount) {
               <div><h3 style="margin:0">${UI.esc(r.playerName || T('personal.unknownPlayer'))}</h3>
                 <p style="color:var(--muted);margin:2px 0 0">${UI.fmtDate(r.date)}${r.sessionTitle ? ' · ' + UI.esc(dt(r.sessionTitle)) : ''}</p></div>
               <div style="text-align:right">
+                ${r.coachOnly ? `<span class="tag amber">${T('exercises.coachOnlyTag')}</span>` : ''}
                 ${(r.exercises || []).length ? `<span class="tag">🏋 ${(r.exercises || []).length} ${T('personal.exercises')}</span>` : ''}
                 ${(r.tests || []).length ? `<span class="tag blue">🏆 ${(r.tests || []).length} ${T('personal.tests')}</span>` : ''}
               </div>
@@ -744,6 +748,8 @@ Views.training = function (mount) {
         <div id="p_tests">${((r.tests && r.tests.length) ? r.tests : [{ unit: 'kg', reps: 1 }]).map(testRowHtml).join('')}</div>
         <button type="button" class="btn sm" id="p_addTest">+ ${T('personal.addTest')}</button>
         <label class="field" style="margin-top:12px"><span>${T('personal.notes')}</span><textarea id="p_notes" rows="3">${UI.esc(r.notes || '')}</textarea></label>
+        <label class="check-row"><input type="checkbox" id="p_coach" ${r.coachOnly ? 'checked' : ''}>
+          <span>${T('exercises.coachOnly')}<span class="share-n">${T('personal.coachOnlyHint')}</span></span></label>
         <p class="hint">${T('personal.safety')}</p>`,
       footer: `<button class="btn ghost" data-close2>${T('common.cancel')}</button><button class="btn primary" data-save>${T('common.save')}</button>`,
       onOpen: (m, close) => {
@@ -792,6 +798,7 @@ Views.training = function (mount) {
             sessionId: sid, sessionTitle: s ? s.title : '',
             date: new Date(m.querySelector('#p_date').value).getTime() || Date.now(),
             notes: m.querySelector('#p_notes').value.trim().slice(0, 1000),
+            coachOnly: m.querySelector('#p_coach').checked,
             exercises, tests
           });
           await Store.save('personal', obj);
@@ -991,7 +998,9 @@ Views.training = function (mount) {
         </div>
         <label class="field"><span>${T('training.drills')}</span><select id="t_ex" multiple size="5">${drills.map(e => `<option value="${e.id}" ${(s.exercises || []).includes(e.id) ? 'selected' : ''}>${UI.esc(ex(e))} (${UI.esc(tt('cat', e.category))})</option>`).join('')}</select></label>
         <label class="field"><span>${T('training.anims')}</span>${ANIM.pickerHtml('t_anim', s.animations, sportId)}</label>
-        <p class="hint">${T('training.animsHint')}</p>`,
+        <p class="hint">${T('training.animsHint')}</p>
+        <label class="check-row"><input type="checkbox" id="t_coach" ${s.coachOnly ? 'checked' : ''}>
+          <span>${T('exercises.coachOnly')}<span class="share-n">${T('training.coachOnlyHint')}</span></span></label>`,
       footer: `<button class="btn ghost" data-close2>${T('common.cancel')}</button><button class="btn primary" data-save>${T('common.save')}</button>`,
       onOpen: (m, close) => {
         m.querySelector('[data-close2]').onclick = close;
@@ -1002,6 +1011,7 @@ Views.training = function (mount) {
             date: new Date(m.querySelector('#t_date').value).getTime(),
             duration: +m.querySelector('#t_dur').value, focus: m.querySelector('#t_focus').value,
             exercises: [...m.querySelector('#t_ex').selectedOptions].map(o => o.value),
+            coachOnly: m.querySelector('#t_coach').checked,
             animations: anim ? [...anim.selectedOptions].map(o => o.value) : (s.animations || [])
           });
           if (!obj.title) return UI.toast(T('training.titleReq'), 'error');

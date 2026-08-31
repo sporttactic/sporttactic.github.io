@@ -11,22 +11,25 @@ const Store = (() => {
     for (const s of DB.STORES) cache[s] = await DB.getAll(s);
   }
 
+  // Drills, sessions and personal records can each be marked as staff work.
+  const HIDEABLE = ['exercises', 'training', 'personal'];
+
   function all(store) {
     // A player copy is not shown the scouting events, so nothing counted from
     // them — season totals, ratings, match reports — shows up either. They still
     // sync: the shared file is read and written straight from the database.
     if (store === 'events' && typeof window !== 'undefined' && window.Access && Access.hidesEvents && Access.hidesEvents()) return [];
     const rows = cache[store] || [];
-    return store === 'exercises' ? rows.filter(visible) : rows;
+    return HIDEABLE.indexOf(store) >= 0 ? rows.filter(r => visible(store, r)) : rows;
   }
-  // A drill the coach kept for staff is not listed, named or counted on a player
+  // A row the coach kept for staff is not listed, named or counted on a player
   // copy — the same answer wherever the app asks for one.
-  function visible(row) {
-    return !(typeof window !== 'undefined' && window.Access && Access.hidesDrill && Access.hidesDrill(row));
+  function visible(store, row) {
+    return !(typeof window !== 'undefined' && window.Access && Access.hidesRow && Access.hidesRow(store, row));
   }
   function find(store, id) {
     const row = raw(store, id);
-    return (row && (store !== 'exercises' || visible(row))) ? row : undefined;
+    return (row && visible(store, row)) ? row : undefined;
   }
   // The stored row whatever this device may see. The write gate has to judge
   // what is really there, or a row hidden from the screen looks like a free id.
