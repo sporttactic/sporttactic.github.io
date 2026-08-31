@@ -179,7 +179,7 @@ Views.exerciseLib = function (mount, opts) {
       ${linksHtml(e)}
       ${animChips(e)}`;
     return UI.acc('exlibitem_' + e.id, exTitle(e), body, {
-      sub: `${e.duration || 0} ${T('training.min')} · ${tt('intensity', e.intensity || 'Low')}`,
+      sub: `${e.duration || 0} ${T('training.min')} · ${tt('intensity', e.intensity || 'Low')}${e.coachOnly ? ' · ' + T('exercises.coachOnlyTag') : ''}`,
       actions: acts
     });
   }
@@ -766,7 +766,9 @@ Views.exerciseLib = function (mount, opts) {
         <label class="field"><span>${T('training.tags')}</span><input id="e_tags" value="${UI.esc((e.tags || []).join(', '))}"></label>
         <div class="field"><span>${T('exercises.muscles')}</span><div id="e_mus" class="mus-picker">${musclePicker(e.muscles || [])}</div></div>
         <label class="field"><span>${T('training.anims')}</span>${ANIM.pickerHtml('e_anim', e.animations, sportId)}</label>
-        <p class="hint">${T('exercises.animsHint')}</p>`,
+        <p class="hint">${T('exercises.animsHint')}</p>
+        <label class="check-row"><input type="checkbox" id="e_coach" ${e.coachOnly ? 'checked' : ''}>
+          <span>${T('exercises.coachOnly')}<span class="share-n">${T('exercises.coachOnlyHint')}</span></span></label>`,
       footer: `<button class="btn ghost" data-close2>${T('common.cancel')}</button><button class="btn primary" data-save>${T('common.save')}</button>`,
       onOpen: (m, close) => {
         // Paste a link and the player appears straight away, so you can see you
@@ -789,6 +791,7 @@ Views.exerciseLib = function (mount, opts) {
           const obj = Object.assign({}, e, {
             title, description, category: m.querySelector('#e_c').value,
             duration: +m.querySelector('#e_d').value, intensity: m.querySelector('#e_i').value,
+            coachOnly: m.querySelector('#e_coach').checked,
             // What you typed is stored under the language you typed it in.
             tr: withLang(e.tr, I18N.getLang(), title, description),
             // The list is the whole truth now; the two old single fields are folded into it.

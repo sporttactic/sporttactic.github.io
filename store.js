@@ -16,9 +16,21 @@ const Store = (() => {
     // them — season totals, ratings, match reports — shows up either. They still
     // sync: the shared file is read and written straight from the database.
     if (store === 'events' && typeof window !== 'undefined' && window.Access && Access.hidesEvents && Access.hidesEvents()) return [];
-    return cache[store] || [];
+    const rows = cache[store] || [];
+    return store === 'exercises' ? rows.filter(visible) : rows;
   }
-  function find(store, id) { return (cache[store] || []).find(x => x.id === id); }
+  // A drill the coach kept for staff is not listed, named or counted on a player
+  // copy — the same answer wherever the app asks for one.
+  function visible(row) {
+    return !(typeof window !== 'undefined' && window.Access && Access.hidesDrill && Access.hidesDrill(row));
+  }
+  function find(store, id) {
+    const row = raw(store, id);
+    return (row && (store !== 'exercises' || visible(row))) ? row : undefined;
+  }
+  // The stored row whatever this device may see. The write gate has to judge
+  // what is really there, or a row hidden from the screen looks like a free id.
+  function raw(store, id) { return (cache[store] || []).find(x => x.id === id); }
 
   // ---- Read-only lock ----------------------------------------------------
   // A backup exported with a pass key opens view-only: the recipient can look
@@ -81,7 +93,7 @@ const Store = (() => {
   }
 
   async function remove(store, id) {
-    if (blockWrite(store, find(store, id))) return false;
+    if (blockWrite(store, raw(store, id))) return false;
     await DB.remove(store, id);
     cache[store] = (cache[store] || []).filter(x => x.id !== id);
     // Without this, a sync merges in whichever copy is still on Drive and the
@@ -547,7 +559,7 @@ const Store = (() => {
   }
 
   return {
-    uid, loadAll, all, find, save, remove, onChange,
+    uid, loadAll, all, find, raw, save, remove, onChange,
     locked, lockInfo, setLock,
     getSetting, setSetting, teamStats, playerStats, matchEvents,
     purgeDemoPlayers, purgeSeedDrills, purgeSeedMatches, purgeSeedClub,
