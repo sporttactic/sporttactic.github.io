@@ -117,16 +117,21 @@ const Access = (() => {
   // bites on a player-tier device that follows somebody else's file — the owner
   // and the coaches never see it.
   const PROFILE_KEY = 'memberProfile';
-  // The one module a read-only copy keeps: the player's own training plan, the
-  // drills they write for it and their own records.
-  const OPEN_ROUTES = ['training'];
-  const OPEN_STORES = ['training', 'exercises', 'personal'];
-  // The second exception, off until the coach ticks it: the video desk and the
-  // bookmark list it keeps.
-  const VIDEO_ROUTES = ['video'];
-  const VIDEO_STORES = ['videos'];
-  // Live scouting is the coach's tool at the table, so it is never on a player
-  // copy — not the module, and not the events it writes.
+  // What a club can hand a player copy on top of read-only, one tick each: the
+  // module itself and the stores its tools have to write.
+  //   own    — the member may only change rows they made themselves.
+  //   events — the module is worthless without the scouting events, so they stop
+  //            being hidden.
+  //   def    — training is the module a player copy has always kept; the rest
+  //            are off until the coach ticks them.
+  const EXTRAS = [
+    { key: 'training', routes: ['training'], stores: ['training', 'exercises', 'personal'], own: true, def: true },
+    { key: 'video', routes: ['video'], stores: ['videos'] },
+    { key: 'stats', routes: ['statistics'], stores: [], events: true },
+    { key: 'scouting', routes: ['scouting'], stores: ['events', 'matches'], events: true }
+  ];
+  // Live scouting is the coach's tool at the table, so it is off a player copy
+  // — module and events both — until the club says otherwise.
   const NEVER_ROUTES = ['scouting'];
   // Rows a read-only member made themselves carry this, so they can change and
   // remove their own work without ever touching the club's.
@@ -139,13 +144,10 @@ const Access = (() => {
     const rec = Store.find('settings', PROFILE_KEY);
     const v = (rec && rec.value && typeof rec.value === 'object') ? rec.value : {};
     const routes = a => Array.isArray(a) ? a.filter(r => typeof r === 'string') : [];
-    return {
+    const p = {
       // Read-only is what a player copy IS. The coach can open it up, but a club
       // that never opened this screen still hands out a look-only copy.
       readOnly: v.readOnly !== false,
-      training: v.training !== false,
-      // Off unless the coach says otherwise: the video desk is their own bench.
-      video: v.video === true,
       hide: routes(v.hide),
       // The areas kept off a coach who was let in with one squad's word. Empty
       // by default: a coach is a coach, just on that squad only.
@@ -154,18 +156,25 @@ const Access = (() => {
       // set from the rest. A squad missing here follows coachHide.
       coachTeams: (v.coachTeams && typeof v.coachTeams === 'object') ? v.coachTeams : {}
     };
+    EXTRAS.forEach(x => { p[x.key] = x.def ? v[x.key] !== false : v[x.key] === true; });
+    return p;
   }
   async function saveProfile(p) {
     const cur = profile();
-    await Store.setSetting(PROFILE_KEY, {
+    const out = {
       readOnly: !!(p && p.readOnly),
-      training: !(p && p.training === false),
-      video: !!(p && p.video),
       hide: Array.isArray(p && p.hide) ? p.hide.slice() : [],
       coachHide: Array.isArray(p && p.coachHide) ? p.coachHide.slice() : [],
       coachTeams: (p && p.coachTeams && typeof p.coachTeams === 'object') ? p.coachTeams : cur.coachTeams
-    });
+    };
+    EXTRAS.forEach(x => { out[x.key] = x.def ? !(p && p[x.key] === false) : !!(p && p[x.key]); });
+    await Store.setSetting(PROFILE_KEY, out);
     return profile();
+  }
+  // The exceptions the club actually ticked.
+  function extrasOn() {
+    const p = profile();
+    return EXTRAS.filter(x => p[x.key]);
   }
   // What a coach holding this squad's word may not open.
   function coachHidden(teamId) {
@@ -202,23 +211,24 @@ const Access = (() => {
     return !!(c && c.teamId);
   }
   function hiddenModules() {
-    if (memberCopy()) return NEVER_ROUTES.concat(profile().hide);
+    if (memberCopy()) {
+      const never = NEVER_ROUTES.filter(r => !extrasOn().some(x => x.routes.indexOf(r) >= 0));
+      return never.concat(profile().hide);
+    }
     return squadCoach() ? coachHidden(teamLock()) : [];
   }
   // Everything the app counts — totals, ratings, reports — is derived from the
   // scouting events, so hiding them at the source empties all of it at once.
-  const hidesEvents = () => memberCopy();
+  const hidesEvents = () => memberCopy() && !extrasOn().some(x => x.events);
   // Is this module one the coach left open to a read-only copy? Training stays
   // open on a team-code join even before (or without) a role word is claimed —
   // an unproven role must not cost a player the one module that is theirs.
   function moduleOpen(route) {
     if (!readMode()) return true;
-    const p = profile();
-    return (p.training && OPEN_ROUTES.indexOf(route) >= 0) || (p.video && VIDEO_ROUTES.indexOf(route) >= 0);
+    return extrasOn().some(x => x.routes.indexOf(route) >= 0);
   }
   const openStores = () => {
-    const p = profile();
-    const base = (p.training ? OPEN_STORES : []).concat(p.video ? VIDEO_STORES : []);
+    const base = extrasOn().reduce((a, x) => a.concat(x.stores), []);
     // Whatever the club opened for contributions has to be writable here too,
     // or a member would have nothing to send back. Still only their own rows —
     // blocks() keeps the club's records the club's. Unproven role passwords
@@ -249,10 +259,11 @@ const Access = (() => {
     // may do this to ANY drill the training exception already opened, not only
     // the ones stamped as their own.
     if (store === 'exercises' && opts && opts.categoryOnly) return false;
-    // The video desk keeps one list for the whole module, so own-rows-only would
-    // leave the tools unusable. A copy that joined with a code can never write
-    // the club's file, so what a player marks stays on their own device.
-    if (profile().video && VIDEO_STORES.indexOf(store) >= 0) return false;
+    // The video desk and the scoring table each keep one list for the whole
+    // module, so own-rows-only would leave those tools unusable. A copy that
+    // joined with a code can never write the club's file, so what a player marks
+    // stays on their own device.
+    if (extrasOn().some(x => !x.own && x.stores.indexOf(store) >= 0)) return false;
     // The stored row decides, never the incoming one, so an edit cannot claim
     // a club drill by sending the stamp along with it.
     const known = (row && row.id) ? Store.find(store, row.id) : null;
@@ -490,7 +501,7 @@ const Access = (() => {
   return {
     ROLES, GRANTABLE, normRole, role, tier, can, isAdmin, isStaff, driveRole, label,
     members, findMember, saveMembers, grant, revoke, markInvited, suggestions, normEmail,
-    OPEN_ROUTES, VIDEO_ROUTES, MEMBER_STAMP,
+    EXTRAS, MEMBER_STAMP,
     profile, saveProfile, memberCopy, following, readMode, hiddenModules, moduleOpen, blocks, hidesEvents,
     coachHidden, saveCoachAreas,
     roleKeys, roleKeyWords, newRoleKeys, ensureTeamKeys, pruneTeamKeys, claimRole, claimedRole, claimedTeam: teamLock,

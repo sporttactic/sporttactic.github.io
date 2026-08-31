@@ -29,8 +29,9 @@ Views.statistics = function (mount) {
     </div>`;
 
   // A player copy reads the team's own totals; the squad's individual numbers,
-  // ratings and profiles are the coach's business, so the board is not built.
-  const board = Access.readMode() ? '' : `
+  // ratings and profiles are the coach's business unless the club opened the
+  // module up, so the board is not built.
+  const board = !Access.moduleOpen('statistics') ? '' : `
     <div class="table-wrap">
       <table class="compact stack">
         <thead><tr><th>${T('stat.player')}</th><th>${T('stat.pos')}</th><th>${T('stat.rating')}</th><th>${T('stat.goals')}</th><th>${T('stat.attempts')}</th><th>${T('stat.shotPct')}</th><th>${T('stat.assists')}</th><th>${T('stat.to')}</th><th>${T('stat.saves')}</th><th>${T('teams.weight')}</th><th></th></tr></thead>
