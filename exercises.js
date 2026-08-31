@@ -20,11 +20,13 @@ const MUSCLE_KEYS = Object.keys(MUSCLE_AREA_OF);
 // modelled on the left half of the body and mirrored, so the sides always match.
 // Muscle groups carry data-m — that is what gets highlighted and clicked; the head,
 // limbs outline, hands and feet are silhouette only.
-function muscleBodySvg(frontLabel, backLabel) {
+// `on` marks groups as trained up front, for a figure nothing will click on later.
+function muscleBodySvg(frontLabel, backLabel, on) {
+  const lit = m => (on && on.indexOf(m) >= 0) ? ' on' : '';
   // A muscle group given as a left-side path, drawn twice (mirrored on x).
-  const pair = (m, d) => `<g class="mus" data-m="${m}"><path d="${d}"/><path d="${d}" transform="scale(-1,1)"/></g>`;
+  const pair = (m, d) => `<g class="mus${lit(m)}" data-m="${m}"><path d="${d}"/><path d="${d}" transform="scale(-1,1)"/></g>`;
   // A group that sits on the mid-line (abs, traps, low back) — drawn once.
-  const one = (m, d) => `<g class="mus" data-m="${m}"><path d="${d}"/></g>`;
+  const one = (m, d) => `<g class="mus${lit(m)}" data-m="${m}"><path d="${d}"/></g>`;
   const sil = d => `<path class="sil" d="${d}"/><path class="sil" d="${d}" transform="scale(-1,1)"/>`;
 
   const ARM = 'M-36 66 C-45 72 -49 86 -47 102 C-45 118 -43 134 -41 150 C-40 160 -37 167 -33 167 C-28 167 -26 160 -27 150 C-29 134 -28 116 -27 100 C-26 86 -28 74 -31 66 Z';
@@ -163,6 +165,7 @@ Views.exerciseLib = function (mount, opts) {
   // scan a long list; the rest only renders once that drill is opened.
   function cardHtml(e) {
     const acts = `<button class="btn sm" data-show="${e.id}">${T('common.show')}</button>
+      <button class="btn sm" data-print="${e.id}">${T('exercises.print')}</button>
       ${mayChange(e) ? `<button class="btn sm" data-edit="${e.id}">${T('common.edit')}</button>
       <button class="btn sm danger" data-del="${e.id}">${T('common.delete')}</button>` : recatHtml(e)}`;
     const body = `
@@ -204,6 +207,41 @@ Views.exerciseLib = function (mount, opts) {
       `<a class="btn sm" href="${UI.esc(u)}" target="_blank" rel="noopener noreferrer">▶ ${UI.esc(linkLabel(u))}</a>`).join('')}</div>`;
   }
 
+  // The printed body map has to carry its own look: the print window is a page
+  // of its own and knows nothing of the app's stylesheet. Ink instead of the
+  // black panel on screen, and the fills are forced through the printer.
+  const PRINT_BODY_CSS = `
+    .body-map { display: block; width: 100%; max-width: 430px; height: auto; margin: 6px auto 0;
+      -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .body-map .sil { fill: #f4f4f4; stroke: #333; stroke-width: 1; }
+    .body-map .mus > * { fill: #f4f4f4; stroke: #333; stroke-width: 1; }
+    .body-map .mus.on > * { fill: #d81b1b; stroke: #6f0d0d; }
+    .body-map .blbl { fill: #111; font-size: 12px; }
+    .mus-key { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; margin: 0 0 6px; }
+    .mus-key span::before { content: ""; display: inline-block; width: 10px; height: 10px; border: 1px solid #6f0d0d;
+      background: #d81b1b; margin-right: 6px; vertical-align: -1px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }`;
+
+  // One drill on paper, with the body map showing what it loads — the sheet a
+  // coach hands to a player or takes to the hall.
+  function printDrill(e) {
+    if (!e) return;
+    const mus = (e.muscles || []).filter(m => MUSCLE_KEYS.indexOf(m) >= 0);
+    const sub = [tt('cat', e.category), (e.duration || 0) + ' ' + T('training.min'), tt('intensity', e.intensity || 'Low')]
+      .filter(Boolean).join(' \u00b7 ');
+    const links = videoList(e).map(u => `<li>${UI.esc(u)}</li>`).join('');
+    const html = `<style>${PRINT_BODY_CSS}</style>
+      <h2>${T('training.description')}</h2>
+      ${exDesc(e) ? `<p style="white-space:pre-line">${UI.esc(exDesc(e))}</p>` : `<p class="none">${T('common.noData')}</p>`}
+      ${(e.tags || []).length ? `<h2>${T('exercises.tagsHead')}</h2><p>${(e.tags || []).map(t => '#' + UI.esc(t)).join(' \u00b7 ')}</p>` : ''}
+      <h2>${T('exercises.muscleMap')}</h2>
+      ${mus.length
+        ? `<div class="mus-key">${mus.map(m => `<span>${UI.esc(musLabel(m))}</span>`).join('')}</div>`
+        : `<p class="none">${T('common.noData')}</p>`}
+      ${muscleBodySvg(T('body.front'), T('body.back'), mus)}
+      ${links ? `<h2>${T('exercises.videos')}</h2><ul>${links}</ul>` : ''}`;
+    UI.printDoc(exTitle(e), sub, html, () => UI.toast(T('training.popupBlocked'), 'error'));
+  }
+
   // Read-only view of one drill: the whole description, the video, what it
   // trains and its links.
   function showDrill(e) {
@@ -222,10 +260,13 @@ Views.exerciseLib = function (mount, opts) {
         <h4 style="margin-bottom:6px">${T('training.anims')}</h4>
         ${ANIM.chipsHtml(e.animations)}
         <div style="margin-top:12px">${linksHtml(e)}</div>`,
-      footer: `<button class="btn ghost" data-close2>${T('common.close')}</button>${mayChange(e) ? `<button class="btn primary" data-edit>${T('common.edit')}</button>` : recatHtml(e)}`,
+      footer: `<button class="btn ghost" data-close2>${T('common.close')}</button>
+        <button class="btn" data-print>${T('exercises.print')}</button>
+        ${mayChange(e) ? `<button class="btn primary" data-edit>${T('common.edit')}</button>` : recatHtml(e)}`,
       onOpen: (m, close) => {
         ANIM.bind(m);
         m.querySelector('[data-close2]').onclick = close;
+        m.querySelector('[data-print]').onclick = () => printDrill(e);
         const editBtn = m.querySelector('[data-edit]');
         if (editBtn) editBtn.onclick = () => { close(); form(e); };
         const recatSel = m.querySelector('[data-recat]');
@@ -359,6 +400,7 @@ Views.exerciseLib = function (mount, opts) {
     };
     mount.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => form(Store.find('exercises', b.dataset.edit)));
     mount.querySelectorAll('[data-show]').forEach(b => b.onclick = () => showDrill(Store.find('exercises', b.dataset.show)));
+    mount.querySelectorAll('[data-print]').forEach(b => b.onclick = () => printDrill(Store.find('exercises', b.dataset.print)));
     mount.querySelectorAll('[data-recat]').forEach(sel => sel.onchange = () => saveRecat(Store.find('exercises', sel.dataset.recat), sel.value));
     ANIM.bind(mount);
     // A session pointing at a deleted drill would render an empty tag row —
@@ -488,7 +530,8 @@ Views.exerciseLib = function (mount, opts) {
             duration: +m.querySelector('#g_d').value,
             intensity: m.querySelector('#g_i').value
           };
-          btn.disabled = true;
+          UI.busyBtn(btn, true, T('exercises.aiBrief'));
+          base.brief = await toEnglish(what);
           const drafts = [];
           // One request per category × body part keeps each answer short and on topic.
           const parts2 = parts.length ? parts : [''];
@@ -574,10 +617,35 @@ Views.exerciseLib = function (mount, opts) {
     });
   }
 
+  // The brief goes out in English whatever the coach typed: the model writes a
+  // sharper drill from it and the live web search finds far more. Only the
+  // request is translated — the drill still comes back written in both
+  // languages, so a Danish coach reads Danish.
+  async function toEnglish(text) {
+    const src = String(text || '').trim();
+    const lang = I18N.getLang();
+    if (!src || lang === 'en') return src;
+    const system = [
+      `You translate a coach's ${SPORTS.name(sportId, 'en')} training request into English.`,
+      'Answer with one JSON object and nothing else.',
+      'Shape: {"text":""}',
+      'Translate only: keep every number, body part, position and piece of equipment as it was meant, add nothing and leave nothing out.',
+      'Text already in English comes back unchanged.'
+    ].join('\n');
+    const raw = await AI.complete(system, src.slice(0, 800), 500, { json: true });
+    if (!raw) return src;
+    try {
+      const d = JSON.parse(raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1));
+      return String(d.text || '').trim() || src;
+    } catch (e) { return src; }
+  }
+
   // Returns an ARRAY of drafts. `muscle` is optional — without it the request is
   // plain sport drills for the chosen category.
   async function generate(opts, muscle, count) {
     const { what, category: catPick, duration: dur, intensity } = opts;
+    // What the coach typed, in English; `what` itself stays as they wrote it.
+    const brief = opts.brief || what;
     const n = Math.max(1, Math.min(5, count || 1));
     const sportName = SPORTS.name(sportId, 'en');
     // The search field is what the coach actually reads on the fallback link,
@@ -593,7 +661,7 @@ Views.exerciseLib = function (mount, opts) {
     // A live web search alongside the club's own library, so a fresh idea can
     // surface even where the library has nothing close to what was asked for.
     UI.toast(T('ai.searching'));
-    const found = await AI.webFindings(what + (muscle ? `, targeting the ${muscle}` : ''));
+    const found = await AI.webFindings(brief + (muscle ? `, targeting the ${muscle}` : ''));
     const system = [
       `You design ${sportName} training exercises for a coach.`,
       'Answer with one JSON object and nothing else — no markdown, no code fence, no commentary.',
@@ -620,11 +688,13 @@ Views.exerciseLib = function (mount, opts) {
       found ? `Live web search, just run for this request — combine it with your own knowledge and the club data, and prefer a concrete idea from here when it fits:\n${found}` : '',
       lib.length ? 'Club videos:\n' + lib.map(e => `- ${e.title}: ${e.url}`).join('\n') : 'Club videos: none.'
     ].filter(Boolean).join('\n');
-    const user = `Train: ${what}` + (catPick ? `\nCategory: ${catPick}` : '')
+    const user = `Train: ${brief}` + (catPick ? `\nCategory: ${catPick}` : '')
       + `\nTarget duration: ${dur} minutes\nIntensity: ${intensity}`
       + (muscle ? `\nBody part: ${muscle}` : '');
 
-    const raw = await AI.complete(system, user, 900 + n * 900, { json: true });
+    // Two language blocks per drill, and Danish runs longer than English —
+    // a budget that only just fits comes back cut off, which is not parseable.
+    const raw = await AI.complete(system, user, 1200 + n * 1300, { json: true });
     if (!raw) return null;
     const body = raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1);
     let d;
