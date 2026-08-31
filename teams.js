@@ -486,7 +486,7 @@ Views.teams = function (mount) {
       'Invent nothing else. No e-mail, no phone number, no notes, no comments.'
     ].join('\n');
     const user = JSON.stringify({ level: level || '', names });
-    const raw = await AI.complete(system, user, 260 + names.length * 60);
+    const raw = await AI.complete(system, user, 260 + names.length * 60, { json: true });
     if (!raw) return null;
     let d;
     try { d = JSON.parse(raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1)); }

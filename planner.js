@@ -261,7 +261,7 @@ Views.planner = function (mount) {
       `Write title, place, who and notes in ${lang}.`
     ].join('\n');
 
-    const raw = await AI.complete(system, desc, 400);
+    const raw = await AI.complete(system, desc, 400, { json: true });
     if (!raw) return null;
     let d;
     try { d = JSON.parse(raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1)); }

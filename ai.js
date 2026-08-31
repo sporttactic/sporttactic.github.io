@@ -251,21 +251,36 @@ window.AI = (() => {
     ];
   }
 
+  // A prompt that must come back as JSON gets this instead of langLines(): told
+  // to write its whole answer in Danish, the model translates the field names
+  // and the fixed values too, and the answer no longer parses. Those prompts
+  // say themselves which fields are free text and what language each is in.
+  const JSON_LANG = [
+    'Answer with one JSON object only.',
+    'Field names, and any value the prompt says must match a fixed list, are copied exactly as written there in English — never translated, however the free text is written.',
+    'Only the free text inside the fields follows the language the prompt asks for.'
+  ];
+
   // One-shot call for other views (e.g. the drill generator) — no chat history, no team data.
-  async function complete(system, user, maxTokens) {
+  // opts.json = the answer is parsed as JSON, so the language rule above applies.
+  async function complete(system, user, maxTokens, opts) {
     const key = getKey();
     if (!key) { keyDialog(); return null; }
     if (navigator.onLine === false) { UI.toast(T('ai.offline'), 'error'); return null; }
-    // Every caller gets the language rule, whatever prompt it built.
-    const sys = langLines().join('\n') + '\n' + String(system || '');
+    const json = !!(opts && opts.json);
+    // Every caller gets a language rule, whatever prompt it built.
+    const sys = (json ? JSON_LANG : langLines()).join('\n') + '\n' + String(system || '');
+    const payload = {
+      model: MODEL, temperature: 0.7, max_tokens: maxTokens || 600,
+      messages: [{ role: 'system', content: sys }, { role: 'user', content: user }]
+    };
+    // Leaves no room for a code fence or a spoken preamble around the object.
+    if (json) payload.response_format = { type: 'json_object' };
     try {
       const res = await fetch(ENDPOINT, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key },
-        body: JSON.stringify({
-          model: MODEL, temperature: 0.7, max_tokens: maxTokens || 600,
-          messages: [{ role: 'system', content: sys }, { role: 'user', content: user }]
-        })
+        body: JSON.stringify(payload)
       });
       if (!res.ok) {
         UI.toast(res.status === 401 ? T('ai.badKey') : res.status === 429 ? T('ai.rate') : `${T('ai.failed')} (${res.status})`, 'error');

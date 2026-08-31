@@ -400,7 +400,7 @@ Views.exerciseLib = function (mount, opts) {
           'Keep the coaching meaning, the numbers, the sets and the reps exactly as they are.',
           'Use the words a coach in that language actually says. Do not add anything of your own.'
         ].join('\n');
-        const raw = await AI.complete(system, JSON.stringify({ drills: rows }), 400 + batch.length * 260);
+        const raw = await AI.complete(system, JSON.stringify({ drills: rows }), 400 + batch.length * 260, { json: true });
         if (!raw) break;
         let d;
         try { d = JSON.parse(raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1)); }
@@ -624,7 +624,7 @@ Views.exerciseLib = function (mount, opts) {
       + `\nTarget duration: ${dur} minutes\nIntensity: ${intensity}`
       + (muscle ? `\nBody part: ${muscle}` : '');
 
-    const raw = await AI.complete(system, user, 900 + n * 900);
+    const raw = await AI.complete(system, user, 900 + n * 900, { json: true });
     if (!raw) return null;
     const body = raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1);
     let d;

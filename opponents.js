@@ -165,7 +165,7 @@ Views.opponents = function (mount) {
       notes ? 'What the coach already knows: ' + notes : ''
     ].filter(Boolean).join('\n');
 
-    const raw = await AI.complete(system, user, 700);
+    const raw = await AI.complete(system, user, 700, { json: true });
     if (!raw) return null;
     let d;
     try { d = JSON.parse(raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1)); }

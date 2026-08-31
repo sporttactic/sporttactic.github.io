@@ -1135,6 +1135,7 @@ Views.training = function (mount) {
       + ' Give only ones you are confident exist — every address is checked against YouTube and a dead one is thrown away.',
       `new[].intensity must be exactly one of: ${INT.join(', ')}.`,
       'plan: short lines — warm-up, the main part with each drill and how long it runs, the finish, and 2 coaching points. Max 150 words.',
+      `Write the title and the plan in ${searchLang}, the language the coach reads them in.`,
       'Keep it safe for amateur athletes and say when to stop if there is pain.',
       lib.length
         ? 'Drill library (this sport only):\n' + lib.map(e => `- ${ex(e)} (${tt('cat', e.category)}, ${e.duration || 0} min, ${e.intensity || 'Low'})`).join('\n')
@@ -1143,7 +1144,7 @@ Views.training = function (mount) {
     ].filter(Boolean).join('\n');
     const user = `Session about: ${what}\nTotal length: ${dur} minutes\nFocus: ${focus}\nCategory for new drills: ${newCat}`;
 
-    const raw = await AI.complete(system, user, 1200 + MAX_NEW * 320);
+    const raw = await AI.complete(system, user, 1200 + MAX_NEW * 320, { json: true });
     if (!raw) return null;
     let d;
     try { d = JSON.parse(raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1)); }
