@@ -303,10 +303,17 @@ const Access = (() => {
     const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt, iterations: iter, hash: 'SHA-256' }, base, 256);
     return b64(bits);
   }
+  // Dashes are display-only. Normalize player input to the generated 4-4-2
+  // form so lowercase, spaces, copied punctuation, or omitted dashes do not
+  // make an otherwise valid key fail its hash check.
+  function canonWord(word) {
+    const raw = String(word == null ? '' : word).toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (raw.length !== 10) return '';
+    return raw.slice(0, 4) + '-' + raw.slice(4, 8) + '-' + raw.slice(8);
+  }
   function makeWord() {
     const r = crypto.getRandomValues(new Uint8Array(10));
-    const s = [...r].map(n => KEY_CHARS[n % KEY_CHARS.length]).join('');
-    return s.slice(0, 4) + '-' + s.slice(4, 8) + '-' + s.slice(8);
+    return canonWord([...r].map(n => KEY_CHARS[n % KEY_CHARS.length]).join(''));
   }
   function roleKeys() {
     const rec = Store.find('settings', KEYS_KEY);
@@ -434,7 +441,7 @@ const Access = (() => {
   // a valid one is a player, and unclaimed() then holds it read-only.
   async function claimRole(word) {
     const rec = roleKeys();
-    const w = String(word == null ? '' : word).trim().toUpperCase();
+    const w = canonWord(word);
     let hit = '', teamId = '';
     if (rec && w && cryptoOk()) {
       const hash = await keyHash(w, unb64(rec.salt), +rec.iter || KEY_ITER);
