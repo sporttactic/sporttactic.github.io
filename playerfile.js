@@ -46,6 +46,7 @@ const PlayerFile = (() => {
   // salted hash travels in the file, and the word itself never leaves the two
   // devices that hold it.
   const KEY_ITER = 310000;
+  const KEY_LEN = 16;
   const KEY_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';   // no 0/O, 1/I/L
   const HELD = 'stx_pfile_keys';                          // this device only
 
@@ -56,10 +57,14 @@ const PlayerFile = (() => {
     const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(word), 'PBKDF2', false, ['deriveBits']);
     return b64(await crypto.subtle.deriveBits({ name: 'PBKDF2', salt, iterations: iter, hash: 'SHA-256' }, base, 256));
   }
+  // The dashes are only there to be read off a screen: the 16 characters alone
+  // are what is hashed, so a key pasted with them, without them or in lower case
+  // is the same key.
+  const canonKey = s => String(s == null ? '' : s).toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const prettyKey = s => (canonKey(s).match(/.{1,4}/g) || []).join('-');
   function makeWord() {
-    const r = crypto.getRandomValues(new Uint8Array(10));
-    const s = [...r].map(n => KEY_CHARS[n % KEY_CHARS.length]).join('');
-    return s.slice(0, 4) + '-' + s.slice(4, 8) + '-' + s.slice(8);
+    const r = crypto.getRandomValues(new Uint8Array(KEY_LEN));
+    return prettyKey([...r].map(n => KEY_CHARS[n % KEY_CHARS.length]).join(''));
   }
   function heldKeys() {
     try { const v = JSON.parse(localStorage.getItem(HELD) || '{}'); return (v && typeof v === 'object') ? v : {}; }
@@ -89,7 +94,7 @@ const PlayerFile = (() => {
     if (!file) return '';
     const word = makeWord();
     const salt = crypto.getRandomValues(new Uint8Array(16));
-    const hash = await hashWord(word, salt, KEY_ITER);
+    const hash = await hashWord(canonKey(word), salt, KEY_ITER);
     await Store.save(STORE, Object.assign({}, file, {
       key: { salt: b64(salt), iter: KEY_ITER, hash, at: Date.now() }
     }));
@@ -97,13 +102,13 @@ const PlayerFile = (() => {
     return word;
   }
   async function claimKey(player, typed) {
-    const word = String(typed == null ? '' : typed).trim().toUpperCase();
+    const word = canonKey(typed);
     const f = get(player && player.id);
     const k = f && f.key;
-    if (!word || !k || !k.hash || !cryptoOk()) return false;
+    if (word.length !== KEY_LEN || !k || !k.hash || !cryptoOk()) return false;
     const hash = await hashWord(word, unb64(k.salt), +k.iter || KEY_ITER);
     if (hash !== k.hash) return false;
-    holdKey(player.id, word, hash);
+    holdKey(player.id, prettyKey(word), hash);
     return true;
   }
 
@@ -221,6 +226,13 @@ const PlayerFile = (() => {
     });
   }
 
+  async function clearAll(player) {
+    const file = get(player && player.id);
+    if (!file || !canWrite(player)) return false;
+    await Store.save(STORE, Object.assign({}, file, { messages: [] }));
+    return true;
+  }
+
   // The conversation itself, so a view that only wants to show it does not have
   // to open the whole dialog.
   function threadHtml(player) {
@@ -305,7 +317,7 @@ const PlayerFile = (() => {
     ? t('pfile.keyHeld', 'This copy holds the key for this player and may write in the file.')
     : t('pfile.keyAsk', 'Type the message key the coach gave you. It is only needed once on this device.'))}</p>
         <label class="field"><span>${esc(t('pfile.key', 'Message key'))}</span>
-          <input id="pf_key_in" maxlength="20" autocomplete="off" spellcheck="false" placeholder="ABCD-EFGH-JK"></label>`,
+          <input id="pf_key_in" maxlength="24" autocomplete="off" spellcheck="false" placeholder="ABCD-EFGH-JKMN-PQRS"></label>`,
       footer: `<button class="btn ghost" data-close2>${esc(T('common.close'))}</button>
         <button class="btn primary" data-claim>${esc(t('pfile.keyUse', 'Use key'))}</button>`,
       onOpen: (m, close) => {
@@ -353,6 +365,7 @@ const PlayerFile = (() => {
           <button class="btn" data-dl ${list.length ? '' : 'disabled'}>\u2b73 ${esc(t('pfile.dl', 'Download message'))}</button>
           ${hasKey(player.id) ? `<label class="btn" style="cursor:pointer">\u2b71 ${esc(t('pfile.up', 'Upload message'))}<input id="pf_up" type="file" accept="application/json" hidden></label>` : ''}
           <button class="btn" data-key>\u{1F511} ${esc(t('pfile.key', 'Message key'))}</button>
+          ${staff ? `<button class="btn danger" data-wipe ${list.length ? '' : 'disabled'}>${esc(t('pfile.clear', 'Clear all messages'))}</button>` : ''}
           <button class="btn primary" data-post ${writable ? '' : 'disabled'}>${esc(t('pfile.send', 'Write'))}</button>`,
         onOpen: (m, close) => {
           const box = m.querySelector('.pf-thread');
@@ -372,10 +385,18 @@ const PlayerFile = (() => {
             }
             const dl = m.querySelector('[data-dl]');
             if (dl) dl.disabled = !messages(player.id).length;
+            const wipe = m.querySelector('[data-wipe]');
+            if (wipe) wipe.disabled = !messages(player.id).length;
           };
           m.querySelector('[data-close2]').onclick = () => { close(); if (typeof onDone === 'function') onDone(); };
           m.querySelector('[data-dl]').onclick = () => download(player);
           m.querySelector('[data-key]').onclick = () => { close(); (staff ? keyDialog : claimDialog)(player, open); };
+          const wipe = m.querySelector('[data-wipe]');
+          if (wipe) wipe.onclick = () => UI.confirm(t('pfile.clearAsk', 'Remove every message in this player file? The key and the file itself stay.'), async () => {
+            if (!await clearAll(player)) return;
+            refresh();
+            UI.toast(t('pfile.cleared', 'Player file emptied'), 'success');
+          });
           const up = m.querySelector('#pf_up');
           if (up) up.onchange = async e => {
             const f = e.target.files && e.target.files[0];
@@ -408,7 +429,7 @@ const PlayerFile = (() => {
   }
 
   return {
-    STORE, fileId, get, messages, ensure, remove, post, sweep, dialog, threadHtml, download, upload, canWrite, side,
+    STORE, fileId, get, messages, ensure, remove, post, sweep, dialog, threadHtml, download, upload, clearAll, canWrite, side,
     newKey, claimKey, holdsKey, hasKey, keyDialog, claimDialog
   };
 })();
