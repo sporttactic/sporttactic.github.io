@@ -259,6 +259,9 @@ const Access = (() => {
       if (claiming && row && (row.id === 'role' || row.id === CLAIM_KEY || row.id === KEYS_KEY)) return false;
       return FIXED_SETTINGS.indexOf(row && row.id) >= 0;
     }
+    // The player file is the line between the coach and one player. A copy that
+    // could only read it would leave the player with nothing to answer on.
+    if (store === 'playerfiles') return false;
     if (openStores().indexOf(store) < 0) return true;
     // Re-tagging a drill's category is not the same as rewriting it — a member
     // may do this to ANY drill the training exception already opened, not only

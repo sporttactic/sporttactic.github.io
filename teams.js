@@ -203,6 +203,7 @@ Views.teams = function (mount) {
       if (!team) return;
       UI.confirm(T('teams.delTeamAsk'), async () => {
         // Everything the team owns goes with it, so no orphan rows are left behind.
+        for (const p of Store.all('players').filter(x => x.teamId === team.id)) await PlayerFile.remove(p.id);
         for (const s of ['players', 'coaches', 'matches', 'opponents', 'training', 'personal']) {
           for (const r of Store.all(s).filter(x => x.teamId === team.id)) await Store.remove(s, r.id);
         }
@@ -230,7 +231,11 @@ Views.teams = function (mount) {
       q('#squadAnims').onclick = () => animListDialog(team, teamAnimations(team));
       mount.querySelectorAll('[data-mail]').forEach(b => b.onclick = () => {
         const p = Store.find('players', b.dataset.mail);
-        if (p) MAIL.compose({ players: [p], title: T('mail.title') + ' — ' + (p.firstName + ' ' + p.lastName).trim() });
+        if (!p) return;
+        // A read-only copy cannot send mail, but the player file is its line
+        // back to the coach, so the same button opens that instead.
+        if (window.Access && Access.readMode && Access.readMode()) return PlayerFile.dialog(p);
+        MAIL.compose({ players: [p], title: T('mail.title') + ' — ' + (p.firstName + ' ' + p.lastName).trim() });
       });
       mount.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => form(team, Store.find('players', b.dataset.edit)));
       mount.querySelectorAll('[data-chat]').forEach(b => b.onclick = () => {
@@ -245,7 +250,7 @@ Views.teams = function (mount) {
       const c = Store.find('coaches', b.dataset.staffchat);
       if (c) App.go('messenger', { playerId: c.id, playerName: c.name, memberStore: 'coaches', from: 'teams' });
     });
-    mount.querySelectorAll('[data-del]').forEach(b => b.onclick = () => UI.confirm(T('teams.delPlayer'), async () => { await Store.remove('players', b.dataset.del); UI.toast(T('common.delete')); render(); }));
+    mount.querySelectorAll('[data-del]').forEach(b => b.onclick = () => UI.confirm(T('teams.delPlayer'), async () => { await Store.remove('players', b.dataset.del); await PlayerFile.remove(b.dataset.del); UI.toast(T('common.delete')); render(); }));
     AI.bind(mount);
   }
 
@@ -426,7 +431,8 @@ Views.teams = function (mount) {
           if (!obj.firstName) return UI.toast(T('teams.reqName'), 'error');
           if (raw && !phone) return UI.toast(T('teams.badPhone'), 'error');
           if (rawMail && !email) return UI.toast(T('teams.badEmail'), 'error');
-          await Store.save('players', obj);
+          const saved = await Store.save('players', obj);
+          await PlayerFile.ensure(saved || obj);
           close(); UI.toast(T('common.save'), 'success'); render();
         };
       }
@@ -551,11 +557,12 @@ Views.teams = function (mount) {
           const picked = boxes.filter(b => b.checked).map(b => list[+b.dataset.draft]);
           if (!picked.length) return UI.toast(T('exercises.aiNonePicked'), 'error');
           for (const p of picked) {
-            await Store.save('players', {
+            const saved = await Store.save('players', {
               teamId: team.id, sport: sportId, status: 'active',
               firstName: p.firstName, lastName: p.lastName, number: p.number,
               position: p.position, height: p.height, weight: p.weight
             });
+            await PlayerFile.ensure(saved);
           }
           close();
           UI.toast(picked.length + ' ' + T('teams.aiSquadSaved'), 'success');

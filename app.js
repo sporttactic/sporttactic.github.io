@@ -466,6 +466,9 @@ const App = (() => {
     await Store.stampSquadSport(currentSport);
     // Rows made before teams were separated are handed to the first team.
     await Store.stampTeamScope();
+    // Squads that predate player files get theirs, and files whose player is
+    // gone are cleared out.
+    await PlayerFile.sweep();
     populateSportPicker();
     populateTeamPicker();
     applyNav();

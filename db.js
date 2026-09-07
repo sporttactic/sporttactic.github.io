@@ -3,11 +3,12 @@ const DB = (() => {
   const DB_NAME = 'handballtactix';
   // v2 added the 'personal' store (personal training plans & max tests).
   // v3 added the 'planner' store (club calendar: meetings, travel, tournaments).
-  const DB_VERSION = 3;
+  // v4 added the 'playerfiles' store (one file per player: coach ↔ player).
+  const DB_VERSION = 4;
   const STORES = [
     'clubs', 'teams', 'players', 'coaches', 'seasons',
     'matches', 'events', 'videos', 'exercises', 'reports',
-    'tactics', 'opponents', 'training', 'personal', 'planner', 'settings'
+    'tactics', 'opponents', 'training', 'personal', 'planner', 'playerfiles', 'settings'
   ];
   let dbp = null;
 

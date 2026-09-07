@@ -336,17 +336,17 @@ const MAIL = (() => {
     const missing = all.length - able.length;
 
     if (!all.length) return UI.toast(t('mail.noPlayers', 'No players to write to'), 'error');
-    if (!able.length) {
-      return UI.modal({
-        title: t('mail.title', 'Send e-mail'),
-        body: `<p>${esc(t('mail.noAddresses', 'None of these players has an e-mail address yet.'))}</p>
-          <p class="hint">${esc(t('mail.addAddressHint', 'Add one under Teams & Players \u2014 edit the player and fill in E-mail.'))}</p>`,
-        footer: `<button class="btn primary" data-close2>${esc(T('common.close'))}</button>`,
-        onOpen: (m, close) => { m.querySelector('[data-close2]').onclick = close; }
-      });
-    }
 
-    const ready = canSendDirect();
+    // Everybody is listed, with or without an address: the ones that cannot be
+    // mailed can still be written to in their own player file.
+    const preset = new Set(able.slice(0, MAX_TO).map(p => p.id));
+    const pickRow = p => {
+      const addr = normEmail(p.email);
+      return `<label class="pick-row"><input type="checkbox" data-to="${esc(addr)}" data-pid="${esc(p.id)}" ${addr ? (preset.has(p.id) ? 'checked' : '') : 'disabled'}>
+            <span class="pick-name">${esc(label(p))}</span><span class="pick-sub">${esc(addr || t('mail.rowNoAddress', 'No e-mail address'))}</span>
+            <button type="button" class="btn sm pick-msg" data-msg="${esc(p.id)}">\u2709 ${esc(t('pfile.btn', 'Message'))}</button></label>`;
+    };
+    const ready = canSendDirect() && !!able.length;
     const from = senders();
     const cur = currentSender();
     UI.modal({
@@ -358,10 +358,9 @@ const MAIL = (() => {
           <span class="hint">${esc(t('mail.sendAsHint', 'The player sees this name and answers to this address. Staff get an address under Teams & Players \u2192 Staff.'))}</span></label>` : ''}
         <label class="field"><span>${esc(t('mail.recipients', 'Recipients'))}</span></label>
         <div class="pick-list">
-          ${able.map((p, i) => `<label class="pick-row"><input type="checkbox" data-to="${esc(normEmail(p.email))}" data-pid="${esc(p.id)}" ${i < MAX_TO ? 'checked' : ''}>
-            <span class="pick-name">${esc(label(p))}</span><span class="pick-sub">${esc(normEmail(p.email))}</span></label>`).join('')}
+          ${all.map(pickRow).join('')}
         </div>
-        ${missing ? `<p class="hint">${esc(t('mail.someMissing', 'Players without an e-mail address are not listed') + ': ' + missing)}</p>` : ''}
+        ${missing ? `<p class="hint">${esc(t('mail.msgInstead', 'A player without an e-mail address cannot be mailed \u2014 write in their player file with Message instead.'))}</p>` : ''}
         <label class="field"><span>${esc(t('mail.subject', 'Subject'))}</span>
           <input id="mail_subj" maxlength="120" value="${esc(opts.subject || t('mail.subjectDef', 'From your coach'))}"></label>
         <label class="field"><span>${esc(t('mail.message', 'Message'))}</span>
@@ -371,7 +370,10 @@ const MAIL = (() => {
           ${BLOCKS.map(b => `<label class="check-row"><input type="checkbox" data-blk="${b.id}"><span>${esc(t(b.key, b.def))}</span></label>`).join('')}
         </div>
         <p class="hint">${esc(t('mail.privacy', 'Injury notes are health data. Only send them to the player they belong to, and never to the whole squad.'))}</p>
-        <p class="hint">${esc(ready ? t('mail.howReady', 'Each recipient gets their own mail, sent through your own mail account. Nobody sees another player\u2019s address.') : t('mail.howNoRelay', 'Sending is switched off until EmailJS is set up under Settings \u2192 Send e-mail \u2192 E-mail sending.'))}</p>`,
+        <p class="hint">${esc(!able.length
+    ? t('mail.noAddresses', 'None of these players has an e-mail address yet') + '. ' + t('mail.addAddressHint', 'Add one under Teams & Players \u2014 edit the player and fill in E-mail.')
+    : ready ? t('mail.howReady', 'Each recipient gets their own mail, sent through your own mail account. Nobody sees another player\u2019s address.')
+      : t('mail.howNoRelay', 'Sending is switched off until EmailJS is set up under Settings \u2192 Send e-mail \u2192 E-mail sending.'))}</p>`,
       footer: `<button class="btn ghost" data-close2>${esc(T('common.cancel'))}</button>
         <button class="btn" data-setup>${esc(t('mailsrv.title', 'E-mail sending'))}</button>
         <button class="btn primary" data-direct ${ready ? '' : 'disabled'}>${esc(t('mail.sendMail', 'Send mail'))}</button>`,
@@ -390,6 +392,16 @@ const MAIL = (() => {
 
         m.querySelector('[data-close2]').onclick = close;
         m.querySelector('[data-setup]').onclick = () => { close(); serverDialog(); };
+
+        // A dialog replaces whatever is open, so the file takes over the screen
+        // and hands it back here when it is closed.
+        m.querySelectorAll('[data-msg]').forEach(b => b.onclick = e => {
+          e.preventDefault(); e.stopPropagation();
+          const p = all.find(x => x.id === b.dataset.msg);
+          if (!p || !window.PlayerFile) return;
+          close();
+          PlayerFile.dialog(p, () => compose(opts));
+        });
 
         // Straight out through EmailJS: no length cap, and every recipient gets
         // their OWN mail, so nobody sees another player's address or numbers.

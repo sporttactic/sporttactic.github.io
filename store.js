@@ -338,7 +338,7 @@ const Store = (() => {
   // preference (localStorage, per sport) rather than a settings row, because
   // players()/matches() are synchronous and getSetting is not.
   const K_TEAM = 'stx_team_';
-  const TEAM_SCOPED = ['players', 'coaches', 'matches', 'opponents', 'training', 'personal', 'planner'];
+  const TEAM_SCOPED = ['players', 'coaches', 'matches', 'opponents', 'training', 'personal', 'planner', 'playerfiles'];
   function teams() {
     const s = sportNow();
     const list = all('teams').filter(t => !t.sport || t.sport === s);
@@ -500,7 +500,7 @@ const Store = (() => {
     // from these same personal rows, so it travels with them for free.
     trainingPlanner: ['training', 'exercises', 'personal'],
     // The team record comes first so the club and season it points at can be found.
-    team: ['teams', 'clubs', 'seasons', 'players', 'coaches'],
+    team: ['teams', 'clubs', 'seasons', 'players', 'coaches', 'playerfiles'],
     stats: ['players', 'matches', 'events'], video: ['videos']
   };
   // A team pack carries its own team record, so its rows must keep the teamId
