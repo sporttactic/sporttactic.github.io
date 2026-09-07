@@ -391,16 +391,6 @@ const MAIL = (() => {
         m.querySelector('[data-close2]').onclick = close;
         m.querySelector('[data-setup]').onclick = () => { close(); serverDialog(); };
 
-        // A dialog replaces whatever is open, so the file takes the screen and
-        // closing it leaves the screen clear.
-        m.querySelectorAll('[data-msg]').forEach(b => b.onclick = e => {
-          e.preventDefault(); e.stopPropagation();
-          const p = all.find(x => x.id === b.dataset.msg);
-          if (!p || !window.PlayerFile) return;
-          close();
-          PlayerFile.dialog(p);
-        });
-
         // Straight out through EmailJS: no length cap, and every recipient gets
         // their OWN mail, so nobody sees another player's address or numbers.
         const direct = m.querySelector('[data-direct]');

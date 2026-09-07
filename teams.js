@@ -1,4 +1,4 @@
-/* Teams & Players view */
+﻿/* Teams & Players view */
 window.Views = window.Views || {};
 Views.teams = function (mount) {
   const sportId = (window.App && App.getSport && App.getSport()) || 'handball';
