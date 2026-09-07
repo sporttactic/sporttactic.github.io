@@ -55,9 +55,7 @@ Views.teams = function (mount) {
     const players = team ? Store.players(team.id) : [];
     const coaches = team ? Store.coaches(team.id) : [];
     const positions = SPORTS.positions(sportId);
-    // A following copy cannot send mail, so the same button is its player file.
-    const mailTitle = (window.Access && Access.readMode && Access.readMode())
-      ? T('pfile.title') : T('mail.mail');
+    const mailTitle = T('pfile.title');
 
     const readRow = p => `
       <tr data-p="${p.id}">
@@ -234,11 +232,8 @@ Views.teams = function (mount) {
       q('#squadAnims').onclick = () => animListDialog(team, teamAnimations(team));
       mount.querySelectorAll('[data-mail]').forEach(b => b.onclick = () => {
         const p = Store.find('players', b.dataset.mail);
-        if (!p) return;
-        // A read-only copy cannot send mail, but the player file is its line
-        // back to the coach, so the same button opens that instead.
-        if (window.Access && Access.readMode && Access.readMode()) return PlayerFile.dialog(p);
-        MAIL.compose({ players: [p], title: T('mail.title') + ' — ' + (p.firstName + ' ' + p.lastName).trim() });
+        // One player is a conversation, not a mailing: this is their file.
+        if (p) PlayerFile.dialog(p);
       });
       mount.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => form(team, Store.find('players', b.dataset.edit)));
       mount.querySelectorAll('[data-chat]').forEach(b => b.onclick = () => {

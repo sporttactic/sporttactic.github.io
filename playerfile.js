@@ -101,13 +101,19 @@ const PlayerFile = (() => {
     holdKey(player.id, word, hash);
     return word;
   }
+  // Returns true, or why it was refused: 'nokey' when no key has reached this
+  // copy yet, 'len' for the wrong length, 'bad' for a key that does not match.
   async function claimKey(player, typed) {
     const word = canonKey(typed);
     const f = get(player && player.id);
     const k = f && f.key;
-    if (word.length !== KEY_LEN || !k || !k.hash || !cryptoOk()) return false;
-    const hash = await hashWord(word, unb64(k.salt), +k.iter || KEY_ITER);
-    if (hash !== k.hash) return false;
+    if (!k || !k.hash || !k.salt) return 'nokey';
+    if (word.length !== KEY_LEN) return 'len';
+    if (!cryptoOk()) return 'bad';
+    let hash;
+    try { hash = await hashWord(word, unb64(k.salt), +k.iter || KEY_ITER); }
+    catch (e) { return 'bad'; }
+    if (hash !== k.hash) return 'bad';
     holdKey(player.id, prettyKey(word), hash);
     return true;
   }
@@ -172,17 +178,16 @@ const PlayerFile = (() => {
     return isNaN(d) ? '' : UI.fmtDate(at) + ' ' + d.toTimeString().slice(0, 5);
   };
 
-  // The file as a JSON download, so the two ends can hand messages over by file
-  // when they do not share a synced copy. The key hash is left out: it is the
-  // squad's business, not the message's.
+  // The file as a JSON download, so the two ends can hand messages over — and
+  // the key with them — when they do not share a synced copy. Only the salt and
+  // the PBKDF2 hash travel, exactly as they do through the squad file; the word
+  // itself never leaves the two devices that hold it.
   function download(player) {
     const file = get(player.id);
     if (!file) return;
-    const out = Object.assign({}, file);
-    delete out.key;
     const safe = nameOf(player).replace(/[^\w\-]+/g, '_') || 'player';
     const a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' }));
+    a.href = URL.createObjectURL(new Blob([JSON.stringify(file, null, 2)], { type: 'application/json' }));
     a.download = 'playerfile-' + safe + '.json';
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 4000);
@@ -197,7 +202,21 @@ const PlayerFile = (() => {
     try { data = JSON.parse(await readText(blob)); } catch (e) { return -1; }
     if (!data || typeof data !== 'object' || !Array.isArray(data.messages)) return -1;
     if (data.playerId && data.playerId !== player.id) return -2;
-    if (!canWrite(player)) return -3;
+    const cur0 = get(player.id) || await ensure(player);
+    if (!cur0) return -1;
+    // Taking the key over is how a copy with none earns the right to write, so
+    // it happens before the write check rather than behind it.
+    const inKey = data.key;
+    const mine = cur0.key;
+    let adopted = false;
+    if (inKey && typeof inKey === 'object' && inKey.hash && inKey.salt
+      && (!mine || !mine.hash || (+inKey.at || 0) > (+mine.at || 0))) {
+      await Store.save(STORE, Object.assign({}, cur0, {
+        key: { salt: String(inKey.salt), iter: +inKey.iter || KEY_ITER, hash: String(inKey.hash), at: +inKey.at || Date.now() }
+      }));
+      adopted = true;
+    }
+    if (!canWrite(player)) return adopted ? -4 : -3;
     const cur = get(player.id) || await ensure(player);
     if (!cur) return -1;
     const seen = new Set((cur.messages || []).map(m => m.id));
@@ -309,6 +328,7 @@ const PlayerFile = (() => {
   // Player side: type the word the coach handed over, once, on this device.
   function claimDialog(player, onDone) {
     const held = holdsKey(player.id);
+    const waiting = !hasKey(player.id);
     UI.modal({
       title: t('pfile.key', 'Message key') + ' \u2014 ' + nameOf(player),
       width: 480,
@@ -316,6 +336,7 @@ const PlayerFile = (() => {
         <p class="hint">${esc(held
     ? t('pfile.keyHeld', 'This copy holds the key for this player and may write in the file.')
     : t('pfile.keyAsk', 'Type the message key the coach gave you. It is only needed once on this device.'))}</p>
+        ${waiting ? `<p class="hint">${esc(t('pfile.keyMissing', 'No key has reached this copy yet. Sync the squad, or have the coach send the file from Download message and load it here with Upload message.'))}</p>` : ''}
         <label class="field"><span>${esc(t('pfile.key', 'Message key'))}</span>
           <input id="pf_key_in" maxlength="24" autocomplete="off" spellcheck="false" placeholder="ABCD-EFGH-JKMN-PQRS"></label>`,
       footer: `<button class="btn ghost" data-close2>${esc(T('common.close'))}</button>
@@ -328,9 +349,11 @@ const PlayerFile = (() => {
         const claim = async () => {
           const btn = m.querySelector('[data-claim]');
           btn.disabled = true;
-          const ok = await claimKey(player, inp.value);
+          const r = await claimKey(player, inp.value);
           btn.disabled = false;
-          if (!ok) return UI.toast(t('pfile.keyBad', 'That key was not accepted'), 'error');
+          if (r === 'nokey') return UI.toast(t('pfile.keyMissing', 'No key has reached this copy yet. Sync the squad, or have the coach send the file from Download message and load it here with Upload message.'), 'error');
+          if (r === 'len') return UI.toast(t('pfile.keyLen', 'A message key is 16 characters'), 'error');
+          if (r !== true) return UI.toast(t('pfile.keyBad', 'That key was not accepted'), 'error');
           UI.toast(t('pfile.keyOk', 'Key accepted \u2014 you can write in your file'), 'success');
           done();
         };
@@ -363,7 +386,7 @@ const PlayerFile = (() => {
               : t('pfile.needKey', 'Writing needs the message key the coach generates for you. Press Message key and type it in.'))}</p>`,
         footer: `<button class="btn ghost" data-close2>${esc(T('common.close'))}</button>
           <button class="btn" data-dl ${list.length ? '' : 'disabled'}>\u2b73 ${esc(t('pfile.dl', 'Download message'))}</button>
-          ${hasKey(player.id) ? `<label class="btn" style="cursor:pointer">\u2b71 ${esc(t('pfile.up', 'Upload message'))}<input id="pf_up" type="file" accept="application/json" hidden></label>` : ''}
+          <label class="btn" style="cursor:pointer">\u2b71 ${esc(t('pfile.up', 'Upload message'))}<input id="pf_up" type="file" accept="application/json" hidden></label>
           <button class="btn" data-key>\u{1F511} ${esc(t('pfile.key', 'Message key'))}</button>
           ${staff ? `<button class="btn danger" data-wipe ${list.length ? '' : 'disabled'}>${esc(t('pfile.clear', 'Clear all messages'))}</button>` : ''}
           <button class="btn primary" data-post ${writable ? '' : 'disabled'}>${esc(t('pfile.send', 'Write'))}</button>`,
@@ -405,6 +428,7 @@ const PlayerFile = (() => {
             const n = await upload(player, f);
             if (n > 0) { refresh(); UI.toast(t('pfile.upOk', 'Messages added') + ' (' + n + ')', 'success'); }
             else if (n === 0) UI.toast(t('pfile.upNone', 'Nothing new in that file'));
+            else if (n === -4) { close(); UI.toast(t('pfile.upKey', 'Message key loaded \u2014 type it in to start writing'), 'success'); open(); }
             else if (n === -2) UI.toast(t('pfile.upWrong', 'That file belongs to another player'), 'error');
             else if (n === -3) UI.toast(t('pfile.needKey', 'Writing needs the message key the coach generates for you.'), 'error');
             else UI.toast(t('pfile.upBad', 'That file could not be read as a player file'), 'error');

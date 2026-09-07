@@ -346,23 +346,6 @@ const MAIL = (() => {
             <span class="pick-name">${esc(label(p))}</span><span class="pick-sub">${esc(addr || t('mail.rowNoAddress', 'No e-mail address'))}</span>
             <button type="button" class="btn sm pick-msg" data-msg="${esc(p.id)}">\u2709 ${esc(t('pfile.btn', 'Message'))}</button></label>`;
     };
-    // One chosen player is not a list to pick from: what belongs on screen is
-    // the file the two of them write in.
-    const one = all.length === 1 && window.PlayerFile ? all[0] : null;
-    function pickBlock() {
-      if (!one) {
-        return `<label class="field"><span>${esc(t('mail.recipients', 'Recipients'))}</span></label>
-        <div class="pick-list">${all.map(pickRow).join('')}</div>
-        ${missing ? `<p class="hint">${esc(t('mail.msgInstead', 'A player without an e-mail address cannot be mailed \u2014 write in their player file with Message instead.'))}</p>` : ''}`;
-      }
-      const addr = normEmail(one.email);
-      return `<label class="field"><span>${esc(t('pfile.title', 'Player file'))} \u2014 ${esc(label(one))}</span></label>
-        ${PlayerFile.threadHtml(one)}
-        <div class="tool-group" style="margin-bottom:12px">
-          <button type="button" class="btn sm pick-msg" data-msg="${esc(one.id)}">\u2709 ${esc(t('pfile.btn', 'Message'))}</button>
-        </div>
-        <input type="checkbox" data-to="${esc(addr)}" data-pid="${esc(one.id)}" ${addr ? 'checked' : ''} hidden>`;
-    }
     const ready = canSendDirect() && !!able.length;
     const from = senders();
     const cur = currentSender();
@@ -373,7 +356,9 @@ const MAIL = (() => {
         ${from.length ? `<label class="field"><span>${esc(t('mail.sendAs', 'Send as'))}</span>
           <select id="mail_from">${from.map(x => `<option value="${esc(x.id)}" ${x.id === cur.id ? 'selected' : ''}>${esc(x.name || x.role || x.email)}${x.name && x.role ? ' \u00b7 ' + esc(x.role) : ''} \u2014 ${esc(x.email)}</option>`).join('')}</select>
           <span class="hint">${esc(t('mail.sendAsHint', 'The player sees this name and answers to this address. Staff get an address under Teams & Players \u2192 Staff.'))}</span></label>` : ''}
-        ${pickBlock()}
+        <label class="field"><span>${esc(t('mail.recipients', 'Recipients'))}</span></label>
+        <div class="pick-list">${all.map(pickRow).join('')}</div>
+        ${missing ? `<p class="hint">${esc(t('mail.msgInstead', 'A player without an e-mail address cannot be mailed \u2014 write in their player file with Message instead.'))}</p>` : ''}
         <label class="field"><span>${esc(t('mail.subject', 'Subject'))}</span>
           <input id="mail_subj" maxlength="120" value="${esc(opts.subject || t('mail.subjectDef', 'From your coach'))}"></label>
         <label class="field"><span>${esc(t('mail.message', 'Message'))}</span>
@@ -406,17 +391,14 @@ const MAIL = (() => {
         m.querySelector('[data-close2]').onclick = close;
         m.querySelector('[data-setup]').onclick = () => { close(); serverDialog(); };
 
-        const thread = m.querySelector('.pf-thread');
-        if (thread) thread.scrollTop = thread.scrollHeight;
-
-        // A dialog replaces whatever is open, so the file takes over the screen
-        // and hands it back here when it is closed.
+        // A dialog replaces whatever is open, so the file takes the screen and
+        // closing it leaves the screen clear.
         m.querySelectorAll('[data-msg]').forEach(b => b.onclick = e => {
           e.preventDefault(); e.stopPropagation();
           const p = all.find(x => x.id === b.dataset.msg);
           if (!p || !window.PlayerFile) return;
           close();
-          PlayerFile.dialog(p, () => compose(opts));
+          PlayerFile.dialog(p);
         });
 
         // Straight out through EmailJS: no length cap, and every recipient gets
