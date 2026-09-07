@@ -150,6 +150,7 @@ Views.video = function (mount) {
         <span class="tool-group">
           <label class="field vsize"><span>${T('video.size')}</span>
             <select id="vSize">${VIDEO_SIZES.map(s => `<option value="${s}" ${s === vSize ? 'selected' : ''}>${T('video.size' + s)}</option>`).join('')}</select></label>
+          <label class="btn sm" data-member-ok style="cursor:pointer">\u2b71 ${T('video.import')}<input type="file" accept="video/*" data-vfile hidden></label>
           <button class="btn sm" id="videoMove" title="${T('video.move')}">✥ ${T('video.move')}</button>
           <button class="btn sm" id="videoFs" title="${T('video.fullscreen')}">⛶ ${T('video.fullscreen')}</button>
         </span>
@@ -165,6 +166,7 @@ Views.video = function (mount) {
             </span>
             <span class="draw-colors">${DRAW_COLORS.map(c => `<button class="swatch" data-dcolor="${c}" style="--sw:${c}" title="${c}"></button>`).join('')}</span>
             <span class="tool-group">
+              <button class="btn sm primary" id="drawSave">★ ${T('video.drawSave')}</button>
               <button class="btn sm" id="drawUndo">\u21b6 ${T('tactics.undo')}</button>
               <button class="btn sm danger" id="drawClear">${T('video.drawClear')}</button>
             </span>
@@ -210,7 +212,7 @@ Views.video = function (mount) {
 
   mount.innerHTML = `
     <div class="page-head"><div><h1>${T('video.title')}</h1><p>${T('video.subtitle')}</p></div>
-      <label class="btn primary" style="cursor:pointer">${T('video.import')}<input id="vfile" type="file" accept="video/*" hidden></label>
+      <label class="btn primary" data-member-ok style="cursor:pointer">${T('video.import')}<input type="file" accept="video/*" data-vfile hidden></label>
     </div>
     ${UI.acc('videoStream', T('video.stream'), streamCard)}
     ${UI.acc('videoPlayer', T('video.player'), playerPanel)}`;
@@ -449,8 +451,11 @@ Views.video = function (mount) {
   };
   mount.querySelector('#streamUrl').addEventListener('keydown', e => { if (e.key === 'Enter') mount.querySelector('#loadStream').click(); });
 
-  mount.querySelector('#vfile').onchange = e => {
+  // Both copies of the control open the same file: the one in the page head and
+  // the one in the panel, which is the only one still on screen in fullscreen.
+  mount.querySelectorAll('[data-vfile]').forEach(inp => inp.onchange = e => {
     const f = e.target.files[0];
+    e.target.value = '';
     if (!f) return;
     showLocalVideo();
     v.src = URL.createObjectURL(f);
@@ -458,7 +463,7 @@ Views.video = function (mount) {
     // rather than inside showLocalVideo, which runs one line too early.
     setDrawMode(drawMode);
     UI.toast(T('video.streaming'));
-  };
+  });
 
   function bindLocalControls() {
     mount.querySelectorAll('[data-seek]').forEach(b => b.onclick = () => {
@@ -506,6 +511,19 @@ Views.video = function (mount) {
   // one at the playhead so the tools work on a video you just opened.
   let overlay = null, octx = null, drawing = null, sizeWatch = null, moving = null;
 
+  // A drawing is a pointer, not a permanent mark: once the picture is running it
+  // has said what it had to say, so it clears itself after a few seconds instead
+  // of covering the play. Pausing, seeking or drawing again brings it back.
+  const DRAW_HOLD = 3;
+  let drawTimer = null, drawFaded = false;
+  const isPlaying = () => hasLocalVideo() ? !v.paused : streamRun;
+  function holdDrawing(playing) {
+    if (drawTimer) { clearTimeout(drawTimer); drawTimer = null; }
+    drawFaded = false;
+    if (playing) drawTimer = setTimeout(() => { drawFaded = true; renderOverlay(); }, DRAW_HOLD * 1000);
+    renderOverlay();
+  }
+
   function mountOverlay() {
     overlay = document.createElement('canvas');
     overlay.className = 'draw-layer';
@@ -519,7 +537,9 @@ Views.video = function (mount) {
     overlay.addEventListener('pointercancel', onDrawUp);
     if (v) {
       v.addEventListener('loadedmetadata', sizeOverlay);
-      v.addEventListener('seeked', renderOverlay);
+      v.addEventListener('seeked', () => holdDrawing(!v.paused));
+      v.addEventListener('play', () => holdDrawing(true));
+      v.addEventListener('pause', () => holdDrawing(false));
       v.addEventListener('timeupdate', onRangeTick);
     }
     // The element resizes with the size picker, the accordion and fullscreen;
@@ -577,14 +597,16 @@ Views.video = function (mount) {
             : T('video.drawNew');
       hint.textContent = base + (drawMode && hasEmbed() ? ' ' + T('video.drawStream') : '');
     }
+    const save = mount.querySelector('#drawSave');
+    if (save) save.disabled = !((bm && bm.shapes) || []).length;
     if (!overlay || !octx) return;
     octx.setTransform(1, 0, 0, 1, 0, 0);
     octx.clearRect(0, 0, overlay.width, overlay.height);
-    if (bm) drawShapes(octx, overlay.width, overlay.height, bm);
+    if (bm && !drawFaded) drawShapes(octx, overlay.width, overlay.height, bm);
     if (drawing) drawShapes(octx, overlay.width, overlay.height, { shapes: [drawing] });
     // A shape the coach marked with Select is ringed, so Move and Remove act on
     // something they can see they picked.
-    if (bm && selShape >= 0 && bm.shapes && bm.shapes[selShape]) drawSelection(octx, overlay.width, overlay.height, bm.shapes[selShape]);
+    if (bm && !drawFaded && selShape >= 0 && bm.shapes && bm.shapes[selShape]) drawSelection(octx, overlay.width, overlay.height, bm.shapes[selShape]);
     // Armed is what makes the canvas accept a pointer at all, so it follows the
     // mode and not whether a bookmark happens to be selected.
     overlay.classList.toggle('armed', drawMode && hasMedia());
@@ -760,7 +782,7 @@ Views.video = function (mount) {
       moving = null;
       await saveBookmarks();
       renderBm();
-      renderOverlay();
+      holdDrawing(isPlaying());
       return;
     }
     if (!drawing) return;
@@ -774,7 +796,51 @@ Views.video = function (mount) {
       await saveBookmarks();
       renderBm();
     }
-    renderOverlay();
+    holdDrawing(isPlaying());
+  }
+
+  // A stroke drawn with no bookmark picked makes one of its own, which is not
+  // always the one the coach meant. This moves the drawing onto the bookmark
+  // they choose and clears away the stand-in it left behind.
+  function saveDrawing() {
+    const from = drawTarget();
+    const shapes = (from && from.shapes) || [];
+    if (!shapes.length) return UI.toast(T('video.drawNothing'), 'error');
+    if (bookmarks.length < 2) return commitDrawing(from, from);
+    UI.modal({
+      title: T('video.drawSave'),
+      width: 460,
+      body: `<p class="hint">${T('video.drawSaveHint')}</p>
+        <label class="field"><span>${T('video.bookmarks')}</span>
+          <select id="dsb">${bookmarks.map((b, i) =>
+    `<option value="${i}"${b === from ? ' selected' : ''}>${UI.esc(fmtRange(b))} \u00b7 ${UI.esc(b.tag || '')}${(b.shapes || []).length ? ' \u270e' + b.shapes.length : ''}</option>`).join('')}</select></label>`,
+      footer: `<button class="btn ghost" data-close2>${T('common.cancel')}</button><button class="btn primary" data-save>${T('common.save')}</button>`,
+      onOpen: (m, close) => {
+        m.querySelector('[data-close2]').onclick = close;
+        m.querySelector('[data-save]').onclick = async () => {
+          const to = bookmarks[+m.querySelector('#dsb').value] || from;
+          close();
+          await commitDrawing(from, to);
+        };
+      }
+    });
+  }
+  async function commitDrawing(from, to) {
+    if (to !== from) {
+      to.shapes = (to.shapes || []).concat(from.shapes);
+      from.shapes = [];
+      // The stand-in the stroke made is only worth keeping if it says something.
+      if (!from.comment && from.tag === T('video.tagDefault')) {
+        const i = bookmarks.indexOf(from);
+        if (i >= 0) bookmarks.splice(i, 1);
+      }
+      selectedBm = to;
+      selShape = -1;
+    }
+    await saveBookmarks();
+    renderBm();
+    holdDrawing(isPlaying());
+    UI.toast(T('video.drawSaved') + ' ' + fmtRange(to) + ' ' + (to.tag || ''), 'success');
   }
 
   function bindDrawBar() {
@@ -787,6 +853,7 @@ Views.video = function (mount) {
     bar.querySelectorAll('[data-dtool]').forEach(b => b.onclick = () => { dTool = b.dataset.dtool; selShape = -1; sync(); setDrawMode(true); });
     bar.querySelectorAll('[data-dcolor]').forEach(b => b.onclick = () => { dColor = b.dataset.dcolor; sync(); });
     mount.querySelector('#drawMode').onclick = () => setDrawMode(!drawMode);
+    mount.querySelector('#drawSave').onclick = () => saveDrawing();
     mount.querySelector('#drawUndo').onclick = async () => {
       const bm = drawTarget();
       if (!bm || !(bm.shapes || []).length) return;
@@ -874,6 +941,7 @@ Views.video = function (mount) {
   function runClock(on) {
     streamRun = !!on;
     if (streamTick) { clearInterval(streamTick); streamTick = null; }
+    holdDrawing(streamRun);
     if (streamRun) {
       streamFrom = Date.now() - streamT * 1000;
       streamTick = setInterval(() => {
