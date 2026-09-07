@@ -135,7 +135,9 @@ Views.video = function (mount) {
       <div class="row" style="flex:0">
         <input id="streamUrl" type="url" placeholder="https://youtube.com/watch?v=… , twitch.tv/… , vimeo.com/…" style="min-width:260px">
         <button class="btn primary" id="loadStream">${T('video.watch')}</button>
+        <button class="btn" id="saveStream">★ ${T('video.saveStream')}</button>
       </div>
+      <div class="saved-streams" id="savedStreams"></div>
       <div class="stream-services">
         <span class="tag">YouTube</span><span class="tag">Twitch</span><span class="tag">Vimeo</span>
         <span class="tag">Dailymotion</span><span class="tag">Facebook</span>
@@ -359,19 +361,91 @@ Views.video = function (mount) {
     return canAim();
   }
 
-  mount.querySelector('#loadStream').onclick = () => {
-    const src = toEmbed(mount.querySelector('#streamUrl').value);
-    if (!src) { UI.toast(T('video.badUrl'), 'error'); return; }
-    // A plain media file plays in the real element, so it gets every tool an
-    // imported file has — the iframe is only for players we cannot reach into.
-    if (FILE_RE.test(src)) {
-      showLocalVideo();
-      v.src = src;
-      setDrawMode(drawMode);
-    } else {
-      showEmbed(src);
-    }
+  // ---- Saved streams ------------------------------------------------------
+  // The link to a match feed is long and comes from somewhere else entirely, so
+  // the ones a coach comes back to are kept in a list under the field.
+  const STREAM_KEY = 'stx_streams';
+  const MAX_STREAMS = 40;
+  function savedStreams() {
+    try {
+      const v = JSON.parse(localStorage.getItem(STREAM_KEY) || '[]');
+      return Array.isArray(v) ? v.filter(s => s && s.url) : [];
+    } catch (e) { return []; }
+  }
+  function writeStreams(list) {
+    try { localStorage.setItem(STREAM_KEY, JSON.stringify(list.slice(0, MAX_STREAMS))); } catch (e) { /* private mode */ }
+  }
+  // A readable name for a link nobody wants to read: the video id or the host.
+  function streamLabel(url) {
+    try {
+      const u = new URL(url);
+      const id = u.searchParams.get('v') || u.pathname.split('/').filter(Boolean).pop() || '';
+      return (u.hostname.replace(/^www\./, '') + (id ? ' · ' + id : '')).slice(0, 60);
+    } catch (e) { return String(url).slice(0, 60); }
+  }
+  function openStream(url) {
+    const src = toEmbed(url);
+    if (!src) { UI.toast(T('video.badUrl'), 'error'); return false; }
+    if (FILE_RE.test(src)) { showLocalVideo(); v.src = src; setDrawMode(drawMode); }
+    else showEmbed(src);
+    const box = mount.querySelector('#streamUrl');
+    if (box) box.value = url;
     UI.toast(T('video.streaming'), 'success');
+    return true;
+  }
+  function renderStreams() {
+    const host = mount.querySelector('#savedStreams');
+    if (!host) return;
+    const list = savedStreams();
+    host.innerHTML = list.length ? list.map((s, i) => `
+      <span class="saved-stream">
+        <button type="button" class="btn sm" data-open="${i}" title="${UI.esc(s.url)}">\u25b6 ${UI.esc(s.name || streamLabel(s.url))}</button>
+        <button type="button" class="btn sm danger" data-drop="${i}" title="${UI.esc(T('common.remove'))}">\u2715</button>
+      </span>`).join('') : `<p class="hint" style="margin:0">${UI.esc(T('video.streamsNone'))}</p>`;
+    host.querySelectorAll('[data-open]').forEach(b => b.onclick = () => {
+      const s = savedStreams()[+b.dataset.open];
+      if (s) openStream(s.url);
+    });
+    host.querySelectorAll('[data-drop]').forEach(b => b.onclick = () => {
+      const list2 = savedStreams();
+      list2.splice(+b.dataset.drop, 1);
+      writeStreams(list2);
+      renderStreams();
+    });
+  }
+  function saveStream() {
+    const raw = (mount.querySelector('#streamUrl').value || '').trim();
+    if (!raw || !toEmbed(raw)) { UI.toast(T('video.badUrl'), 'error'); return; }
+    const list = savedStreams();
+    if (list.some(s => s.url === raw)) { UI.toast(T('video.streamSaved')); return; }
+    UI.modal({
+      title: T('video.saveStream'),
+      body: `<label class="field"><span>${T('video.streamName')}</span>
+        <input id="st_name" maxlength="60" value="${UI.esc(streamLabel(raw))}"></label>
+        <p class="hint">${UI.esc(raw)}</p>`,
+      footer: `<button class="btn ghost" data-close2>${T('common.cancel')}</button>
+        <button class="btn primary" data-save>${T('common.save')}</button>`,
+      onOpen: (m, close) => {
+        const inp = m.querySelector('#st_name');
+        inp.focus(); inp.select();
+        const save = () => {
+          list.unshift({ url: raw, name: inp.value.trim().slice(0, 60) || streamLabel(raw), at: Date.now() });
+          writeStreams(list);
+          close();
+          renderStreams();
+          UI.toast(T('video.streamSaved'), 'success');
+        };
+        inp.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); save(); } };
+        m.querySelector('[data-close2]').onclick = close;
+        m.querySelector('[data-save]').onclick = save;
+      }
+    });
+  }
+  mount.querySelector('#saveStream').onclick = saveStream;
+  renderStreams();
+
+  mount.querySelector('#loadStream').onclick = () => {
+    openStream(mount.querySelector('#streamUrl').value);
   };
   mount.querySelector('#streamUrl').addEventListener('keydown', e => { if (e.key === 'Enter') mount.querySelector('#loadStream').click(); });
 
@@ -1174,6 +1248,11 @@ Views.video = function (mount) {
   }
   async function recordShare(secs, formats, bm) {
     const stream = await ensureShare();
+    // Our own overlay is on screen too, so the capture would pick the drawing up
+    // a second time and the armed border with it. It goes dark for the take; the
+    // compositor below is what burns the shapes in.
+    const hidden = overlay ? overlay.style.visibility : '';
+    if (overlay) overlay.style.visibility = 'hidden';
     const src = document.createElement('video');
     src.srcObject = stream; src.muted = true; src.playsInline = true;
     try { await src.play(); } catch (e) { /* metadata first on some engines */ }
@@ -1224,7 +1303,11 @@ Views.video = function (mount) {
           else { r.done = true; finish(); }
         }), Math.round(secs * 1000));
       });
-    } finally { clearInterval(timer); src.srcObject = null; }
+    } finally {
+      clearInterval(timer);
+      src.srcObject = null;
+      if (overlay) overlay.style.visibility = hidden;
+    }
     return out;
   }
   // Play each passage in the streamed player and record it off the screen.
@@ -1237,7 +1320,9 @@ Views.video = function (mount) {
       const secs = Math.max(1, Math.min(120, bmEnd(b) - from));
       // No end is given to the player: the recorder decides how long the clip is.
       aimStream(from, null, true);
-      await wait(1500);
+      // Long enough for the seek to land and for the player to hide its own
+      // controls, which it does once the pointer is off it.
+      await wait(3200);
       let outs = null;
       try { outs = await recordShare(secs, formats, b); }
       catch (e) { UI.toast(T('video.shareStopped'), 'error'); break; }

@@ -267,9 +267,9 @@ const PlayerFile = (() => {
   }
 
   // ---- Google Drive: one JSON per player in a Players folder ---------------
-  // SportTactic / <squad> / Players / <Player Name>.json. The coach owns the
-  // folder and shares each file with the player it belongs to, so the player's
-  // copy reaches its own file and nobody else's.
+  // SportTactic / <squad> / Players / <Player Name>.json. Whichever end writes
+  // first makes the file and shares it with the other, so a player can post
+  // before the coach has ever opened Drive and the coach still gets it.
   const DRIVE_DIR = 'Players';
   const driveOn = () => !!(window.Drive && Drive.isConnected && Drive.isConnected());
   const safeName = s => String(s || '').replace(/[/\\?%*:|"<>]+/g, '-').trim();
@@ -282,38 +282,52 @@ const PlayerFile = (() => {
     updatedAt: Date.now(), messages: messages
   });
 
-  async function playersFolder(create) {
+  // The squad's Players folder as this account can build it. ensureFolder finds
+  // an existing one, so the coach lands on theirs and a player on their own.
+  // The team folder id in settings is deliberately not written here: it belongs
+  // to the coach's cloud setup and a player copy must not overwrite it.
+  async function ownFolder() {
+    const root = await Drive.ensureFolder('SportTactic', null);
+    const t = Store.activeTeam();
+    const team = await Drive.ensureFolder(safeName(t && t.name) || 'Team', root);
+    return await Drive.ensureFolder(DRIVE_DIR, team);
+  }
+  async function knownFolder() {
     let team = '';
     try { team = await Drive.getTeamFolderId(); } catch (e) { team = ''; }
     if (!team && window.TeamCloud && TeamCloud.cfg) team = TeamCloud.cfg().folderId || '';
-    if (!team) {
-      if (!create) return '';
-      const t = Store.activeTeam();
-      team = await Drive.ensureTeamFolder(safeName(t && t.name) || 'Team');
-    }
-    if (create) return await Drive.ensureFolder(DRIVE_DIR, team);
-    const hit = await Drive.findFolder(DRIVE_DIR, team);
-    return (hit && hit.id) || '';
+    if (!team) return '';
+    try { const hit = await Drive.findFolder(DRIVE_DIR, team); return (hit && hit.id) || ''; }
+    catch (e) { return ''; }
+  }
+  // The other end, so the file it does not own is still reachable to it.
+  function shareTargets(player) {
+    const norm = e => (window.MAIL && MAIL.normEmail) ? MAIL.normEmail(e) : String(e || '').trim();
+    const out = [];
+    if (side(player) === 'player') (Store.coaches() || []).forEach(c => { const e = norm(c.email); if (e) out.push(e); });
+    else { const e = norm(player.email); if (e) out.push(e); }
+    return out.slice(0, 5);
   }
 
-  // The file in the coach's own folder, or — on a player copy, which cannot see
-  // that folder — the one the coach shared with this Google account.
+  // The file in the squad folder, the one shared with this account, or a new one.
   async function driveFile(player, create) {
     const name = driveName(player);
-    const folder = await playersFolder(create);
-    if (folder) {
-      const hit = await Drive.findFile(name, folder);
+    const known = await knownFolder();
+    if (known) {
+      const hit = await Drive.findFile(name, known);
       if (hit) return hit.id;
-      if (create) {
-        const res = await Drive.uploadJson(name, driveDoc(player, get(player.id), []), { parent: folder });
-        if (res && res.id && player.email) {
-          try { await Drive.shareWith(res.id, player.email, 'writer'); } catch (e) { /* invite can be sent later */ }
-        }
-        return (res && res.id) || '';
-      }
     }
     const shared = await Drive.listFiles("name='" + qEsc(name) + "' and sharedWithMe = true and trashed=false");
-    return (shared && shared[0] && shared[0].id) || '';
+    if (shared && shared[0]) return shared[0].id;
+    if (!create) return '';
+    const res = await Drive.uploadJson(name, driveDoc(player, get(player.id), []), { parent: await ownFolder() });
+    const id = (res && res.id) || '';
+    if (id) {
+      for (const to of shareTargets(player)) {
+        try { await Drive.shareWith(id, to, 'writer'); } catch (e) { /* the invite can be sent later */ }
+      }
+    }
+    return id;
   }
 
   // Read what is on Drive, add whatever this copy has not seen, write the whole
@@ -324,10 +338,8 @@ const PlayerFile = (() => {
     if (!driveOn()) return { ok: false, why: 'off' };
     const local = get(player.id) || await ensure(player);
     if (!local) return { ok: false, why: 'nofile' };
-    // Only a staff copy builds the folder; a player copy uses the shared file.
-    const staff = !(window.Access && Access.readMode && Access.readMode());
     let fileId = '';
-    try { fileId = await driveFile(player, staff); } catch (e) { return { ok: false, why: 'net' }; }
+    try { fileId = await driveFile(player, true); } catch (e) { return { ok: false, why: 'net' }; }
     if (!fileId) return { ok: false, why: 'nofile' };
     let remote = null;
     try { remote = await Drive.downloadJson(fileId); } catch (e) { remote = null; }
