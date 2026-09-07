@@ -475,7 +475,13 @@ const TeamCloud = (() => {
     }
     if (Array.isArray(doc.data.settings)) {
       const theirs = Store.unpack(doc.data.settings).filter(r => r && SHARED_SETTINGS.indexOf(r.id) >= 0);
-      const mine = (await DB.getAll('settings')).filter(r => SHARED_SETTINGS.indexOf(r.id) >= 0);
+      let mine = (await DB.getAll('settings')).filter(r => SHARED_SETTINGS.indexOf(r.id) >= 0);
+      // On a joined copy the owner's role-key hashes are authoritative. A key
+      // set left by another club (or an older join) must never win merely
+      // because its local IndexedDB timestamp is newer than the shared row.
+      if (!cfg().owner && theirs.some(r => r.id === 'roleKeys')) {
+        mine = mine.filter(r => r.id !== 'roleKeys');
+      }
       const rows = replace ? theirs : mergeRows(mine, theirs);
       if (rows.length) { await DB.bulkPut('settings', rows); n += replace ? theirs.length : countNew(mine, theirs); }
     }
@@ -810,8 +816,16 @@ const TeamCloud = (() => {
     }
     await setCfg({ fileId: t.fileId, apiKey: t.apiKey || cfg().apiKey, teamName: t.teamName || cfg().teamName, owner: false });
     const n = await pull('merge');
+    // The team code may contain a newer key set than the shared file (for
+    // example immediately after a coach regenerated keys). Adopt that set
+    // after pulling so stale Drive data cannot make a valid word fail.
+    if (t.roleKeys && window.Access) {
+      const current = Access.roleKeys();
+      if (!current || String(current.set || '') !== String(t.roleKeys.set || '')) {
+        await Access.adoptRoleKeys(t.roleKeys);
+      }
+    }
     if (!cfg().autoMin) await setAuto(MEMBER_AUTO_MIN);
-    if (t.roleKeys && window.Access && !Access.roleKeys()) await Access.adoptRoleKeys(t.roleKeys);
     return n;
   }
 
