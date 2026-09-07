@@ -194,6 +194,11 @@ Views.tactics = function (mount, params) {
             ${BOARD_COLORS.map(c => `<div class="tool-btn" data-color="${c}" style="background:${c};min-width:30px;height:30px"></div>`).join('')}
           </div>
           <button class="btn sm danger" id="clearShapes" style="margin-top:8px">${T('tactics.eraseTools')}</button>
+          <div id="rosterWrap" class="hidden" style="margin-top:12px">
+            <h3 style="margin:0 0 6px">${T('tactics.rosterTitle')}</h3>
+            <div class="roster-list" id="rosterList"></div>
+            <p class="hint">${T('tactics.rosterHint')}</p>
+          </div>
           <div id="courtSizeWrap" style="margin-top:12px">
             <h3 style="margin:0 0 6px">${T('tactics.courtSize')}</h3>
             <select id="courtSizeSel">
@@ -239,7 +244,6 @@ Views.tactics = function (mount, params) {
               <button class="btn sm" id="animLoad" disabled>↺ ${T('tactics.animLoad')}</button>
               <button class="btn sm" id="animEdit" disabled title="${T('tactics.animEdit')}">✎</button>
               <button class="btn sm" id="animShare" disabled title="${T('tactics.animShare')}">📤</button>
-              <button class="btn sm" id="animVideo" disabled title="${T('tactics.animPlayVideo')}">▶</button>
               <button class="btn sm danger" id="animDel" disabled title="${T('common.delete')}">✕</button>
             </div>
             <button class="btn sm" id="animSend" disabled title="${T('tactics.animSendHint')}">👥 ${T('tactics.animSend')}</button>
@@ -628,6 +632,7 @@ Views.tactics = function (mount, params) {
     updateKeeperToggle();
     updateRotControls();
     updateNameTools();
+    renderRoster();
   }
 
   // Show/refresh the "Keeper active" toggle only when a goalkeeper is on the board.
@@ -1178,6 +1183,47 @@ Views.tactics = function (mount, params) {
     naming = false; nameSig = null; updateNameTools(); draw();
   }
   function cancelNaming() { naming = false; nameSig = null; updateNameTools(); }
+
+  // ---- Roster: one name field per player, in the tool panel ----
+  // Typing a whole squad through the Add name button means selecting every disc
+  // first; this lists them all with a text field each instead.
+  let rosterSig = null;
+  function rosterPlayers() {
+    return frame().objects.filter(o => o.kind === 'player' || o.kind === 'gk');
+  }
+  function renderRoster() {
+    const wrap = mount.querySelector('#rosterWrap');
+    const box = mount.querySelector('#rosterList');
+    if (!wrap || !box) return;
+    const list = rosterPlayers();
+    wrap.classList.toggle('hidden', !list.length);
+    const sig = list.map(o => [o.id, o.label, o.name || '', o.team || o.kind].join(':')).join('|');
+    if (sig === rosterSig) return;
+    // draw() runs on every drag frame — never rebuild the field being typed in.
+    if (box.contains(document.activeElement)) return;
+    rosterSig = sig;
+    box.innerHTML = list.map(o => `
+      <label class="roster-row">
+        <span class="roster-dot ${o.kind === 'gk' ? 'gk' : (o.team === 'atk' ? 'atk' : 'def')}">${UI.esc(o.label)}</span>
+        <input type="text" maxlength="24" autocomplete="off" data-roster="${UI.esc(o.id)}"
+          value="${UI.esc(o.name || '')}" placeholder="${T('tactics.namePlaceholder')}">
+      </label>`).join('');
+    box.querySelectorAll('[data-roster]').forEach(inp => {
+      let step = false;                                  // one undo step per visit, not per keystroke
+      inp.onfocus = () => { step = false; };
+      inp.oninput = () => {
+        const o = rosterPlayers().find(p => String(p.id) === inp.dataset.roster);
+        if (!o) return;
+        if (!step) { step = true; pushHistory(); }
+        const v = inp.value.trim();
+        if (v) o.name = v; else delete o.name;
+        draw();
+        scheduleAutosave();
+      };
+      inp.onchange = () => { step = false; if (autoRec) captureAutoFrame(); };
+      inp.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); inp.blur(); } };
+    });
+  }
 
   // A quick tap in select mode. With a player already marked and a ball on the
   // court: tapping the goal shoots on goal, and tapping a player who isn't
@@ -1865,7 +1911,6 @@ Views.tactics = function (mount, params) {
     mount.querySelector('#animDel').disabled = !id;
     mount.querySelector('#animShare').disabled = !id;
     mount.querySelector('#animSend').disabled = !id;
-    mount.querySelector('#animVideo').disabled = !(opt && opt.dataset.vid);
     const all = mount.querySelector('#animPlayAll');
     if (all) all.disabled = !userSystems().length;
     updatePlayAllBtn();
@@ -1940,7 +1985,6 @@ Views.tactics = function (mount, params) {
     mount.querySelector('#animPlayAll').onclick = playAllAnims;
     mount.querySelector('#animSend').onclick = () => { if (sel()) sendToTeam(sel()); };
     mount.querySelector('#animEdit').onclick = () => { if (sel()) editSystem(sel()); };
-    mount.querySelector('#animVideo').onclick = () => { if (sel()) playSystemVideo(sel()); };
     mount.querySelector('#animShare').onclick = () => { if (sel()) shareSystem(sel()); };
     mount.querySelector('#animGroupBtn').onclick = groupDialog;
     mount.querySelector('#animDel').onclick = () => {

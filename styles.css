@@ -747,6 +747,16 @@ body.board-fs { overflow: hidden; }
 .name-bar { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px; margin-top: 10px; width: 100%; }
 .name-bar #playerNameInput { width: 180px; max-width: 60%; }
 .name-bar .hint { margin: 0; }
+/* Roster: a name field per player, listed in the tool panel */
+.roster-list { display: flex; flex-direction: column; gap: 6px; max-height: 260px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+.roster-list::-webkit-scrollbar { width: 8px; }
+.roster-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 8px; }
+.roster-row { display: flex; align-items: center; gap: 6px; }
+.roster-row input { flex: 1; min-width: 0; padding: 6px 8px; font-size: 12px; }
+.roster-dot { flex: 0 0 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: #fff; border: 1px solid rgba(255,255,255,.85); }
+.roster-dot.atk { background: #0a84ff; }
+.roster-dot.def { background: #ff3b30; }
+.roster-dot.gk { background: #f59e0b; }
 /* Frames strip: a scrollable panel holding every frame in a single row */
 .timeline { margin-top: 12px; width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); }
 .tl-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
@@ -1139,6 +1149,8 @@ td.col-num .cell, td.col-h .cell, td.col-w .cell { max-width: 92px; }
 #mediaWrap .embed-frame { margin: 0 auto; }
 .video-head .vsize { max-width: 130px; margin: 0; }
 .mark-group { display: inline-flex; gap: 6px; align-items: center; }
+#clockGroup { display: inline-flex; gap: 6px; align-items: center; }
+.clock-input { width: 76px; padding: 6px 8px; font-size: 12px; text-align: center; }
 .draw-layer { position: absolute; left: 0; top: 0; pointer-events: none; touch-action: none; border-radius: 10px; }
 .draw-layer.armed { pointer-events: auto; cursor: crosshair; box-shadow: inset 0 0 0 2px var(--accent); }
 .draw-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 10px; }

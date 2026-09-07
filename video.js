@@ -16,6 +16,7 @@ Views.video = function (mount) {
   }
 
   // Convert a shareable streaming URL into an embeddable iframe URL.
+  const FILE_RE = /\.(mp4|m4v|webm|ogv|ogg|mov)(\?|#|$)/i;
   function toEmbed(url) {
     url = (url || '').trim();
     if (!url) return null;
@@ -168,14 +169,19 @@ Views.video = function (mount) {
       </div>
       <p class="hint" id="drawHint"></p>
       <div class="row" style="margin-top:10px;flex:0;flex-wrap:wrap" id="localControls">
-        <button class="btn sm local-only" data-seek="-5">« 5s</button>
+        <button class="btn sm" data-seek="-5">« 5s</button>
         <button class="btn sm local-only" data-rate="0.5">0.5×</button>
         <button class="btn sm local-only" data-rate="1">1×</button>
         <button class="btn sm local-only" data-rate="2">2×</button>
-        <button class="btn sm local-only" data-seek="5">5s »</button>
+        <button class="btn sm" data-seek="5">5s »</button>
+        <span class="tool-group stream-only" id="clockGroup" title="${T('video.clockHint')}">
+          <button class="btn sm" id="clockRun">▶ ${T('video.clock')}</button>
+          <input id="clockTime" class="clock-input" value="0:00" placeholder="mm:ss">
+          <button class="btn sm" id="clockReset" title="${T('video.clockReset')}">↺</button>
+        </span>
         <span class="tool-group mark-group">
-          <button class="btn sm local-only" id="markIn">⌘ ${T('video.markIn')}</button>
-          <button class="btn sm local-only" id="markOut">⌙ ${T('video.markOut')}</button>
+          <button class="btn sm" id="markIn">⌘ ${T('video.markIn')}</button>
+          <button class="btn sm" id="markOut">⌙ ${T('video.markOut')}</button>
           <span class="tag" id="markState"></span>
         </span>
         <button class="btn sm primary" id="bm">★ ${T('video.bookmark')}</button>
@@ -210,16 +216,20 @@ Views.video = function (mount) {
   const localControls = mount.querySelector('#localControls');
   let v = mount.querySelector('#player');
 
-  // Seek/speed need a real <video>; bookmarking stays available for streams too.
+  // Seek/speed need a real <video>; a stream is driven by the clock instead.
   function showPlaybackBtns(on) {
     localControls.querySelectorAll('.local-only').forEach(b => { b.style.display = on ? '' : 'none'; });
+    localControls.querySelectorAll('.stream-only').forEach(b => { b.style.display = on ? 'none' : ''; });
   }
   function hasLocalVideo() { return !!(v && v.src && v.isConnected); }
+  function hasEmbed() { return !!wrap.querySelector('.embed-frame'); }
+  function hasMedia() { return hasLocalVideo() || hasEmbed(); }
 
   function showLocalVideo() {
     wrap.innerHTML = `<video id="player" class="v-media" controls></video>`;
     v = mount.querySelector('#player');
     showPlaybackBtns(true);
+    runClock(false);
     bindLocalControls();
     mountOverlay();
   }
@@ -229,13 +239,24 @@ Views.video = function (mount) {
     overlay = null; octx = null;
     if (sizeWatch) { sizeWatch.disconnect(); sizeWatch = null; }
     showPlaybackBtns(false);
-    setDrawMode(false);
+    mountOverlay();
+    setDrawMode(drawMode);
+    runClock(false);
+    setStreamTime(0);
   }
 
   mount.querySelector('#loadStream').onclick = () => {
     const src = toEmbed(mount.querySelector('#streamUrl').value);
     if (!src) { UI.toast(T('video.badUrl'), 'error'); return; }
-    showEmbed(src);
+    // A plain media file plays in the real element, so it gets every tool an
+    // imported file has — the iframe is only for players we cannot reach into.
+    if (FILE_RE.test(src)) {
+      showLocalVideo();
+      v.src = src;
+      setDrawMode(drawMode);
+    } else {
+      showEmbed(src);
+    }
     UI.toast(T('video.streaming'), 'success');
   };
   mount.querySelector('#streamUrl').addEventListener('keydown', e => { if (e.key === 'Enter') mount.querySelector('#loadStream').click(); });
@@ -252,19 +273,31 @@ Views.video = function (mount) {
   };
 
   function bindLocalControls() {
-    mount.querySelectorAll('[data-seek]').forEach(b => b.onclick = () => { if (v) v.currentTime += +b.dataset.seek; });
+    mount.querySelectorAll('[data-seek]').forEach(b => b.onclick = () => {
+      if (hasLocalVideo()) v.currentTime += +b.dataset.seek;
+      else setStreamTime(streamT + (+b.dataset.seek));       // nudges the clock back into sync
+    });
     mount.querySelectorAll('[data-rate]').forEach(b => b.onclick = () => { if (v) v.playbackRate = +b.dataset.rate; });
     mount.querySelector('#bm').onclick = () => createBookmark();
+    const clockRun = mount.querySelector('#clockRun');
+    if (clockRun) clockRun.onclick = () => runClock(!streamRun);
+    const clockReset = mount.querySelector('#clockReset');
+    if (clockReset) clockReset.onclick = () => { playUntil = null; runClock(false); setStreamTime(0); };
+    const clockTime = mount.querySelector('#clockTime');
+    if (clockTime) {
+      clockTime.onchange = () => setStreamTime(parseClock(clockTime.value));
+      clockTime.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); clockTime.blur(); } };
+    }
     mount.querySelector('#markIn').onclick = () => {
-      if (!hasLocalVideo()) return UI.toast(T('video.needLocal'), 'error');
-      inPoint = v.currentTime || 0;
+      if (!hasMedia()) return UI.toast(T('video.needMedia'), 'error');
+      inPoint = playhead();
       if (outPoint != null && outPoint <= inPoint) outPoint = null;
       renderMarks();
       UI.toast(T('video.markedIn') + ' ' + UI.fmtClock(Math.floor(inPoint)));
     };
     mount.querySelector('#markOut').onclick = () => {
-      if (!hasLocalVideo()) return UI.toast(T('video.needLocal'), 'error');
-      outPoint = v.currentTime || 0;
+      if (!hasMedia()) return UI.toast(T('video.needMedia'), 'error');
+      outPoint = playhead();
       if (inPoint == null || inPoint >= outPoint) inPoint = Math.max(0, outPoint - clipLenSec);
       renderMarks();
       // Both ends are known now, so the dialog opens with the passage already
@@ -272,6 +305,7 @@ Views.video = function (mount) {
       createBookmark();
     };
     renderMarks();
+    paintClock();
   }
 
   // ---- The drawing overlay -----------------------------------------------
@@ -295,13 +329,14 @@ Views.video = function (mount) {
       v.addEventListener('loadedmetadata', sizeOverlay);
       v.addEventListener('seeked', renderOverlay);
       v.addEventListener('timeupdate', onRangeTick);
-      // The element resizes with the size picker, the accordion and fullscreen;
-      // without this the overlay stays where the picture used to be.
-      if (window.ResizeObserver) {
-        if (sizeWatch) sizeWatch.disconnect();
-        sizeWatch = new ResizeObserver(() => sizeOverlay());
-        sizeWatch.observe(v);
-      }
+    }
+    // The element resizes with the size picker, the accordion and fullscreen;
+    // without this the overlay stays where the picture used to be.
+    const media = v || wrap.querySelector('.embed-frame');
+    if (media && window.ResizeObserver) {
+      if (sizeWatch) sizeWatch.disconnect();
+      sizeWatch = new ResizeObserver(() => sizeOverlay());
+      sizeWatch.observe(media);
     }
     sizeOverlay();
   }
@@ -310,16 +345,23 @@ Views.video = function (mount) {
   // inside the wrapper, so the overlay is pinned with both offsets rather than
   // to the top-left of the box around it.
   function videoBox() {
-    if (!v) return null;
-    const r = v.getBoundingClientRect();
     const wr = wrap.getBoundingClientRect();
+    // A stream has no element we can measure the picture inside, so the whole
+    // frame is the drawing surface.
+    if (!v) {
+      const f = wrap.querySelector('.embed-frame');
+      if (!f) return null;
+      const fr = f.getBoundingClientRect();
+      return { left: fr.left - wr.left, top: fr.top - wr.top, w: fr.width, h: fr.height };
+    }
+    const r = v.getBoundingClientRect();
     const vw = v.videoWidth || 16, vh = v.videoHeight || 9;
     const scale = Math.min(r.width / vw, r.height / vh) || 0;
     const w = vw * scale, h = vh * scale;
     return { left: (r.left - wr.left) + (r.width - w) / 2, top: (r.top - wr.top) + (r.height - h) / 2, w, h };
   }
   function sizeOverlay() {
-    if (!overlay || !v) return;
+    if (!overlay) return;
     const b = videoBox();
     if (!b || !b.w || !b.h) return;
     const dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -337,10 +379,11 @@ Views.video = function (mount) {
     // replaces “drawing is on” with the reason it no longer is.
     const hint = mount.querySelector('#drawHint');
     if (hint) {
-      hint.textContent = !hasLocalVideo() ? T('video.drawNeedLocal')
+      const base = !hasMedia() ? T('video.drawNeedMedia')
         : !drawMode ? T('video.drawOff')
           : bm ? T('video.drawOn') + ' ' + fmtRange(bm) + ' ' + (bm.tag || '')
             : T('video.drawNew');
+      hint.textContent = base + (drawMode && hasEmbed() ? ' ' + T('video.drawStream') : '');
     }
     if (!overlay || !octx) return;
     octx.setTransform(1, 0, 0, 1, 0, 0);
@@ -349,16 +392,16 @@ Views.video = function (mount) {
     if (drawing) drawShapes(octx, overlay.width, overlay.height, { shapes: [drawing] });
     // Armed is what makes the canvas accept a pointer at all, so it follows the
     // mode and not whether a bookmark happens to be selected.
-    overlay.classList.toggle('armed', drawMode && hasLocalVideo());
+    overlay.classList.toggle('armed', drawMode && hasMedia());
   }
   const drawTarget = () => (selectedBm && bookmarks.indexOf(selectedBm) >= 0) ? selectedBm : null;
 
   function setDrawMode(on) {
-    drawMode = !!on && hasLocalVideo();
+    drawMode = !!on && hasMedia();
     const btn = mount.querySelector('#drawMode');
     if (btn) {
       btn.classList.toggle('primary', drawMode);
-      btn.disabled = !hasLocalVideo();
+      btn.disabled = !hasMedia();
     }
     const bar = mount.querySelector('#drawBar');
     if (bar) bar.classList.toggle('drawing', drawMode);
@@ -371,7 +414,7 @@ Views.video = function (mount) {
   async function ensureDrawTarget() {
     let bm = drawTarget();
     if (bm) return bm;
-    const t = hasLocalVideo() ? (v.currentTime || 0) : 0;
+    const t = playhead();
     bm = { t, t2: Math.min(t + clipLenSec, (v && v.duration) || t + clipLenSec), tag: T('video.tagDefault'), comment: '', shapes: [] };
     bookmarks.push(bm);
     bookmarks.sort((a, b) => a.t - b.t);
@@ -390,7 +433,7 @@ Views.video = function (mount) {
   // `drawing` exists, and the stroke would be dropped. The bookmark is created
   // by whatever finishes the shape instead.
   function onDrawDown(e) {
-    if (!hasLocalVideo()) { UI.toast(T('video.drawNeedLocal'), 'error'); return; }
+    if (!hasMedia()) { UI.toast(T('video.drawNeedMedia'), 'error'); return; }
     e.preventDefault();
     // Pausing first: a shape drawn over a moving picture never lands where the
     // coach meant it to.
@@ -523,11 +566,45 @@ Views.video = function (mount) {
     if (v.currentTime >= playUntil - 0.05) { playUntil = null; try { v.pause(); } catch (e) { /* already gone */ } }
   }
 
+  // ---- Stream clock -------------------------------------------------------
+  // A cross-origin player will not say where it is, so a stream gets a clock the
+  // coach starts with the picture. Every tool reads the playhead below, which is
+  // the video's own time for a file and this clock for a stream.
+  let streamT = 0, streamRun = false, streamTick = null, streamFrom = 0;
+  const playhead = () => hasLocalVideo() ? (v.currentTime || 0) : streamT;
+  function paintClock() {
+    const inp = mount.querySelector('#clockTime');
+    if (inp && document.activeElement !== inp) inp.value = UI.fmtClock(Math.floor(streamT));
+    const btn = mount.querySelector('#clockRun');
+    if (btn) {
+      btn.textContent = (streamRun ? '\u23f8 ' : '\u25b6 ') + T('video.clock');
+      btn.classList.toggle('primary', streamRun);
+    }
+  }
+  function setStreamTime(t) {
+    streamT = Math.max(0, t || 0);
+    if (streamRun) streamFrom = Date.now() - streamT * 1000;
+    paintClock();
+  }
+  function runClock(on) {
+    streamRun = !!on;
+    if (streamTick) { clearInterval(streamTick); streamTick = null; }
+    if (streamRun) {
+      streamFrom = Date.now() - streamT * 1000;
+      streamTick = setInterval(() => {
+        streamT = (Date.now() - streamFrom) / 1000;
+        if (playUntil != null && streamT >= playUntil) { playUntil = null; runClock(false); return; }
+        paintClock();
+      }, 250);
+    }
+    paintClock();
+  }
+
   // Create a bookmark over a passage of play. Auto-saved immediately on confirm.
   // Both timestamps are editable so streams (whose time we cannot read from the
   // cross-origin iframe) can be tagged too.
   function createBookmark(seed) {
-    const now = hasLocalVideo() ? (v.currentTime || 0) : 0;
+    const now = playhead();
     const start = seed && seed.t != null ? seed.t : (inPoint != null ? inPoint : now);
     const end = seed && seed.t2 != null ? seed.t2 : (outPoint != null ? outPoint : 0);
     const editing = seed && seed.bm;
@@ -658,6 +735,7 @@ Views.video = function (mount) {
   };
   bindLocalControls();
   mountOverlay();
+  showPlaybackBtns(true);
   setDrawMode(false);
 
   loadBookmarks();
@@ -893,23 +971,29 @@ Views.video = function (mount) {
         ${b.comment ? `<p class="bm-comment">${UI.esc(b.comment)}</p>` : ''}
       </div>`).join('') : `<p style="color:var(--muted)">${T('video.noBm')}</p>`;
     l.querySelectorAll('[data-go]').forEach(b => b.onclick = () => {
-      if (!hasLocalVideo()) { UI.toast(T('video.needLocal'), 'error'); return; }
       const bm = bookmarks[+b.dataset.go];
       selectedBm = bm;
       playUntil = null;
-      v.currentTime = bmStart(bm);
-      v.pause();
+      if (hasLocalVideo()) { v.currentTime = bmStart(bm); v.pause(); }
+      else { runClock(false); setStreamTime(bmStart(bm)); }
       renderBm();
       renderOverlay();
     });
     l.querySelectorAll('[data-play]').forEach(b => b.onclick = () => {
-      if (!hasLocalVideo()) { UI.toast(T('video.needLocal'), 'error'); return; }
       const bm = bookmarks[+b.dataset.play];
       selectedBm = bm;
       const from = bmStart(bm), to = bmEnd(bm);
       // Armed only once the seek has landed: a timeupdate from the old position
       // would otherwise stop the clip before it started.
       playUntil = null;
+      if (!hasLocalVideo()) {
+        // Nothing to seek in a stream, so the clock runs the passage instead.
+        setStreamTime(from);
+        playUntil = to;
+        runClock(true);
+        renderBm();
+        return;
+      }
       const go = () => {
         playUntil = to;
         const p = v.play();
@@ -948,6 +1032,7 @@ Views.video = function (mount) {
     document.removeEventListener('fullscreenchange', onVideoFsChange);
     window.removeEventListener('resize', onVResize);
     window.removeEventListener('resize', keepOnScreen);
+    if (streamTick) { clearInterval(streamTick); streamTick = null; }
     if (sizeWatch) { sizeWatch.disconnect(); sizeWatch = null; }
   };
 };
