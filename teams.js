@@ -103,7 +103,7 @@ Views.teams = function (mount) {
         ${UI.statCard(players.filter(p => p.status === 'active').length, T('status.available'))}
       </div>
       <label class="field wide"><span>${T('teams.squadComment')}</span>
-        <textarea id="squadComment" rows="2" maxlength="500" placeholder="${UI.esc(T('teams.squadCommentPh'))}" ${!team ? 'disabled' : (Store.locked() || Access.readMode() ? 'readonly' : '')}>${UI.esc((team && team.squadComment) || '')}</textarea></label>
+        <textarea id="squadComment" rows="5" maxlength="500" placeholder="${UI.esc(T('teams.squadCommentPh'))}" ${!team ? 'disabled' : (Store.locked() || Access.readMode() ? 'readonly' : '')}>${UI.esc((team && team.squadComment) || '')}</textarea></label>
       <div class="row" style="flex:0;margin:-4px 0 12px">
         <button class="btn sm" id="saveSquadComment" data-write ${(!team || Store.locked() || Access.readMode()) ? 'disabled' : ''}>${T('common.save')}</button>
       </div>
