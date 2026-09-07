@@ -109,6 +109,19 @@ const PlayerFile = (() => {
     setTimeout(() => URL.revokeObjectURL(a.href), 4000);
   }
 
+  // The conversation itself, so a view that only wants to show it does not have
+  // to open the whole dialog.
+  function threadHtml(player) {
+    const list = player ? messages(player.id) : [];
+    return `<div class="pf-thread">
+      ${list.length ? list.map(m => `
+        <div class="pf-msg ${m.side === 'player' ? 'from-player' : 'from-coach'}">
+          <div class="pf-meta">${esc(m.by || sideLabel(m.side))} \u00b7 ${esc(sideLabel(m.side))} \u00b7 ${esc(stamp(m.at))}</div>
+          <div class="pf-text">${esc(m.text)}</div>
+        </div>`).join('') : `<p class="hint">${esc(t('pfile.empty', 'Nothing written in this file yet.'))}</p>`}
+    </div>`;
+  }
+
   // Read the file and write the next line in it. `onDone` runs when the dialog
   // is closed, so the view that opened it can come back.
   function dialog(player, onDone) {
@@ -121,13 +134,7 @@ const PlayerFile = (() => {
         width: 620,
         body: `
           <p class="hint">${esc(t('pfile.intro', 'A line kept between the coach and this player. It lives with the squad, so both ends read and write the same file.'))}</p>
-          <div class="pf-thread" id="pf_thread">
-            ${list.length ? list.map(m => `
-              <div class="pf-msg ${m.side === 'player' ? 'from-player' : 'from-coach'}">
-                <div class="pf-meta">${esc(m.by || sideLabel(m.side))} \u00b7 ${esc(sideLabel(m.side))} \u00b7 ${esc(stamp(m.at))}</div>
-                <div class="pf-text">${esc(m.text)}</div>
-              </div>`).join('') : `<p class="hint">${esc(t('pfile.empty', 'Nothing written in this file yet.'))}</p>`}
-          </div>
+          ${threadHtml(player)}
           <label class="field"><span>${esc(t('pfile.write', 'Write'))}</span>
             <textarea id="pf_text" rows="3" maxlength="${MAX_LEN}" ${writable ? '' : 'disabled'}
               placeholder="${esc(t('pfile.ph', 'Write to the other end\u2026'))}"></textarea></label>
@@ -138,7 +145,7 @@ const PlayerFile = (() => {
           <button class="btn" data-dl ${list.length ? '' : 'disabled'}>\u2b73 JSON</button>
           <button class="btn primary" data-post ${writable ? '' : 'disabled'}>${esc(t('pfile.send', 'Write in the file'))}</button>`,
         onOpen: (m, close) => {
-          const box = m.querySelector('#pf_thread');
+          const box = m.querySelector('.pf-thread');
           if (box) box.scrollTop = box.scrollHeight;
           const inp = m.querySelector('#pf_text');
           if (inp && writable) inp.focus();
@@ -158,6 +165,6 @@ const PlayerFile = (() => {
     open();
   }
 
-  return { STORE, fileId, get, messages, ensure, remove, post, sweep, dialog, download, canWrite, side };
+  return { STORE, fileId, get, messages, ensure, remove, post, sweep, dialog, threadHtml, download, canWrite, side };
 })();
 if (typeof window !== 'undefined') window.PlayerFile = PlayerFile;
