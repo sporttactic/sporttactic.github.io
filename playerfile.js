@@ -209,8 +209,21 @@ const PlayerFile = (() => {
     setTimeout(() => URL.revokeObjectURL(a.href), 4000);
   }
 
-  // The other half of the download. Everything is rebuilt field by field: the
-  // file comes from outside and decides nothing about the row it lands in.
+  // Messages that arrive from outside are rebuilt field by field: a file or a
+  // Drive document decides nothing about the row it lands in.
+  function cleanMsgs(list, known) {
+    return (Array.isArray(list) ? list : []).slice(0, MAX_MSG)
+      .filter(m => m && typeof m === 'object' && m.text && !known.has(m.id))
+      .map(m => ({
+        id: String(m.id || Store.uid('msg')).slice(0, 40),
+        at: +m.at || Date.now(),
+        side: m.side === 'player' ? 'player' : 'coach',
+        by: String(m.by == null ? '' : m.by).slice(0, 60),
+        text: String(m.text).slice(0, MAX_LEN)
+      }));
+  }
+
+  // The other half of the download.
   // Returns the number added, or a negative code for a file that was refused.
   async function upload(player, blob) {
     if (!player || !player.id || !blob) return -1;
@@ -236,15 +249,7 @@ const PlayerFile = (() => {
     const cur = get(player.id) || await ensure(player);
     if (!cur) return -1;
     const seen = new Set((cur.messages || []).map(m => m.id));
-    const add = data.messages.slice(0, MAX_MSG)
-      .filter(m => m && typeof m === 'object' && m.text && !seen.has(m.id))
-      .map(m => ({
-        id: String(m.id || Store.uid('msg')).slice(0, 40),
-        at: +m.at || Date.now(),
-        side: m.side === 'player' ? 'player' : 'coach',
-        by: String(m.by == null ? '' : m.by).slice(0, 60),
-        text: String(m.text).slice(0, MAX_LEN)
-      }));
+    const add = cleanMsgs(data.messages, seen);
     if (!add.length) return 0;
     const merged = (cur.messages || []).concat(add).sort((a, b) => a.at - b.at).slice(-MAX_MSG);
     await Store.save(STORE, Object.assign({}, cur, { messages: merged }));
@@ -259,6 +264,81 @@ const PlayerFile = (() => {
       r.onerror = () => rej(r.error);
       r.readAsText(blob);
     });
+  }
+
+  // ---- Google Drive: one JSON per player in a Players folder ---------------
+  // SportTactic / <squad> / Players / <Player Name>.json. The coach owns the
+  // folder and shares each file with the player it belongs to, so the player's
+  // copy reaches its own file and nobody else's.
+  const DRIVE_DIR = 'Players';
+  const driveOn = () => !!(window.Drive && Drive.isConnected && Drive.isConnected());
+  const safeName = s => String(s || '').replace(/[/\\?%*:|"<>]+/g, '-').trim();
+  const driveName = player => (safeName(nameOf(player)) || String(player.id)) + '.json';
+  const qEsc = s => String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  const driveDoc = (player, file, messages) => ({
+    app: 'SportTactic', kind: 'player-file', v: 1,
+    playerId: player.id, playerName: nameOf(player),
+    teamId: (file && file.teamId) || '', sport: (file && file.sport) || '',
+    updatedAt: Date.now(), messages: messages
+  });
+
+  async function playersFolder(create) {
+    let team = '';
+    try { team = await Drive.getTeamFolderId(); } catch (e) { team = ''; }
+    if (!team && window.TeamCloud && TeamCloud.cfg) team = TeamCloud.cfg().folderId || '';
+    if (!team) {
+      if (!create) return '';
+      const t = Store.activeTeam();
+      team = await Drive.ensureTeamFolder(safeName(t && t.name) || 'Team');
+    }
+    if (create) return await Drive.ensureFolder(DRIVE_DIR, team);
+    const hit = await Drive.findFolder(DRIVE_DIR, team);
+    return (hit && hit.id) || '';
+  }
+
+  // The file in the coach's own folder, or — on a player copy, which cannot see
+  // that folder — the one the coach shared with this Google account.
+  async function driveFile(player, create) {
+    const name = driveName(player);
+    const folder = await playersFolder(create);
+    if (folder) {
+      const hit = await Drive.findFile(name, folder);
+      if (hit) return hit.id;
+      if (create) {
+        const res = await Drive.uploadJson(name, driveDoc(player, get(player.id), []), { parent: folder });
+        if (res && res.id && player.email) {
+          try { await Drive.shareWith(res.id, player.email, 'writer'); } catch (e) { /* invite can be sent later */ }
+        }
+        return (res && res.id) || '';
+      }
+    }
+    const shared = await Drive.listFiles("name='" + qEsc(name) + "' and sharedWithMe = true and trashed=false");
+    return (shared && shared[0] && shared[0].id) || '';
+  }
+
+  // Read what is on Drive, add whatever this copy has not seen, write the whole
+  // thread back. The same call serves both ends: the player posts their message
+  // and the coach retrieves it.
+  async function driveSync(player) {
+    if (!player || !player.id) return { ok: false, why: 'nofile' };
+    if (!driveOn()) return { ok: false, why: 'off' };
+    const local = get(player.id) || await ensure(player);
+    if (!local) return { ok: false, why: 'nofile' };
+    // Only a staff copy builds the folder; a player copy uses the shared file.
+    const staff = !(window.Access && Access.readMode && Access.readMode());
+    let fileId = '';
+    try { fileId = await driveFile(player, staff); } catch (e) { return { ok: false, why: 'net' }; }
+    if (!fileId) return { ok: false, why: 'nofile' };
+    let remote = null;
+    try { remote = await Drive.downloadJson(fileId); } catch (e) { remote = null; }
+    const mine = local.messages || [];
+    const seen = new Set(mine.map(m => m.id));
+    const got = cleanMsgs(remote && remote.messages, seen);
+    const merged = mine.concat(got).sort((a, b) => a.at - b.at).slice(-MAX_MSG);
+    if (got.length) await Store.save(STORE, Object.assign({}, get(player.id) || local, { messages: merged }));
+    try { await Drive.uploadJson('', driveDoc(player, local, merged), { fileId }); }
+    catch (e) { return { ok: false, why: 'net', got: got.length }; }
+    return { ok: true, got: got.length, total: merged.length };
   }
 
   async function clearAll(player) {
@@ -402,6 +482,7 @@ const PlayerFile = (() => {
         footer: `<button class="btn ghost" data-close2>${esc(T('common.close'))}</button>
           <button class="btn" data-dl ${list.length ? '' : 'disabled'}>\u2b73 ${esc(t('pfile.dl', 'Download message'))}</button>
           <label class="btn" style="cursor:pointer">\u2b71 ${esc(t('pfile.up', 'Upload message'))}<input id="pf_up" type="file" accept="application/json" hidden></label>
+          ${window.Drive ? `<button class="btn" data-drive>\u2601 ${esc(t('pfile.drive', 'Drive'))}</button>` : ''}
           <button class="btn" data-key>\u{1F511} ${esc(t('pfile.key', 'Message key'))}</button>
           ${staff ? `<button class="btn danger" data-wipe ${list.length ? '' : 'disabled'}>${esc(t('pfile.clear', 'Clear all messages'))}</button>` : ''}
           <button class="btn primary" data-post ${writable ? '' : 'disabled'}>${esc(t('pfile.send', 'Write'))}</button>`,
@@ -435,6 +516,16 @@ const PlayerFile = (() => {
             refresh();
             UI.toast(t('pfile.cleared', 'Player file emptied'), 'success');
           });
+          const driveBtn = m.querySelector('[data-drive]');
+          if (driveBtn) driveBtn.onclick = async () => {
+            driveBtn.disabled = true;
+            const r = await driveSync(player);
+            driveBtn.disabled = false;
+            if (r.ok) { refresh(); UI.toast(r.got ? t('pfile.driveGot', 'Fetched from Drive') + ' (' + r.got + ')' : t('pfile.driveSent', 'Player file is up to date on Drive'), 'success'); }
+            else if (r.why === 'off') UI.toast(t('pfile.driveOff', 'Google Drive is not connected \u2014 set it up under Settings.'), 'error');
+            else if (r.why === 'nofile') UI.toast(t('pfile.driveNone', 'This player has no file on Drive yet \u2014 the coach makes it with Drive.'), 'error');
+            else UI.toast(t('pfile.driveFail', 'Drive could not be reached'), 'error');
+          };
           const up = m.querySelector('#pf_up');
           if (up) up.onchange = async e => {
             const f = e.target.files && e.target.files[0];
@@ -460,6 +551,8 @@ const PlayerFile = (() => {
             inp.focus();
             refresh();
             UI.toast(t('pfile.saved', 'Written in the player file'), 'success');
+            // The line is already safe on this device; Drive catches up behind it.
+            if (driveOn()) driveSync(player).then(r => { if (r.ok) refresh(); });
           };
         }
       });
@@ -469,7 +562,7 @@ const PlayerFile = (() => {
 
   return {
     STORE, fileId, get, messages, ensure, remove, post, sweep, dialog, threadHtml, download, upload, clearAll, canWrite, side,
-    newKey, claimKey, holdsKey, hasKey, keyDialog, claimDialog
+    newKey, claimKey, holdsKey, hasKey, keyDialog, claimDialog, driveSync, driveName
   };
 })();
 if (typeof window !== 'undefined') window.PlayerFile = PlayerFile;

@@ -308,7 +308,7 @@ Views.video = function (mount) {
     const f = wrap.querySelector('.embed-frame iframe');
     if (!f || !f.contentWindow) return false;
     try {
-      f.contentWindow.postMessage(JSON.stringify({ event: 'command', func, args: args || [] }), 'https://www.youtube.com');
+      f.contentWindow.postMessage(JSON.stringify({ event: 'command', func, args: args || [], id: 1, channel: 'widget' }), 'https://www.youtube.com');
       return true;
     } catch (e) { return false; }
   }
@@ -319,12 +319,23 @@ Views.video = function (mount) {
     if (provider !== 'youtube') return;
     const f = wrap.querySelector('.embed-frame iframe');
     if (!f) return;
-    const hello = () => { try { f.contentWindow.postMessage(JSON.stringify({ event: 'listening' }), 'https://www.youtube.com'); } catch (e) { /* not up yet */ } };
+    const hello = () => { try { f.contentWindow.postMessage(JSON.stringify({ event: 'listening', id: 1, channel: 'widget' }), 'https://www.youtube.com'); } catch (e) { /* not up yet */ } };
     f.addEventListener('load', hello);
-    setTimeout(hello, 1200);
+    // The player answers only once it is up, and it is up at its own pace.
+    [600, 1600, 3200].forEach(ms => setTimeout(hello, ms));
   }
+  // The player reports where it is once it has been told to listen, so dragging
+  // its own scrub bar moves our clock with it and Set start / Set end read the
+  // real position instead of a guess.
   const onFrameMsg = e => {
-    if (provider === 'youtube' && /^https:\/\/(www\.)?youtube(-nocookie)?\.com$/.test(e.origin)) ytLive = true;
+    if (provider !== 'youtube' || !/^https:\/\/(www\.)?youtube(-nocookie)?\.com$/.test(e.origin)) return;
+    ytLive = true;
+    let d = e.data;
+    if (typeof d === 'string') { try { d = JSON.parse(d); } catch (err) { return; } }
+    const info = d && typeof d === 'object' && d.info;
+    if (!info || typeof info !== 'object') return;
+    if (typeof info.currentTime === 'number' && isFinite(info.currentTime)) adoptStreamTime(info.currentTime);
+    if (typeof info.playerState === 'number') followPlayer(info.playerState);
   };
   window.addEventListener('message', onFrameMsg);
   // Point the stream at `from`, and have it stop at `to` where the platform can
@@ -804,6 +815,20 @@ Views.video = function (mount) {
     }
     paintClock();
   }
+  // The player's own position wins over the clock's guess at it, so a drag of
+  // its scrub bar lands here and the clock jumps with the picture.
+  function adoptStreamTime(t) {
+    const s = Math.max(0, +t || 0);
+    const moved = Math.floor(s) !== Math.floor(streamT);
+    streamT = s;
+    streamFrom = Date.now() - s * 1000;
+    if (moved) paintClock();
+  }
+  // 1 = playing, 2 = paused, 0 = ended. The picture decides whether the clock runs.
+  function followPlayer(state) {
+    const on = state === 1;
+    if (on !== streamRun) runClock(on);
+  }
 
   // Create a bookmark over a passage of play. Auto-saved immediately on confirm.
   // Both timestamps are editable so streams (whose time we cannot read from the
@@ -1128,17 +1153,24 @@ Views.video = function (mount) {
   }
   // Where the player sits inside the shared surface. Exact when the tab was
   // shared; a whole-screen share falls back to the full frame.
+  const CTRL_BAR = 52;      // the player's own control bar, kept out of the clip
   function shareCrop(srcW, srcH) {
     const box = wrap.querySelector('.embed-frame') || v;
     const vw = window.innerWidth, vh = window.innerHeight;
     if (!box || !vw || !vh) return null;
     const r = box.getBoundingClientRect();
     if (r.width < 8 || r.height < 8 || r.top < 0 || r.left < 0) return null;
+    // The scrub bar and buttons belong to the player, not to the passage, so the
+    // strip they sit in is cut off the bottom of every clip.
+    const bar = Math.min(CTRL_BAR, r.height * 0.18);
     const sx = Math.max(0, Math.round(r.left / vw * srcW));
     const sy = Math.max(0, Math.round(r.top / vh * srcH));
     const sw = Math.min(srcW - sx, Math.round(r.width / vw * srcW));
-    const sh = Math.min(srcH - sy, Math.round(r.height / vh * srcH));
-    return (sw > 16 && sh > 16) ? { sx, sy, sw, sh } : null;
+    const sh = Math.min(srcH - sy, Math.round((r.height - bar) / vh * srcH));
+    // How much of the picture the clip keeps, so the drawing lands where the
+    // coach put it even though the bottom strip is gone.
+    const keepY = r.height ? (r.height - bar) / r.height : 1;
+    return (sw > 16 && sh > 16) ? { sx, sy, sw, sh, keepY } : null;
   }
   async function recordShare(secs, formats, bm) {
     const stream = await ensureShare();
@@ -1147,15 +1179,16 @@ Views.video = function (mount) {
     try { await src.play(); } catch (e) { /* metadata first on some engines */ }
     if (!src.videoWidth) await new Promise(r => { src.onloadedmetadata = r; setTimeout(r, 3000); });
     const crop = shareCrop(src.videoWidth, src.videoHeight)
-      || { sx: 0, sy: 0, sw: src.videoWidth || 1280, sh: src.videoHeight || 720 };
+      || { sx: 0, sy: 0, sw: src.videoWidth || 1280, sh: src.videoHeight || 720, keepY: 1 };
     const cv = document.createElement('canvas');
     cv.width = crop.sw; cv.height = crop.sh;
     const cx = cv.getContext('2d');
+    const shapeH = Math.max(1, Math.round(cv.height / (crop.keepY || 1)));
     const t0 = Date.now();
     const paint = () => {
       try {
         cx.drawImage(src, crop.sx, crop.sy, crop.sw, crop.sh, 0, 0, cv.width, cv.height);
-        drawShapes(cx, cv.width, cv.height, bm);
+        drawShapes(cx, cv.width, shapeH, bm);
         drawCaption(cx, cv.width, cv.height, bm, (Date.now() - t0) / 1000);
       } catch (e) { /* a frame that is not ready is simply skipped */ }
     };
