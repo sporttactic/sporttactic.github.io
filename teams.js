@@ -55,6 +55,9 @@ Views.teams = function (mount) {
     const players = team ? Store.players(team.id) : [];
     const coaches = team ? Store.coaches(team.id) : [];
     const positions = SPORTS.positions(sportId);
+    // A following copy cannot send mail, so the same button is its player file.
+    const mailTitle = (window.Access && Access.readMode && Access.readMode())
+      ? T('pfile.title') : T('mail.mail');
 
     const readRow = p => `
       <tr data-p="${p.id}">
@@ -68,7 +71,7 @@ Views.teams = function (mount) {
         <td data-label="${UI.esc(T('teams.contact'))}" class="wide"><div class="contact-cell"><span>${UI.esc(p.phone || '—')}</span><span class="contact-mail">${UI.esc(p.email || '—')}</span></div></td>
         <td class="acts-cell">
           <div class="row-acts icons">
-            <button class="btn sm" data-mail="${p.id}" title="${UI.esc(T('mail.mail'))}" aria-label="${UI.esc(T('mail.mail'))}">✉</button>
+            <button class="btn sm" data-mail="${p.id}" title="${UI.esc(mailTitle)}" aria-label="${UI.esc(mailTitle)}">✉</button>
             <button class="btn sm" data-chat="${p.id}" title="${UI.esc(T('teams.chat'))}" aria-label="${UI.esc(T('teams.chat'))}">💬</button>
             <button class="btn sm" data-edit="${p.id}" title="${UI.esc(T('common.edit'))}" aria-label="${UI.esc(T('common.edit'))}">✎</button>
             <button class="btn sm danger" data-del="${p.id}" title="${UI.esc(T('common.delete'))}" aria-label="${UI.esc(T('common.delete'))}">${UI.icon('trash', 14)}</button>

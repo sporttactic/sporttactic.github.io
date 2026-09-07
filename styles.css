@@ -521,10 +521,11 @@ body[data-member="read"]:not([data-member-open="1"]) #modalHost [data-del],
 body[data-member="read"]:not([data-member-open="1"]) #modalHost [data-rm],
 body[data-member="read"]:not([data-member-open="1"]) #modalHost [data-edit],
 body[data-member="read"]:not([data-member-open="1"]) #modalHost .btn.danger:not([data-member-ok]),
-body[data-member="read"] #view [data-mail],
 body[data-member="read"] #view #mailSquad,
 body[data-member="read"] #view #emailAll,
 body[data-member="read"] #modalHost [data-mail] { display: none !important; }
+/* The per-player button stays: on a following copy it opens that player's file,
+   which is the one line a player has back to the coach. */
 /* Row actions: one button per line, so a long label never squeezes the column. */
 .row-acts { display: flex; flex-direction: column; align-items: stretch; gap: 6px; min-width: 108px; }
 .row-acts > .btn { width: 100%; }
