@@ -107,6 +107,12 @@ const PlayerFile = (() => {
     if (driveOn()) { try { await driveSync(player, 'push'); } catch (e) { /* the buttons can send it later */ } }
     return word;
   }
+  // Is this the word the key block in the file was made from?
+  async function sameWord(word, k) {
+    if (!k || !k.hash || !k.salt) return false;
+    try { return (await hashWord(word, unb64(k.salt), +k.iter || KEY_ITER)) === k.hash; }
+    catch (e) { return false; }
+  }
   // Returns true, or why it was refused: 'len' for the wrong length, 'bad' for
   // a key that does not match the one the file carries.
   async function claimKey(player, typed) {
@@ -121,22 +127,29 @@ const PlayerFile = (() => {
     if (!f.key || !f.key.hash || f.key.prov) {
       if (await driveKey(player)) f = get(player.id) || f;
     }
-    const k = f.key;
-    if (k && k.hash && k.salt) {
-      let hash;
-      try { hash = await hashWord(word, unb64(k.salt), +k.iter || KEY_ITER); }
-      catch (e) { return 'bad'; }
-      if (hash !== k.hash) return 'bad';
-      holdKey(player.id, prettyKey(word), hash);
+    if (await sameWord(word, f.key)) {
+      holdKey(player.id, prettyKey(word), f.key.hash);
+      return true;
+    }
+    // The word does not match the key sitting here. A key the coach replaced
+    // after this copy last synced would otherwise turn the word they are
+    // reading out away for good, so Drive is asked once more before it is.
+    if (f.key && f.key.hash && !f.key.prov) {
+      if (!await driveKey(player)) return 'bad';
+      f = get(player.id) || f;
+      if (!await sameWord(word, f.key)) return 'bad';
+      holdKey(player.id, prettyKey(word), f.key.hash);
       return true;
     }
     // Neither the squad nor Drive has the coach's key — a club that never syncs
     // would otherwise leave the player locked out for good. The word handed over
     // is taken on trust and written in, so the player can answer now; it is
-    // marked provisional so the coach's own key replaces it when they meet.
+    // marked provisional so the coach's own key replaces it when they meet. A
+    // word only this copy has ever seen is no proof of anything, so a second
+    // one simply takes its place: a mistyped one must not lock the player out.
     const salt = crypto.getRandomValues(new Uint8Array(16));
     const hash = await hashWord(word, salt, KEY_ITER);
-    await Store.save(STORE, Object.assign({}, f, {
+    await Store.save(STORE, Object.assign({}, get(player.id) || f, {
       key: { salt: b64(salt), iter: KEY_ITER, hash, at: Date.now(), prov: 1 }
     }));
     holdKey(player.id, prettyKey(word), hash);
