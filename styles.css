@@ -1136,7 +1136,20 @@ td.col-num .cell, td.col-h .cell, td.col-w .cell { max-width: 92px; }
 
 /* ---- Video telestration (video.js) ---- */
 #mediaWrap { position: relative; }
-.v-stage { display: flex; flex-direction: column; gap: 10px; }
+/* Tools to the left of the picture, so the court is never buried under them. */
+.v-stage { display: flex; flex-direction: row; align-items: flex-start; gap: 12px; }
+.v-stage > #mediaWrap { flex: 1 1 auto; min-width: 0; }
+.v-tools { flex: 0 0 230px; width: 230px; display: flex; flex-direction: column;
+  padding: 8px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); }
+.v-tools .draw-bar { margin-top: 0; }
+.v-tools .hint { margin: 8px 0 0; }
+.v-tools .row { margin-top: 10px; }
+.v-tools .dtools { display: grid; grid-template-columns: repeat(auto-fill, minmax(66px, 1fr)); gap: 6px; width: 100%; }
+.v-tools .dtools .btn { width: 100%; padding: 6px 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 820px) {
+  .v-stage { flex-direction: column; }
+  .v-tools { flex: 0 0 auto; width: 100%; }
+}
 /* The picture used to fill the whole column and push the bookmarks off screen.
    The size picker in the panel header switches between these three. */
 .v-media { display: block; width: 100%; margin: 0 auto; border-radius: 10px; background: #000; object-fit: contain; }

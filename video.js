@@ -56,10 +56,13 @@ Views.video = function (mount) {
   // Shapes belong to a bookmark and are stored in fractions of the frame, so the
   // same drawing lands in the right place on the preview and in the export,
   // whatever the video resolution is.
-  const DRAW_TOOLS = ['arrow', 'line', 'free', 'circle', 'rect', 'text'];
+  const DRAW_TOOLS = ['select', 'move', 'remove', 'arrow', 'line', 'free', 'circle', 'rect', 'text'];
+  // The three that work on what is already drawn rather than adding to it.
+  const EDIT_TOOLS = ['select', 'move', 'remove'];
   const DRAW_COLORS = ['#ffd400', '#ff3b30', '#34c759', '#0a84ff', '#ffffff', '#101010'];
   let dTool = 'arrow';
   let dColor = DRAW_COLORS[0];
+  let selShape = -1;                 // index into the bookmark's shapes, -1 for none
   // Drawing used to depend on a bookmark already being picked, which meant the
   // overlay never accepted a click on a fresh video and the tools looked broken.
   // It is an explicit mode now, and it makes the bookmark it needs.
@@ -150,41 +153,43 @@ Views.video = function (mount) {
         </span>
       </div>
       <div class="v-stage" id="vStage">
+        <div class="v-tools" id="vTools">
+          <div class="draw-bar" id="drawBar">
+            <span class="tool-group">
+              <button class="btn sm" id="drawMode">✎ ${T('video.drawMode')}</button>
+            </span>
+            <span class="tool-group dtools">
+              ${DRAW_TOOLS.map(t => `<button class="btn sm" data-dtool="${t}">${T('video.d' + t)}</button>`).join('')}
+            </span>
+            <span class="draw-colors">${DRAW_COLORS.map(c => `<button class="swatch" data-dcolor="${c}" style="--sw:${c}" title="${c}"></button>`).join('')}</span>
+            <span class="tool-group">
+              <button class="btn sm" id="drawUndo">\u21b6 ${T('tactics.undo')}</button>
+              <button class="btn sm danger" id="drawClear">${T('video.drawClear')}</button>
+            </span>
+          </div>
+          <p class="hint" id="drawHint"></p>
+          <div class="row" style="margin-top:10px;flex:0;flex-wrap:wrap" id="localControls">
+            <button class="btn sm" data-seek="-5">« 5s</button>
+            <button class="btn sm local-only" data-rate="0.5">0.5×</button>
+            <button class="btn sm local-only" data-rate="1">1×</button>
+            <button class="btn sm local-only" data-rate="2">2×</button>
+            <button class="btn sm" data-seek="5">5s »</button>
+            <span class="tool-group stream-only" id="clockGroup" title="${T('video.clockHint')}">
+              <button class="btn sm" id="clockRun">▶ ${T('video.clock')}</button>
+              <input id="clockTime" class="clock-input" value="0:00" placeholder="mm:ss">
+              <button class="btn sm" id="clockReset" title="${T('video.clockReset')}">↺</button>
+            </span>
+            <span class="tool-group mark-group">
+              <button class="btn sm" id="markIn">⌘ ${T('video.markIn')}</button>
+              <button class="btn sm" id="markOut">⌙ ${T('video.markOut')}</button>
+              <span class="tag" id="markState"></span>
+            </span>
+            <button class="btn sm primary" id="bm">★ ${T('video.bookmark')}</button>
+          </div>
+        </div>
         <div id="mediaWrap" class="size-${vSize}">
           <video id="player" class="v-media" controls></video>
         </div>
-        <div class="draw-bar" id="drawBar">
-          <span class="tool-group">
-            <button class="btn sm" id="drawMode">✎ ${T('video.drawMode')}</button>
-          </span>
-          <span class="tool-group">
-            ${DRAW_TOOLS.map(t => `<button class="btn sm" data-dtool="${t}">${T('video.d' + t)}</button>`).join('')}
-          </span>
-          <span class="draw-colors">${DRAW_COLORS.map(c => `<button class="swatch" data-dcolor="${c}" style="--sw:${c}" title="${c}"></button>`).join('')}</span>
-          <span class="tool-group">
-            <button class="btn sm" id="drawUndo">\u21b6 ${T('tactics.undo')}</button>
-            <button class="btn sm danger" id="drawClear">${T('video.drawClear')}</button>
-          </span>
-        </div>
-      </div>
-      <p class="hint" id="drawHint"></p>
-      <div class="row" style="margin-top:10px;flex:0;flex-wrap:wrap" id="localControls">
-        <button class="btn sm" data-seek="-5">« 5s</button>
-        <button class="btn sm local-only" data-rate="0.5">0.5×</button>
-        <button class="btn sm local-only" data-rate="1">1×</button>
-        <button class="btn sm local-only" data-rate="2">2×</button>
-        <button class="btn sm" data-seek="5">5s »</button>
-        <span class="tool-group stream-only" id="clockGroup" title="${T('video.clockHint')}">
-          <button class="btn sm" id="clockRun">▶ ${T('video.clock')}</button>
-          <input id="clockTime" class="clock-input" value="0:00" placeholder="mm:ss">
-          <button class="btn sm" id="clockReset" title="${T('video.clockReset')}">↺</button>
-        </span>
-        <span class="tool-group mark-group">
-          <button class="btn sm" id="markIn">⌘ ${T('video.markIn')}</button>
-          <button class="btn sm" id="markOut">⌙ ${T('video.markOut')}</button>
-          <span class="tag" id="markState"></span>
-        </span>
-        <button class="btn sm primary" id="bm">★ ${T('video.bookmark')}</button>
       </div>
       <div class="bm-section">
         <div class="bm-head">
@@ -234,15 +239,113 @@ Views.video = function (mount) {
     mountOverlay();
   }
   function showEmbed(src) {
-    wrap.innerHTML = `<div class="embed-frame"><iframe src="${UI.esc(src)}" referrerpolicy="strict-origin-when-cross-origin" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen frameborder="0"></iframe></div>`;
+    embedBase = src;
+    provider = providerOf(src);
+    ytLive = false;
+    wrap.innerHTML = `<div class="embed-frame"><iframe src="${UI.esc(provider === 'youtube' ? rangeSrc(0, 0, false) : src)}" referrerpolicy="strict-origin-when-cross-origin" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen frameborder="0"></iframe></div>`;
     v = null;
     overlay = null; octx = null;
     if (sizeWatch) { sizeWatch.disconnect(); sizeWatch = null; }
     showPlaybackBtns(false);
+    ytHandshake();
     mountOverlay();
     setDrawMode(drawMode);
     runClock(false);
     setStreamTime(0);
+  }
+
+  // ---- Driving a streamed player -----------------------------------------
+  // A cross-origin player takes no orders from the page, but every platform
+  // worth embedding reads a start (and YouTube an end) out of the embed URL, so
+  // a passage is played by pointing the frame at it. YouTube also answers the
+  // postMessage API, which seeks without the reload.
+  let embedBase = '', provider = '', ytLive = false;
+  function providerOf(src) {
+    const s = String(src || '');
+    if (/youtube(-nocookie)?\.com\/embed\//i.test(s)) return 'youtube';
+    if (/player\.vimeo\.com\//i.test(s)) return 'vimeo';
+    if (/dailymotion\.com\/embed\//i.test(s)) return 'dailymotion';
+    if (/player\.twitch\.tv\//i.test(s)) return 'twitch';
+    return '';
+  }
+  const canAim = () => !!provider && hasEmbed();
+  const hms = sec => {
+    const s = Math.max(0, Math.round(sec));
+    return Math.floor(s / 3600) + 'h' + Math.floor((s % 3600) / 60) + 'm' + (s % 60) + 's';
+  };
+  function rangeSrc(from, to, play) {
+    const s = Math.max(0, Math.round(from || 0));
+    const e = to && to > s ? Math.round(to) : 0;
+    let u;
+    try { u = new URL(embedBase, location.href); } catch (err) { return embedBase; }
+    const auto = play ? '1' : '0';
+    if (provider === 'youtube') {
+      u.searchParams.set('enablejsapi', '1');
+      u.searchParams.set('rel', '0');
+      if (s) u.searchParams.set('start', s); else u.searchParams.delete('start');
+      if (e) u.searchParams.set('end', e); else u.searchParams.delete('end');
+      u.searchParams.set('autoplay', auto);
+      return u.toString();
+    }
+    if (provider === 'dailymotion') {
+      if (s) u.searchParams.set('start', s); else u.searchParams.delete('start');
+      u.searchParams.set('autoplay', auto);
+      return u.toString();
+    }
+    if (provider === 'twitch') {
+      u.searchParams.set('t', hms(s));
+      u.searchParams.set('autoplay', play ? 'true' : 'false');
+      return u.toString();
+    }
+    if (provider === 'vimeo') {
+      u.searchParams.set('autoplay', auto);
+      return u.toString() + (s ? '#t=' + s + 's' : '');
+    }
+    return u.toString();
+  }
+  function ytCmd(func, args) {
+    if (provider !== 'youtube') return false;
+    const f = wrap.querySelector('.embed-frame iframe');
+    if (!f || !f.contentWindow) return false;
+    try {
+      f.contentWindow.postMessage(JSON.stringify({ event: 'command', func, args: args || [] }), 'https://www.youtube.com');
+      return true;
+    } catch (e) { return false; }
+  }
+  // The player only answers commands once it has been told to listen, and only
+  // an answer proves it will: until one arrives, a seek goes through the URL so
+  // the picture can never drift away from the clock.
+  function ytHandshake() {
+    if (provider !== 'youtube') return;
+    const f = wrap.querySelector('.embed-frame iframe');
+    if (!f) return;
+    const hello = () => { try { f.contentWindow.postMessage(JSON.stringify({ event: 'listening' }), 'https://www.youtube.com'); } catch (e) { /* not up yet */ } };
+    f.addEventListener('load', hello);
+    setTimeout(hello, 1200);
+  }
+  const onFrameMsg = e => {
+    if (provider === 'youtube' && /^https:\/\/(www\.)?youtube(-nocookie)?\.com$/.test(e.origin)) ytLive = true;
+  };
+  window.addEventListener('message', onFrameMsg);
+  // Point the stream at `from`, and have it stop at `to` where the platform can
+  // be told. The clock follows, so Set start / Set end stay in step with it.
+  function aimStream(from, to, play) {
+    const s = Math.max(0, from || 0);
+    const e = to && to > s ? to : null;
+    if (canAim()) {
+      // A live player takes a seek without losing its buffer; an end always has
+      // to be baked into the URL, and so does a seek nobody has answered for.
+      if (provider === 'youtube' && !e && ytLive && ytCmd('seekTo', [s, true])) {
+        if (play) ytCmd('playVideo'); else ytCmd('pauseVideo');
+      } else {
+        const f = wrap.querySelector('.embed-frame iframe');
+        if (f) { f.src = rangeSrc(s, e, play); ytHandshake(); }
+      }
+    }
+    setStreamTime(s);
+    playUntil = e;
+    runClock(!!play);
+    return canAim();
   }
 
   mount.querySelector('#loadStream').onclick = () => {
@@ -275,17 +378,21 @@ Views.video = function (mount) {
   function bindLocalControls() {
     mount.querySelectorAll('[data-seek]').forEach(b => b.onclick = () => {
       if (hasLocalVideo()) v.currentTime += +b.dataset.seek;
-      else setStreamTime(streamT + (+b.dataset.seek));       // nudges the clock back into sync
+      else aimStream(streamT + (+b.dataset.seek), null, streamRun);
     });
     mount.querySelectorAll('[data-rate]').forEach(b => b.onclick = () => { if (v) v.playbackRate = +b.dataset.rate; });
     mount.querySelector('#bm').onclick = () => createBookmark();
     const clockRun = mount.querySelector('#clockRun');
-    if (clockRun) clockRun.onclick = () => runClock(!streamRun);
+    if (clockRun) clockRun.onclick = () => {
+      const on = !streamRun;
+      ytCmd(on ? 'playVideo' : 'pauseVideo');
+      runClock(on);
+    };
     const clockReset = mount.querySelector('#clockReset');
     if (clockReset) clockReset.onclick = () => { playUntil = null; runClock(false); setStreamTime(0); };
     const clockTime = mount.querySelector('#clockTime');
     if (clockTime) {
-      clockTime.onchange = () => setStreamTime(parseClock(clockTime.value));
+      clockTime.onchange = () => aimStream(parseClock(clockTime.value), null, streamRun);
       clockTime.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); clockTime.blur(); } };
     }
     mount.querySelector('#markIn').onclick = () => {
@@ -312,7 +419,7 @@ Views.video = function (mount) {
   // It sits exactly over the picture. Drawing is a mode you switch on; the
   // shapes belong to a bookmark, and if none is picked the first stroke makes
   // one at the playhead so the tools work on a video you just opened.
-  let overlay = null, octx = null, drawing = null, sizeWatch = null;
+  let overlay = null, octx = null, drawing = null, sizeWatch = null, moving = null;
 
   function mountOverlay() {
     overlay = document.createElement('canvas');
@@ -390,6 +497,9 @@ Views.video = function (mount) {
     octx.clearRect(0, 0, overlay.width, overlay.height);
     if (bm) drawShapes(octx, overlay.width, overlay.height, bm);
     if (drawing) drawShapes(octx, overlay.width, overlay.height, { shapes: [drawing] });
+    // A shape the coach marked with Select is ringed, so Move and Remove act on
+    // something they can see they picked.
+    if (bm && selShape >= 0 && bm.shapes && bm.shapes[selShape]) drawSelection(octx, overlay.width, overlay.height, bm.shapes[selShape]);
     // Armed is what makes the canvas accept a pointer at all, so it follows the
     // mode and not whether a bookmark happens to be selected.
     overlay.classList.toggle('armed', drawMode && hasMedia());
@@ -424,6 +534,55 @@ Views.video = function (mount) {
     return bm;
   }
 
+  // ---- Picking a shape that is already there ------------------------------
+  // Everything is stored in fractions of the frame, so the hit test works in the
+  // same units and the tolerance is a fraction too.
+  const HIT = 0.02;
+  function distToSeg(p, a, b) {
+    const vx = b[0] - a[0], vy = b[1] - a[1];
+    const len = vx * vx + vy * vy;
+    const t = len ? Math.max(0, Math.min(1, ((p[0] - a[0]) * vx + (p[1] - a[1]) * vy) / len)) : 0;
+    return Math.hypot(p[0] - (a[0] + vx * t), p[1] - (a[1] + vy * t));
+  }
+  function hits(shape, p) {
+    const q = shape.p || [];
+    if (!q.length) return false;
+    if (shape.k === 'text') return Math.hypot(p[0] - q[0][0], p[1] - q[0][1]) < 0.06;
+    if (shape.k === 'free') {
+      for (let i = 1; i < q.length; i++) if (distToSeg(p, q[i - 1], q[i]) < HIT) return true;
+      return false;
+    }
+    if (q.length < 2) return false;
+    const [a, b] = q;
+    if (shape.k === 'rect' || shape.k === 'circle') {
+      // The outline, not the fill — an empty box must not swallow every click in it.
+      const c = [[a[0], a[1]], [b[0], a[1]], [b[0], b[1]], [a[0], b[1]]];
+      for (let i = 0; i < 4; i++) if (distToSeg(p, c[i], c[(i + 1) % 4]) < HIT * 1.6) return true;
+      return false;
+    }
+    return distToSeg(p, a, b) < HIT;
+  }
+  // Topmost first: the last drawn is the one on top of the picture.
+  function shapeAt(bm, p) {
+    const list = (bm && bm.shapes) || [];
+    for (let i = list.length - 1; i >= 0; i--) if (hits(list[i], p)) return i;
+    return -1;
+  }
+  function drawSelection(cx, w, h, shape) {
+    const q = (shape && shape.p) || [];
+    if (!q.length) return;
+    const xs = q.map(p => p[0] * w), ys = q.map(p => p[1] * h);
+    const pad = Math.max(10, Math.round(Math.min(w, h) * 0.02));
+    const x1 = Math.min(...xs) - pad, y1 = Math.min(...ys) - pad;
+    const x2 = Math.max(...xs) + pad, y2 = Math.max(...ys) + pad;
+    cx.save();
+    cx.setLineDash([6, 5]);
+    cx.strokeStyle = '#ffd400';
+    cx.lineWidth = Math.max(2, Math.round(Math.min(w, h) * 0.004));
+    cx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+    cx.restore();
+  }
+
   function pt(e) {
     const r = overlay.getBoundingClientRect();
     return [Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)),
@@ -438,9 +597,30 @@ Views.video = function (mount) {
     // Pausing first: a shape drawn over a moving picture never lands where the
     // coach meant it to.
     if (v && !v.paused) v.pause();
+    if (EDIT_TOOLS.indexOf(dTool) >= 0) { editDown(e); return; }
     if (dTool === 'text') { askDrawText(pt(e)); return; }
     try { overlay.setPointerCapture(e.pointerId); } catch (err) { /* pointer already gone */ }
     drawing = { k: dTool, c: dColor, p: [pt(e), pt(e)] };
+    renderOverlay();
+  }
+  // Select marks one, Move drags it, Remove takes it away.
+  function editDown(e) {
+    const bm = drawTarget();
+    const at = pt(e);
+    const i = shapeAt(bm, at);
+    if (i < 0) { selShape = -1; renderOverlay(); if (dTool !== 'select') UI.toast(T('video.dNoHit')); return; }
+    selShape = i;
+    if (dTool === 'remove') {
+      bm.shapes.splice(i, 1);
+      selShape = -1;
+      saveBookmarks().then(renderBm);
+      renderOverlay();
+      return;
+    }
+    if (dTool === 'move') {
+      try { overlay.setPointerCapture(e.pointerId); } catch (err) { /* pointer already gone */ }
+      moving = { i, from: at, orig: bm.shapes[i].p.map(p => p.slice()) };
+    }
     renderOverlay();
   }
 
@@ -473,6 +653,17 @@ Views.video = function (mount) {
     });
   }
   function onDrawMove(e) {
+    if (moving) {
+      e.preventDefault();
+      const bm = drawTarget();
+      const s = bm && bm.shapes[moving.i];
+      if (!s) return;
+      const at = pt(e);
+      const dx = at[0] - moving.from[0], dy = at[1] - moving.from[1];
+      s.p = moving.orig.map(p => [Math.min(1, Math.max(0, p[0] + dx)), Math.min(1, Math.max(0, p[1] + dy))]);
+      renderOverlay();
+      return;
+    }
     if (!drawing) return;
     e.preventDefault();
     if (drawing.k === 'free') drawing.p.push(pt(e));
@@ -480,6 +671,13 @@ Views.video = function (mount) {
     renderOverlay();
   }
   async function onDrawUp() {
+    if (moving) {
+      moving = null;
+      await saveBookmarks();
+      renderBm();
+      renderOverlay();
+      return;
+    }
     if (!drawing) return;
     const shape = drawing;
     drawing = null;
@@ -501,13 +699,14 @@ Views.video = function (mount) {
       bar.querySelectorAll('[data-dcolor]').forEach(b => b.classList.toggle('on', b.dataset.dcolor === dColor));
     };
     // Picking a tool is also how most people expect to start drawing.
-    bar.querySelectorAll('[data-dtool]').forEach(b => b.onclick = () => { dTool = b.dataset.dtool; sync(); setDrawMode(true); });
+    bar.querySelectorAll('[data-dtool]').forEach(b => b.onclick = () => { dTool = b.dataset.dtool; selShape = -1; sync(); setDrawMode(true); });
     bar.querySelectorAll('[data-dcolor]').forEach(b => b.onclick = () => { dColor = b.dataset.dcolor; sync(); });
     mount.querySelector('#drawMode').onclick = () => setDrawMode(!drawMode);
     mount.querySelector('#drawUndo').onclick = async () => {
       const bm = drawTarget();
       if (!bm || !(bm.shapes || []).length) return;
       bm.shapes.pop();
+      selShape = -1;
       await saveBookmarks(); renderOverlay(); renderBm();
     };
     mount.querySelector('#drawClear').onclick = () => {
@@ -515,6 +714,7 @@ Views.video = function (mount) {
       if (!bm || !(bm.shapes || []).length) return;
       UI.confirm(T('video.drawClearAsk'), async () => {
         bm.shapes = [];
+        selShape = -1;
         await saveBookmarks(); renderOverlay(); renderBm();
       });
     };
@@ -593,7 +793,12 @@ Views.video = function (mount) {
       streamFrom = Date.now() - streamT * 1000;
       streamTick = setInterval(() => {
         streamT = (Date.now() - streamFrom) / 1000;
-        if (playUntil != null && streamT >= playUntil) { playUntil = null; runClock(false); return; }
+        if (playUntil != null && streamT >= playUntil) {
+          playUntil = null;
+          ytCmd('pauseVideo');            // YouTube also stops itself on the end= it was given
+          runClock(false);
+          return;
+        }
         paintClock();
       }, 250);
     }
@@ -902,15 +1107,131 @@ Views.video = function (mount) {
       else { try { v.currentTime = target; } catch (e) { v.removeEventListener('seeked', onSeeked); begin(); } }
     });
   }
+  // ---- Clips from a stream ------------------------------------------------
+  // A cross-origin player hands out no pixels, so the only clip a browser can
+  // cut from YouTube & co. is the one it can see: the coach shares this tab, the
+  // passage is played, and what shows is recorded through the same canvas the
+  // local export uses — the drawing and the caption are burnt in identically.
+  const wait = ms => new Promise(r => setTimeout(r, ms));
+  let shareStream = null;
+  const canShare = () => !!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia);
+  async function ensureShare() {
+    if (shareStream && shareStream.getVideoTracks().some(t => t.readyState === 'live')) return shareStream;
+    shareStream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 30 }, audio: true });
+    shareStream.getVideoTracks().forEach(t => t.addEventListener('ended', () => { shareStream = null; }));
+    return shareStream;
+  }
+  function stopShare() {
+    if (!shareStream) return;
+    shareStream.getTracks().forEach(t => { try { t.stop(); } catch (e) { /* already gone */ } });
+    shareStream = null;
+  }
+  // Where the player sits inside the shared surface. Exact when the tab was
+  // shared; a whole-screen share falls back to the full frame.
+  function shareCrop(srcW, srcH) {
+    const box = wrap.querySelector('.embed-frame') || v;
+    const vw = window.innerWidth, vh = window.innerHeight;
+    if (!box || !vw || !vh) return null;
+    const r = box.getBoundingClientRect();
+    if (r.width < 8 || r.height < 8 || r.top < 0 || r.left < 0) return null;
+    const sx = Math.max(0, Math.round(r.left / vw * srcW));
+    const sy = Math.max(0, Math.round(r.top / vh * srcH));
+    const sw = Math.min(srcW - sx, Math.round(r.width / vw * srcW));
+    const sh = Math.min(srcH - sy, Math.round(r.height / vh * srcH));
+    return (sw > 16 && sh > 16) ? { sx, sy, sw, sh } : null;
+  }
+  async function recordShare(secs, formats, bm) {
+    const stream = await ensureShare();
+    const src = document.createElement('video');
+    src.srcObject = stream; src.muted = true; src.playsInline = true;
+    try { await src.play(); } catch (e) { /* metadata first on some engines */ }
+    if (!src.videoWidth) await new Promise(r => { src.onloadedmetadata = r; setTimeout(r, 3000); });
+    const crop = shareCrop(src.videoWidth, src.videoHeight)
+      || { sx: 0, sy: 0, sw: src.videoWidth || 1280, sh: src.videoHeight || 720 };
+    const cv = document.createElement('canvas');
+    cv.width = crop.sw; cv.height = crop.sh;
+    const cx = cv.getContext('2d');
+    const t0 = Date.now();
+    const paint = () => {
+      try {
+        cx.drawImage(src, crop.sx, crop.sy, crop.sw, crop.sh, 0, 0, cv.width, cv.height);
+        drawShapes(cx, cv.width, cv.height, bm);
+        drawCaption(cx, cv.width, cv.height, bm, (Date.now() - t0) / 1000);
+      } catch (e) { /* a frame that is not ready is simply skipped */ }
+    };
+    paint();
+    const timer = setInterval(paint, 33);
+    let out;
+    try {
+      out = await new Promise((resolve, reject) => {
+        let cvStream;
+        try { cvStream = cv.captureStream(30); } catch (e) { reject(e); return; }
+        stream.getAudioTracks().forEach(t => { try { cvStream.addTrack(t); } catch (e) { /* no audio shared */ } });
+        const recs = [];
+        formats.forEach(f => {
+          try { recs.push({ rec: f.mime ? new MediaRecorder(cvStream, { mimeType: f.mime }) : new MediaRecorder(cvStream), ext: f.ext, chunks: [], done: false }); }
+          catch (e) { /* container this engine cannot write */ }
+        });
+        if (!recs.length) { reject(new Error('no recorder')); return; }
+        let settled = false;
+        const finish = () => {
+          if (settled || recs.some(r => !r.done)) return;
+          settled = true;
+          resolve(recs.map(r => ({ ext: r.ext, blob: new Blob(r.chunks, { type: r.rec.mimeType || ('video/' + r.ext) }) })).filter(o => o.blob.size));
+        };
+        recs.forEach(r => {
+          r.rec.ondataavailable = e => { if (e.data && e.data.size) r.chunks.push(e.data); };
+          r.rec.onstop = () => { r.done = true; finish(); };
+          r.rec.onerror = () => { r.done = true; r.chunks.length = 0; finish(); };
+          try { r.rec.start(); } catch (e) { r.done = true; }
+        });
+        setTimeout(() => recs.forEach(r => {
+          if (r.done) return;
+          if (r.rec.state !== 'inactive') { try { r.rec.stop(); } catch (e) { r.done = true; finish(); } }
+          else { r.done = true; finish(); }
+        }), Math.round(secs * 1000));
+      });
+    } finally { clearInterval(timer); src.srcObject = null; }
+    return out;
+  }
+  // Play each passage in the streamed player and record it off the screen.
+  async function exportStreamClips(ext, list, formats) {
+    if (!canShare()) { UI.toast(T('video.needShare'), 'error'); return 0; }
+    UI.toast(T('video.shareAsk'));
+    let ok = 0;
+    for (const b of list) {
+      const from = bmStart(b);
+      const secs = Math.max(1, Math.min(120, bmEnd(b) - from));
+      // No end is given to the player: the recorder decides how long the clip is.
+      aimStream(from, null, true);
+      await wait(1500);
+      let outs = null;
+      try { outs = await recordShare(secs, formats, b); }
+      catch (e) { UI.toast(T('video.shareStopped'), 'error'); break; }
+      const safe = String(b.tag).replace(/[^\w\-]+/g, '_').slice(0, 40) || 'clip';
+      const base = `clip-${String(bookmarks.indexOf(b) + 1).padStart(2, '0')}-${safe}-${Math.floor(b.t)}s`;
+      (outs || []).forEach(o => { download(o.blob, `${base}.${o.ext}`); ok++; });
+    }
+    stopShare();
+    runClock(false);
+    return ok;
+  }
+
   async function exportClipSequences(ext, only) {
-    if (!v || !v.src || !v.duration || isNaN(v.duration)) { UI.toast(T('video.needLocal'), 'error'); return; }
-    if (!window.MediaRecorder || !(v.captureStream || v.mozCaptureStream)) { UI.toast(T('video.needLocal'), 'error'); return; }
-    // A range left armed by Play would pause the recorder mid-clip.
-    playUntil = null;
     const list = (only && bookmarks.indexOf(only) >= 0) ? [only] : bookmarks;
     if (!list.length) { UI.toast(T('video.noBm'), 'error'); return; }
     const formats = pickFormats().filter(f => f.ext === ext);
     if (!formats.length) { UI.toast(T('video.noMp4'), 'error'); return; }
+    if (!window.MediaRecorder) { UI.toast(T('video.needLocal'), 'error'); return; }
+    // A range left armed by Play would pause the recorder mid-clip.
+    playUntil = null;
+    const localReady = hasLocalVideo() && v.duration && !isNaN(v.duration) && (v.captureStream || v.mozCaptureStream);
+    if (!localReady) {
+      if (!hasEmbed()) { UI.toast(T('video.needMedia'), 'error'); return; }
+      const n = await exportStreamClips(ext, list, formats);
+      UI.toast(n ? T('video.exported') + ' (' + n + ' \u00d7 ' + ext.toUpperCase() + ')' : T('video.noClip'), n ? 'success' : 'error');
+      return;
+    }
     UI.toast(T('video.exporting') + ' ' + ext.toUpperCase());
     const wasRate = v.playbackRate, wasMuted = v.muted;
     v.playbackRate = 1; v.muted = true;   // mute so playback is silent and never autoplay-blocked
@@ -973,24 +1294,24 @@ Views.video = function (mount) {
     l.querySelectorAll('[data-go]').forEach(b => b.onclick = () => {
       const bm = bookmarks[+b.dataset.go];
       selectedBm = bm;
+      selShape = -1;
       playUntil = null;
       if (hasLocalVideo()) { v.currentTime = bmStart(bm); v.pause(); }
-      else { runClock(false); setStreamTime(bmStart(bm)); }
+      else aimStream(bmStart(bm), null, false);
       renderBm();
       renderOverlay();
     });
     l.querySelectorAll('[data-play]').forEach(b => b.onclick = () => {
       const bm = bookmarks[+b.dataset.play];
       selectedBm = bm;
+      selShape = -1;
       const from = bmStart(bm), to = bmEnd(bm);
       // Armed only once the seek has landed: a timeupdate from the old position
       // would otherwise stop the clip before it started.
       playUntil = null;
       if (!hasLocalVideo()) {
-        // Nothing to seek in a stream, so the clock runs the passage instead.
-        setStreamTime(from);
-        playUntil = to;
-        runClock(true);
+        // The platform is told where to start and, where it can be, where to stop.
+        aimStream(from, to, true);
         renderBm();
         return;
       }
@@ -1032,7 +1353,9 @@ Views.video = function (mount) {
     document.removeEventListener('fullscreenchange', onVideoFsChange);
     window.removeEventListener('resize', onVResize);
     window.removeEventListener('resize', keepOnScreen);
+    window.removeEventListener('message', onFrameMsg);
     if (streamTick) { clearInterval(streamTick); streamTick = null; }
+    stopShare();
     if (sizeWatch) { sizeWatch.disconnect(); sizeWatch = null; }
   };
 };
