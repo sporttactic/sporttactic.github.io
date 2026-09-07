@@ -86,7 +86,9 @@ const PlayerFile = (() => {
     return !!held && held.set === String(k.hash).slice(0, 12);
   }
   const heldWord = playerId => (heldKeys()[playerId] || {}).word || '';
-  const hasKey = playerId => { const f = get(playerId); return !!(f && f.key && f.key.hash); };
+  // A key a player typed in before the coach's own arrived is provisional: the
+  // coach has never seen that word, so their dialog treats it as none.
+  const hasKey = playerId => { const f = get(playerId); return !!(f && f.key && f.key.hash && !f.key.prov); };
 
   async function newKey(player) {
     if (!player || !player.id || !cryptoOk()) return '';
@@ -101,21 +103,35 @@ const PlayerFile = (() => {
     holdKey(player.id, word, hash);
     return word;
   }
-  // Returns true, or why it was refused: 'nokey' when no key has reached this
-  // copy yet, 'len' for the wrong length, 'bad' for a key that does not match.
+  // Returns true, or why it was refused: 'len' for the wrong length, 'bad' for
+  // a key that does not match the one the file carries.
   async function claimKey(player, typed) {
     const word = canonKey(typed);
-    const f = get(player && player.id);
-    const k = f && f.key;
-    if (!k || !k.hash || !k.salt) return 'nokey';
     if (word.length !== KEY_LEN) return 'len';
     if (!cryptoOk()) return 'bad';
-    let hash;
-    try { hash = await hashWord(word, unb64(k.salt), +k.iter || KEY_ITER); }
-    catch (e) { return 'bad'; }
-    if (hash !== k.hash) return 'bad';
+    const f = get(player && player.id) || await ensure(player);
+    if (!f) return 'bad';
+    const k = f.key;
+    if (k && k.hash && k.salt) {
+      let hash;
+      try { hash = await hashWord(word, unb64(k.salt), +k.iter || KEY_ITER); }
+      catch (e) { return 'bad'; }
+      if (hash !== k.hash) return 'bad';
+      holdKey(player.id, prettyKey(word), hash);
+      return true;
+    }
+    // The coach's key has not reached this copy — a squad that never syncs would
+    // leave the player locked out for good. The word handed over is taken on
+    // trust and written in, so the player can answer now; it is marked
+    // provisional so the coach's own key replaces it when the two copies meet.
+    const salt = crypto.getRandomValues(new Uint8Array(16));
+    const hash = await hashWord(word, salt, KEY_ITER);
+    await Store.save(STORE, Object.assign({}, f, {
+      key: { salt: b64(salt), iter: KEY_ITER, hash, at: Date.now(), prov: 1 }
+    }));
     holdKey(player.id, prettyKey(word), hash);
-    return true;
+    // A copy that refused the write (a frozen backup) never really took the key.
+    return holdsKey(player.id) ? true : 'bad';
   }
 
   // A frozen backup stays frozen. The coach's own copy writes freely; a copy
@@ -328,7 +344,7 @@ const PlayerFile = (() => {
   // Player side: type the word the coach handed over, once, on this device.
   function claimDialog(player, onDone) {
     const held = holdsKey(player.id);
-    const waiting = !hasKey(player.id);
+    const waiting = !held && !hasKey(player.id);
     UI.modal({
       title: t('pfile.key', 'Message key') + ' \u2014 ' + nameOf(player),
       width: 480,
@@ -336,7 +352,7 @@ const PlayerFile = (() => {
         <p class="hint">${esc(held
     ? t('pfile.keyHeld', 'This copy holds the key for this player and may write in the file.')
     : t('pfile.keyAsk', 'Type the message key the coach gave you. It is only needed once on this device.'))}</p>
-        ${waiting ? `<p class="hint">${esc(t('pfile.keyMissing', 'No key has reached this copy yet. Sync the squad, or have the coach send the file from Download message and load it here with Upload message.'))}</p>` : ''}
+        ${waiting ? `<p class="hint">${esc(t('pfile.keyTrust', 'The coach\u2019s key has not reached this copy yet, so the word you type is taken on trust and you can write straight away. It is checked for real the next time this copy and the coach\u2019s meet.'))}</p>` : ''}
         <label class="field"><span>${esc(t('pfile.key', 'Message key'))}</span>
           <input id="pf_key_in" maxlength="24" autocomplete="off" spellcheck="false" placeholder="ABCD-EFGH-JKMN-PQRS"></label>`,
       footer: `<button class="btn ghost" data-close2>${esc(T('common.close'))}</button>
@@ -351,7 +367,6 @@ const PlayerFile = (() => {
           btn.disabled = true;
           const r = await claimKey(player, inp.value);
           btn.disabled = false;
-          if (r === 'nokey') return UI.toast(t('pfile.keyMissing', 'No key has reached this copy yet. Sync the squad, or have the coach send the file from Download message and load it here with Upload message.'), 'error');
           if (r === 'len') return UI.toast(t('pfile.keyLen', 'A message key is 16 characters'), 'error');
           if (r !== true) return UI.toast(t('pfile.keyBad', 'That key was not accepted'), 'error');
           UI.toast(t('pfile.keyOk', 'Key accepted \u2014 you can write in your file'), 'success');
