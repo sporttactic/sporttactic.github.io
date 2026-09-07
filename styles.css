@@ -1249,6 +1249,10 @@ td.col-num .cell, td.col-h .cell, td.col-w .cell { max-width: 92px; }
 .pf-msg.from-player { align-self: flex-end; border-color: var(--primary); }
 .pf-meta { color: var(--muted); font-size: 11px; margin-bottom: 3px; }
 .pf-text { white-space: pre-wrap; word-break: break-word; line-height: 1.45; }
+/* The key is read off a screen and typed on a phone, so it is set large and spaced. */
+.pf-key { margin: 10px 0; padding: 14px; border: 1px dashed var(--primary); border-radius: 10px; background: var(--surface-2);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 24px; font-weight: 700;
+  letter-spacing: 2px; text-align: center; user-select: all; word-break: break-all; }
 
 /* ---- Live scouting: strength set logger (scouting.js) ---- */
 .set-input { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
