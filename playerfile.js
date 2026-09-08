@@ -11,6 +11,7 @@ const PlayerFile = (() => {
   const MAX_MSG = 500;          // a conversation, not a log — the oldest fall off
   const MAX_LEN = 2000;
   const POLL_MS = 5000;         // how often an open dialog looks for the other end
+  const DRIVE_SYNC_MS = 2 * 60 * 1000; // keep every player file current on Drive
 
   const esc = s => UI.esc(s);
   const t = (k, fallback) => { const r = T(k); return r === k ? fallback : r; };
@@ -189,9 +190,11 @@ const PlayerFile = (() => {
     const file = get(player.id) || await ensure(player);
     if (!file) return null;
     const msg = { id: Store.uid('msg'), at: Date.now(), side: side(player), by: myName(player), text: body };
-    return await Store.save(STORE, Object.assign({}, file, {
+    const saved = await Store.save(STORE, Object.assign({}, file, {
       messages: (file.messages || []).concat([msg]).slice(-MAX_MSG)
     }));
+    if (saved) await saveToDrive(player);
+    return saved;
   }
 
   // Squads that existed before player files did get theirs here, and a file
@@ -308,6 +311,9 @@ const PlayerFile = (() => {
   // in Players, so that is looked at too. The answer is kept: finding it again
   // costs four requests, and the dialog asks every few seconds.
   const driveIds = {};
+  const driveDirty = new Set();
+  const driveBusy = new Set();
+  let driveTimer = null;
   async function driveFile(player, create) {
     if (driveIds[player.id]) return driveIds[player.id];
     const name = driveName(player);
@@ -392,10 +398,51 @@ const PlayerFile = (() => {
     return { ok: true, got: got.length, total: merged.length };
   }
 
+  // Save a locally changed player file immediately. Failed writes remain
+  // dirty and are retried by the two-minute background synchronization.
+  async function saveToDrive(player) {
+    if (!player || !player.id) return { ok: false, why: 'nofile' };
+    driveDirty.add(player.id);
+    if (!driveOn() || driveBusy.has(player.id)) {
+      return { ok: false, why: driveOn() ? 'busy' : 'off' };
+    }
+    driveBusy.add(player.id);
+    try {
+      const result = await driveSync(player, 'push');
+      if (result.ok) driveDirty.delete(player.id);
+      return result;
+    } finally {
+      driveBusy.delete(player.id);
+    }
+  }
+
+  // Every two minutes merge changes from Drive and upload local edits that did
+  // not make it there immediately. This runs even when no dialog is open.
+  async function syncAll() {
+    if (!driveOn()) return;
+    let players = [];
+    try { players = Store.all('players') || []; } catch (e) { return; }
+    for (const player of players) {
+      if (!player || !player.id || driveBusy.has(player.id)) continue;
+      driveBusy.add(player.id);
+      try {
+        const result = await driveSync(player, driveDirty.has(player.id) ? 'push' : 'pull');
+        if (result.ok) driveDirty.delete(player.id);
+      } catch (e) { /* the next two-minute pass retries */ }
+      finally { driveBusy.delete(player.id); }
+    }
+  }
+
+  function startDriveSync() {
+    if (driveTimer) clearInterval(driveTimer);
+    driveTimer = setInterval(syncAll, DRIVE_SYNC_MS);
+  }
+
   async function clearAll(player) {
     const file = get(player && player.id);
     if (!file || !canWrite(player)) return false;
     await Store.save(STORE, Object.assign({}, file, { messages: [] }));
+    await saveToDrive(player);
     return true;
   }
 
@@ -614,11 +661,9 @@ const PlayerFile = (() => {
             inp.focus();
             refresh();
             UI.toast(t('pfile.saved', 'Written in the player file'), 'success');
-            // The line is already safe on this device; Drive catches up behind
-            // it, so a message the player writes lands in their Drive folder
-            // without them having to press anything.
-            if (!driveOn()) pending = true;
-            else driveSync(player, 'push').then(r => { if (r.ok) refresh(); else pending = true; });
+            // post() already saved to Drive. If that attempt failed, the
+            // two-minute background pass retries it automatically.
+            pending = driveDirty.has(player.id);
           };
         }
       });
@@ -628,7 +673,10 @@ const PlayerFile = (() => {
 
   return {
     STORE, fileId, get, messages, ensure, remove, post, sweep, dialog, threadHtml, clearAll, canWrite, side,
-    newKey, claimKey, holdsKey, hasKey, keyDialog, claimDialog, driveSync, driveName
+    newKey, claimKey, holdsKey, hasKey, keyDialog, claimDialog, driveSync, driveName, syncAll, startDriveSync
   };
 })();
-if (typeof window !== 'undefined') window.PlayerFile = PlayerFile;
+if (typeof window !== 'undefined') {
+  window.PlayerFile = PlayerFile;
+  PlayerFile.startDriveSync();
+}
