@@ -596,8 +596,8 @@ const PlayerFile = (() => {
               : t('pfile.needKey', 'Writing needs the message key the coach generates for you. Press Message key and type it in.'))}</p>
 `,
         footer: `<button class="btn ghost" data-close2>${esc(T('common.close'))}</button>
-          ${staff ? `<button class="btn" data-get>\u2b73 ${esc(t('pfile.dl', 'Get message'))}</button>
-          <button class="btn" data-send>\u2b71 ${esc(t('pfile.up', 'Upload message'))}</button>` : ''}
+          <button class="btn" data-get>\u2b73 ${esc(t('pfile.dl', 'Get message'))}</button>
+          <button class="btn" data-send>\u2b71 ${esc(t('pfile.up', 'Upload message'))}</button>
           <button class="btn" data-key>\u{1F511} ${esc(t('pfile.key', 'Message key'))}</button>
           ${staff ? `<button class="btn danger" data-wipe ${list.length ? '' : 'disabled'}>${esc(t('pfile.clear', 'Clear all messages'))}</button>` : ''}
           <button class="btn primary" data-post ${writable ? '' : 'disabled'}>${esc(t('pfile.send', 'Write'))}</button>`,
