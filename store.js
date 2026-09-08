@@ -60,10 +60,13 @@ const Store = (() => {
     emit();
   }
   function blockWrite(store, row, opts) {
-    const lock = !!lockGuard && LOCK_FREE.indexOf(store) < 0;
+    // A verified message key grants one narrow exception: it may update the
+    // matching player-file row even when this imported/team copy is read-only.
+    const playerFileKey = store === 'playerfiles' && !!(opts && opts.playerFileKey);
+    const lock = !!lockGuard && LOCK_FREE.indexOf(store) < 0 && !playerFileKey;
     // The second read-only mode: a copy that joined with a team code the coach
     // handed out as look-only. Access decides; this only reports it.
-    const member = !lock && !!(window.Access && Access.blocks && Access.blocks(store, row, opts));
+    const member = !lock && !playerFileKey && !!(window.Access && Access.blocks && Access.blocks(store, row, opts));
     if (!lock && !member) return false;
     const now = Date.now();
     if (!lockQuiet && now - lastNag > 2000 && window.UI && UI.toast) {

@@ -10,11 +10,23 @@ const PlayerFile = (() => {
   const STORE = 'playerfiles';
   const MAX_MSG = 500;          // a conversation, not a log — the oldest fall off
   const MAX_LEN = 2000;
-  const POLL_MS = 5000;         // how often an open dialog looks for the other end
+  const AUTO_MINUTES = [1, 5, 10];
+  const AUTO_KEY = 'stx_pfile_auto_min';
   const DRIVE_SYNC_MS = 2 * 60 * 1000; // keep every player file current on Drive
 
   const esc = s => UI.esc(s);
   const t = (k, fallback) => { const r = T(k); return r === k ? fallback : r; };
+  function autoMinutes() {
+    let n = 5;
+    try { n = +(localStorage.getItem(AUTO_KEY) || 5); } catch (e) { /* private mode */ }
+    return AUTO_MINUTES.indexOf(n) >= 0 ? n : 5;
+  }
+  function setAutoMinutes(n) {
+    n = +n;
+    if (AUTO_MINUTES.indexOf(n) < 0) n = 5;
+    try { localStorage.setItem(AUTO_KEY, String(n)); } catch (e) { /* private mode */ }
+    return n;
+  }
 
   const fileId = playerId => 'pf_' + playerId;
   const nameOf = p => [p && p.firstName, p && p.lastName].filter(Boolean).join(' ').trim()
@@ -152,7 +164,7 @@ const PlayerFile = (() => {
     const hash = await hashWord(word, salt, KEY_ITER);
     await Store.save(STORE, Object.assign({}, get(player.id) || f, {
       key: { salt: b64(salt), iter: KEY_ITER, hash, at: Date.now(), prov: 1 }
-    }));
+    }), { playerFileKey: true });
     holdKey(player.id, prettyKey(word), hash);
     // A copy that refused the write (a frozen backup) never really took the key.
     return holdsKey(player.id) ? true : 'bad';
@@ -161,9 +173,12 @@ const PlayerFile = (() => {
   // A frozen backup stays frozen. The coach's own copy writes freely; a copy
   // that only follows the club needs the player's key.
   function canWrite(player) {
+    // A valid key permits writes only to this player's private file, including
+    // on an otherwise locked/read-only player copy.
+    if (player && holdsKey(player.id)) return true;
     if (window.Store && Store.locked && Store.locked()) return false;
     if (!(window.Access && Access.readMode && Access.readMode())) return true;
-    return !!(player && holdsKey(player.id));
+    return false;
   }
 
   async function ensure(player) {
@@ -192,7 +207,7 @@ const PlayerFile = (() => {
     const msg = { id: Store.uid('msg'), at: Date.now(), side: side(player), by: myName(player), text: body };
     const saved = await Store.save(STORE, Object.assign({}, file, {
       messages: (file.messages || []).concat([msg]).slice(-MAX_MSG)
-    }));
+    }), { playerFileKey: holdsKey(player.id) });
     if (saved) await saveToDrive(player);
     return saved;
   }
@@ -350,7 +365,7 @@ const PlayerFile = (() => {
     if (mine && mine.hash && !mine.prov && (+inKey.at || 0) <= (+mine.at || 0)) return false;
     await Store.save(STORE, Object.assign({}, cur, {
       key: { salt: String(inKey.salt), iter: +inKey.iter || KEY_ITER, hash: String(inKey.hash), at: +inKey.at || Date.now() }
-    }));
+    }), { playerFileKey: true });
     return true;
   }
   // Fetch the coach's key alone, without touching the thread — what Use key
@@ -388,7 +403,8 @@ const PlayerFile = (() => {
     const seen = new Set(mine.map(m => m.id));
     const got = cleanMsgs(remote && remote.messages, seen);
     const merged = mine.concat(got).sort((a, b) => a.at - b.at).slice(-MAX_MSG);
-    if (got.length) await Store.save(STORE, Object.assign({}, get(player.id) || local, { messages: merged }));
+    if (got.length) await Store.save(STORE, Object.assign({}, get(player.id) || local, { messages: merged }),
+      { playerFileKey: holdsKey(player.id) });
     if (push) {
       // The record is re-read: a key adopted a moment ago has to go back up with
       // the thread, not be written over by the copy held before the merge.
@@ -441,7 +457,8 @@ const PlayerFile = (() => {
   async function clearAll(player) {
     const file = get(player && player.id);
     if (!file || !canWrite(player)) return false;
-    await Store.save(STORE, Object.assign({}, file, { messages: [] }));
+    await Store.save(STORE, Object.assign({}, file, { messages: [] }),
+      { playerFileKey: holdsKey(player.id) });
     await saveToDrive(player);
     return true;
   }
@@ -576,7 +593,10 @@ const PlayerFile = (() => {
           <p class="hint">${esc(writable
             ? t('pfile.signedAs', 'Signed as') + ': ' + myName(player) + ' \u00b7 ' + sideLabel(side(player))
             : staff ? t('pfile.readOnly', 'This copy is read-only, so the file can be read but not written to.')
-              : t('pfile.needKey', 'Writing needs the message key the coach generates for you. Press Message key and type it in.'))}</p>`,
+              : t('pfile.needKey', 'Writing needs the message key the coach generates for you. Press Message key and type it in.'))}</p>
+          <label class="field"><span>${esc(t('pfile.autoUpdate', 'Auto update'))}</span>
+            <select id="pf_auto">${AUTO_MINUTES.map(n => `<option value="${n}" ${n === autoMinutes() ? 'selected' : ''}>${n} ${esc(n === 1 ? t('pfile.minute', 'minute') : t('pfile.minutes', 'minutes'))}</option>`).join('')}</select>
+          </label>`,
         footer: `<button class="btn ghost" data-close2>${esc(T('common.close'))}</button>
           ${staff ? `<button class="btn" data-get>\u2b73 ${esc(t('pfile.dl', 'Get message'))}</button>
           <button class="btn" data-send>\u2b71 ${esc(t('pfile.up', 'Upload message'))}</button>` : ''}
@@ -639,8 +659,9 @@ const PlayerFile = (() => {
           // Both ends sit on the same file, so each keeps looking for what the
           // other one wrote for as long as the dialog is open. The modal being
           // off the page is what stops it, which covers every way out.
-          const poll = setInterval(async () => {
-            if (!m.isConnected) return clearInterval(poll);
+          let poll = null;
+          const autoSync = async () => {
+            if (!m.isConnected) { if (poll) clearInterval(poll); return; }
             if (busy || !driveOn()) return;
             busy = true;
             const r = await driveSync(player, pending ? 'push' : 'pull');
@@ -648,7 +669,14 @@ const PlayerFile = (() => {
             if (!r.ok) return;
             pending = false;
             if (r.got) refresh();
-          }, POLL_MS);
+          };
+          const startPoll = minutes => {
+            if (poll) clearInterval(poll);
+            poll = setInterval(autoSync, setAutoMinutes(minutes) * 60 * 1000);
+          };
+          const auto = m.querySelector('#pf_auto');
+          if (auto) auto.onchange = () => startPoll(auto.value);
+          startPoll(autoMinutes());
           m.querySelector('[data-post]').onclick = async () => {
             const text = inp.value.trim();
             if (!text) return UI.toast(t('pfile.needText', 'Write something first'), 'error');
