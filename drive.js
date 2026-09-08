@@ -288,11 +288,25 @@ const Drive = (() => {
     });
   }
 
+  // Google exposes Drive media through both the API and content hosts. Some
+  // browsers/networks fail the redirect from www.googleapis.com with only the
+  // opaque `Failed to fetch` error. Retry through the dedicated content host
+  // in that case; real HTTP responses (403, 404, etc.) still reach the UI.
+  async function downloadMedia(fileId, query, opts) {
+    const path = '/drive/v3/files/' + encodeURIComponent(fileId) + '?' + query;
+    try {
+      return await fetchJson('https://www.googleapis.com' + path, opts);
+    } catch (e) {
+      if (!isNetworkThrow(e)) throw e;
+      return fetchJson('https://content.googleapis.com' + path, opts);
+    }
+  }
+
   async function downloadJson(fileId) {
     const at = await ensureToken();
     // The timestamp is belt-and-suspenders alongside cache: 'no-store' above —
     // a proxy that ignores fetch cache directives still sees a brand new URL.
-    return fetchJson('https://www.googleapis.com/drive/v3/files/' + encodeURIComponent(fileId) + '?alt=media&_=' + now(), {
+    return downloadMedia(fileId, 'alt=media&_=' + now(), {
       headers: { Authorization: 'Bearer ' + at }
     });
   }
@@ -382,8 +396,8 @@ const Drive = (() => {
   // never seen a Google sign-in screen.
   async function publicDownload(fileId, apiKey) {
     if (!apiKey || !API_KEY_RE.test(apiKey.trim())) throw new Error('bad-api-key');
-    return fetchJson('https://www.googleapis.com/drive/v3/files/' + encodeURIComponent(fileId) +
-      '?alt=media&_=' + now() + '&key=' + encodeURIComponent(apiKey.trim()));
+    return downloadMedia(fileId,
+      'alt=media&_=' + now() + '&key=' + encodeURIComponent(apiKey.trim()));
   }
 
   // The folder a publicly-shared file sits in, read with nothing but the API
