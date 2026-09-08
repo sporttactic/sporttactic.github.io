@@ -113,7 +113,12 @@ const Drive = (() => {
                 expires: now() + (resp.expires_in ? resp.expires_in * 1000 : 3600000)
               };
               persistToken(token);
-              resolve(token);
+              // A verified player account must write its private player file as
+              // part of connecting instead of waiting for a later timer tick.
+              const playerFileReady = window.PlayerFile && PlayerFile.googleConnected
+                ? Promise.resolve(PlayerFile.googleConnected()).catch(() => {})
+                : Promise.resolve();
+              playerFileReady.then(() => resolve(token));
             } else {
               reject(new Error(explain(resp && resp.error)));
             }

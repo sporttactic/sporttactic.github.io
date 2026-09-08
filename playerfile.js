@@ -535,6 +535,25 @@ const PlayerFile = (() => {
     if (driveTimer) clearInterval(driveTimer);
     driveTimer = setInterval(syncAll, autoMinutes() * 60 * 1000);
   }
+  // A player who has just connected Google must publish their local private
+  // file immediately. A normal clean background pass pulls, so waiting for the
+  // timer could leave the account connected without creating its Drive file.
+  async function googleConnected() {
+    if (!driveOn()) return;
+    let players = [];
+    try { players = Store.all('players') || []; } catch (e) { return; }
+    for (const player of players) {
+      // A held message key identifies the player represented by this device.
+      // Never publish another squad member's private file from a player login.
+      if (!player || !player.id || !holdsKey(player.id) || driveBusy.has(player.id)) continue;
+      driveBusy.add(player.id);
+      try {
+        const result = await driveSync(player, 'push');
+        if (result.ok) driveDirty.delete(player.id);
+      } catch (e) { /* the scheduled pass retries failed writes */ }
+      finally { driveBusy.delete(player.id); }
+    }
+  }
 
   async function clearAll(player) {
     const file = get(player && player.id);
@@ -790,7 +809,7 @@ const PlayerFile = (() => {
 
   return {
     STORE, fileId, get, messages, ensure, remove, post, sweep, dialog, threadHtml, clearAll, canWrite, side,
-    newKey, claimKey, holdsKey, hasKey, keyDialog, claimDialog, driveSync, driveName, syncAll, startDriveSync
+    newKey, claimKey, holdsKey, hasKey, keyDialog, claimDialog, driveSync, driveName, syncAll, startDriveSync, googleConnected
   };
 })();
 if (typeof window !== 'undefined') {
