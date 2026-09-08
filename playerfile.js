@@ -153,18 +153,20 @@ const PlayerFile = (() => {
     const word = canonKey(typed);
     if (word.length !== KEY_LEN) return 'len';
     if (!cryptoOk()) return 'bad';
-    if (!driveOn()) return 'off';
     const f = get(player && player.id) || await ensure(player);
     if (!f) return 'bad';
 
-    // Never accept a player key on trust. Read the coach-generated key block
-    // from the Google player file and verify the entered word against it.
-    if (!await driveKey(player)) return 'bad';
+    // Prefer the current Drive copy when it is reachable, but do not require a
+    // Drive connection just to check a key. The coach-generated key block is
+    // already carried by the synced player file and contains the OAuth client
+    // configuration needed to make that first player-side connection.
+    if (driveOn()) await driveKey(player);
     const current = get(player.id) || f;
-    if (!await sameWord(word, current.key)) return 'bad';
+    const key = current && current.key;
+    if (!key || key.prov || !await sameWord(word, key)) return 'bad';
 
-    holdKey(player.id, prettyKey(word), current.key.hash);
-    await useKeyDriveConfig(current.key);
+    holdKey(player.id, prettyKey(word), key.hash);
+    await useKeyDriveConfig(key);
     return true;
   }
 
