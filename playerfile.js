@@ -110,8 +110,15 @@ const PlayerFile = (() => {
     const word = makeWord();
     const salt = crypto.getRandomValues(new Uint8Array(16));
     const hash = await hashWord(canonKey(word), salt, KEY_ITER);
+    // The OAuth client id is public configuration, not a secret. Carrying it
+    // with the key lets the player sign in from this dialog without having to
+    // understand or visit the coach-only Google Drive settings.
+    let clientId = '';
+    try {
+      if (window.Drive && Drive.getClientId) clientId = await Drive.getClientId();
+    } catch (e) { /* Drive may not be configured yet */ }
     await Store.save(STORE, Object.assign({}, file, {
-      key: { salt: b64(salt), iter: KEY_ITER, hash, at: Date.now() }
+      key: { salt: b64(salt), iter: KEY_ITER, hash, at: Date.now(), clientId: clientId || '' }
     }));
     holdKey(player.id, word, hash);
     // The key is put beside the player file on Drive as it is made, because that
@@ -125,6 +132,19 @@ const PlayerFile = (() => {
     try { return (await hashWord(word, unb64(k.salt), +k.iter || KEY_ITER)) === k.hash; }
     catch (e) { return false; }
   }
+  // Adopt the coach's public OAuth configuration only after the message key
+  // has been verified. This changes no permissions; Google still shows its own
+  // account consent window before issuing a Drive token.
+  async function useKeyDriveConfig(k) {
+    if (!k || !k.clientId || !window.Drive || !Drive.setClientId) return false;
+    try {
+      const id = Drive.normClientId ? Drive.normClientId(k.clientId) : String(k.clientId);
+      if (!id) return false;
+      if (!Drive.getClientId || (await Drive.getClientId()) !== id) await Drive.setClientId(id);
+      return true;
+    } catch (e) { return false; }
+  }
+
   // Returns true, or why it was refused: 'len' for the wrong length, 'bad' for
   // a key that does not match the one the file carries.
   async function claimKey(player, typed) {
@@ -141,6 +161,7 @@ const PlayerFile = (() => {
     }
     if (await sameWord(word, f.key)) {
       holdKey(player.id, prettyKey(word), f.key.hash);
+      await useKeyDriveConfig(f.key);
       return true;
     }
     // The word does not match the key sitting here. A key the coach replaced
@@ -151,6 +172,7 @@ const PlayerFile = (() => {
       f = get(player.id) || f;
       if (!await sameWord(word, f.key)) return 'bad';
       holdKey(player.id, prettyKey(word), f.key.hash);
+      await useKeyDriveConfig(f.key);
       return true;
     }
     // Neither the squad nor Drive has the coach's key â€” a club that never syncs
@@ -267,7 +289,8 @@ const PlayerFile = (() => {
     // the key they were handed against. A key only taken on trust is not
     // published, so it can never stand in for the coach's own.
     key: (file && file.key && file.key.hash && !file.key.prov)
-      ? { salt: file.key.salt, iter: file.key.iter, hash: file.key.hash, at: file.key.at } : null,
+      ? { salt: file.key.salt, iter: file.key.iter, hash: file.key.hash, at: file.key.at,
+          clientId: file.key.clientId || '' } : null,
     updatedAt: Date.now(), messages: messages
   });
 
@@ -361,7 +384,8 @@ const PlayerFile = (() => {
     const mine = cur.key;
     if (mine && mine.hash && !mine.prov && (+inKey.at || 0) <= (+mine.at || 0)) return false;
     await Store.save(STORE, Object.assign({}, cur, {
-      key: { salt: String(inKey.salt), iter: +inKey.iter || KEY_ITER, hash: String(inKey.hash), at: +inKey.at || Date.now() }
+      key: { salt: String(inKey.salt), iter: +inKey.iter || KEY_ITER, hash: String(inKey.hash),
+        at: +inKey.at || Date.now(), clientId: String(inKey.clientId || '') }
     }), { playerFileKey: true });
     return true;
   }
@@ -376,6 +400,19 @@ const PlayerFile = (() => {
     try { doc = await Drive.downloadJson(fileId); }
     catch (e) { delete driveIds[player.id]; return false; }
     return await adoptKey(player, doc && doc.key);
+  }
+
+  // A verified message key is enough to reach Google sign-in. The player does
+  // not need access to Settings; the client id arrived with the coach's key.
+  async function connectWithKey(player) {
+    if (driveOn()) return true;
+    if (!player || !holdsKey(player.id) || !window.Drive || !Drive.connect) return false;
+    const f = get(player.id);
+    await useKeyDriveConfig(f && f.key);
+    try {
+      await Drive.connect();
+      return driveOn();
+    } catch (e) { return false; }
   }
 
   // Read what is on Drive and add whatever this copy has not seen; a push then
@@ -640,6 +677,11 @@ const PlayerFile = (() => {
           const drive = async (btn, mode) => {
             btn.disabled = true;
             busy = true;
+            if (!driveOn() && !await connectWithKey(player)) {
+              busy = false;
+              btn.disabled = false;
+              return driveFail({ why: 'off' });
+            }
             const r = await driveSync(player, mode);
             busy = false;
             btn.disabled = false;
