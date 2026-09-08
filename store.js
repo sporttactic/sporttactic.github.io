@@ -368,7 +368,7 @@ const Store = (() => {
   function scoped(store, teamId) {
     const tid = teamId === undefined ? activeTeamId() : teamId;
     if (!tid) return all(store);
-    return all(store).filter(r => r.teamId === tid);
+    return all(store).filter(r => String(r.teamId == null ? '' : r.teamId) === String(tid));
   }
   const matches = teamId => scoped('matches', teamId);
   const coaches = teamId => scoped('coaches', teamId);
@@ -421,7 +421,7 @@ const Store = (() => {
   function players(teamId) {
     const s = sportNow();
     const tid = teamId === undefined ? activeTeamId() : teamId;
-    return all('players').filter(p => (!p.sport || p.sport === s) && (!tid || p.teamId === tid));
+    return all('players').filter(p => (!p.sport || p.sport === s) && (!tid || String(p.teamId == null ? '' : p.teamId) === String(tid)));
   }
   // One-time upgrade: squads created before this rule keep the sport in use, so
   // nobody disappears from the app after the update.
