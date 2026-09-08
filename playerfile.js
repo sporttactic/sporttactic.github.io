@@ -371,7 +371,13 @@ const PlayerFile = (() => {
       const hit = await Drive.findFile(name, byName);
       if (hit) return await rememberDriveId(player, hit.id);
     }
-    const shared = await Drive.listFiles("name='" + qEsc(name) + "' and sharedWithMe = true and trashed=false");
+    // A shared file can be visible to this OAuth client even when Drive does
+    // not expose the owner's folder tree under the narrow drive.file scope.
+    // Search all app-visible files by the exact player filename first because
+    // sharedWithMe is not consistently set for files created by this app.
+    const visible = await Drive.listFiles("name='" + qEsc(name) + "' and trashed=false");
+    if (visible && visible[0]) return await rememberDriveId(player, visible[0].id);
+    const shared = await Drive.listFiles("name='" + qEsc(name) + "' and sharedWithMe and trashed=false");
     if (shared && shared[0]) return await rememberDriveId(player, shared[0].id);
     if (!create) return '';
     const res = await Drive.uploadJson(name, driveDoc(player, get(player.id), []), { parent: await ownFolder(player) });
@@ -451,12 +457,26 @@ const PlayerFile = (() => {
     let remote = null;
     try { remote = await Drive.downloadJson(fileId); }
     catch (e) {
+      // A remembered id may point at a deleted or replaced file. Clear it and
+      // retry the full filename lookup during this operation, rather than
+      // requiring a second press of Get message or Upload message.
       await forgetDriveId(player);
+      try {
+        fileId = await driveFile(player, false);
+        if (fileId) remote = await Drive.downloadJson(fileId);
+      } catch (e2) {
+        await forgetDriveId(player);
+        fileId = '';
+      }
       // Only the coach may recreate an authoritative player file.
-      if (push && !playerCopy) {
-        try { fileId = await driveFile(player, true); }
-        catch (e2) { return { ok: false, why: 'net' }; }
-      } else return { ok: false, why: playerCopy ? 'badkey' : 'net' };
+      if (!fileId && push && !playerCopy) {
+        try {
+          fileId = await driveFile(player, true);
+          remote = fileId ? await Drive.downloadJson(fileId) : null;
+        } catch (e3) { return { ok: false, why: 'net' }; }
+      } else if (!fileId) {
+        return { ok: false, why: playerCopy ? 'badkey' : 'net' };
+      }
     }
 
     if (playerCopy) {
