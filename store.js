@@ -1,4 +1,4 @@
-/* store.js — in-memory cache over IndexedDB + seed data + domain helpers */
+/* store.js â€” in-memory cache over IndexedDB + seed data + domain helpers */
 const Store = (() => {
   const cache = {};
   const listeners = new Set();
@@ -16,14 +16,14 @@ const Store = (() => {
 
   function all(store) {
     // A player copy is not shown the scouting events, so nothing counted from
-    // them — season totals, ratings, match reports — shows up either. They still
+    // them â€” season totals, ratings, match reports â€” shows up either. They still
     // sync: the shared file is read and written straight from the database.
     if (store === 'events' && typeof window !== 'undefined' && window.Access && Access.hidesEvents && Access.hidesEvents()) return [];
     const rows = cache[store] || [];
     return HIDEABLE.indexOf(store) >= 0 ? rows.filter(r => visible(store, r)) : rows;
   }
   // A row the coach kept for staff is not listed, named or counted on a player
-  // copy — the same answer wherever the app asks for one.
+  // copy â€” the same answer wherever the app asks for one.
   function visible(store, row) {
     return !(typeof window !== 'undefined' && window.Access && Access.hidesRow && Access.hidesRow(store, row));
   }
@@ -80,7 +80,7 @@ const Store = (() => {
     // Anything a team owns is stamped once, so no view has to remember to do it.
     if (TEAM_SCOPED.indexOf(store) >= 0 && !obj.teamId) obj.teamId = activeTeamId();
     // What a read-only member writes here is their own work, and stays theirs
-    // to change or delete — the club's rows came down from the shared file.
+    // to change or delete â€” the club's rows came down from the shared file.
     if (store !== 'settings' && window.Access && Access.readMode && Access.readMode()) {
       // A narrow allowance (recategorising a club drill) must not quietly
       // upgrade into owning the whole row it was never allowed to rewrite.
@@ -100,7 +100,7 @@ const Store = (() => {
     await DB.remove(store, id);
     cache[store] = (cache[store] || []).filter(x => x.id !== id);
     // Without this, a sync merges in whichever copy is still on Drive and the
-    // deleted row comes right back — the tombstone is what tells a later sync
+    // deleted row comes right back â€” the tombstone is what tells a later sync
     // that the row is gone on purpose, not just missing from this device yet.
     if (store !== 'settings') await recordTombstone(store, id);
     emit();
@@ -136,7 +136,7 @@ const Store = (() => {
     const forStore = Object.assign({}, t[store], { [id]: Date.now() });
     await setSetting(TOMBSTONE_KEY, Object.assign({}, t, { [store]: forStore }));
   }
-  // Union of both sides, newest deletedAt per id — a whole-row "newest wins"
+  // Union of both sides, newest deletedAt per id â€” a whole-row "newest wins"
   // merge would throw away whichever side lost the timestamp race entirely.
   function mergeTombstones(a, b) {
     const out = {};
@@ -206,8 +206,8 @@ const Store = (() => {
     };
   }
 
-  // Drills that earlier builds shipped with. The library now starts EMPTY —
-  // a coach builds it from their own work or with the AI drill generator — so
+  // Drills that earlier builds shipped with. The library now starts EMPTY â€”
+  // a coach builds it from their own work or with the AI drill generator â€” so
   // these titles exist only to sweep the old seeded rows out on upgrade.
   const SEED_DRILL_TITLES = [
     '3v3 Continuous Attack', 'Goalkeeper Reaction Wall', 'Fast Break Waves', '6-0 Defensive Shifting', 'Goalkeeper Mobility Routine',
@@ -225,19 +225,19 @@ const Store = (() => {
   // Matches earlier builds shipped with. A season now starts empty, so these two
   // exist only to sweep the old seeded rows out on upgrade.
   const SEED_MATCHES = [
-    { opponent: 'Rhein Löwen', venue: 'City Arena', homeScore: 28, awayScore: 25 },
+    { opponent: 'Rhein LÃ¶wen', venue: 'City Arena', homeScore: 28, awayScore: 25 },
     { opponent: 'Nord Sturm', venue: 'North Hall', homeScore: 0, awayScore: 0 }
   ];
 
-  // The demo club earlier builds opened with. Nothing is invented any more —
-  // the club, its squads and everything in them are the coach's own — so these
+  // The demo club earlier builds opened with. Nothing is invented any more â€”
+  // the club, its squads and everything in them are the coach's own â€” so these
   // names exist only to sweep the old rows out on upgrade.
   const SEED_CLUB = 'Metropolis HC';
   const SEED_SEASON = '2024/2025';
   const SEED_TEAM = 'Metropolis Men A';
   const SEED_COACHES = ['Heinrich Vogel', 'Lukas Bauer', 'Mia Wolf'];
   const SEED_SESSION = 'Strength & Agility';
-  const SEED_OPPONENTS = ['Rhein Löwen', 'Nord Sturm'];
+  const SEED_OPPONENTS = ['Rhein LÃ¶wen', 'Nord Sturm'];
 
   // One-time cleanup: remove the old built-in demo players (and their events)
   // from installs that were seeded before demo players were dropped.
@@ -278,7 +278,7 @@ const Store = (() => {
   }
 
   // One-time upgrade: the app no longer ships demo matches. A seeded row the
-  // coach has since scouted or rewritten is left alone — only an untouched one
+  // coach has since scouted or rewritten is left alone â€” only an untouched one
   // goes, so nobody loses a season they actually played.
   async function purgeSeedMatches() {
     if (await getSetting('matchesNoneV1', false)) return;
@@ -294,7 +294,7 @@ const Store = (() => {
   }
 
   // One-time upgrade: the demo club goes, so the team picker shows the coach's
-  // own squad instead of a made-up one. It only goes if it was never used — a
+  // own squad instead of a made-up one. It only goes if it was never used â€” a
   // single player, match or session of their own and the whole club stays.
   async function purgeSeedClub() {
     if (await getSetting('clubNoneV1', false)) return;
@@ -343,7 +343,7 @@ const Store = (() => {
     const s = sportNow();
     const list = all('teams').filter(t => !t.sport || t.sport === s);
     // A player copy that joined with one squad's own password sees that squad
-    // and no other — every team-scoped read runs through here.
+    // and no other â€” every team-scoped read runs through here.
     const lock = (typeof window !== 'undefined' && window.Access && Access.teamLock) ? Access.teamLock() : '';
     return lock ? list.filter(t => t.id === lock) : list;
   }
@@ -351,11 +351,16 @@ const Store = (() => {
     const list = teams();
     let id = '';
     try { id = localStorage.getItem(K_TEAM + sportNow()) || ''; } catch { /* private mode */ }
-    return list.find(t => t.id === id) || list[0] || null;
+    // Select values and localStorage are strings. Normalize legacy/imported ids
+    // too, otherwise a valid selection misses and falls back to the first team.
+    const wanted = String(id);
+    return list.find(t => String(t.id) === wanted) || list[0] || null;
   }
   function activeTeamId() { const t = activeTeam(); return t ? t.id : ''; }
   function setActiveTeam(id) {
-    try { localStorage.setItem(K_TEAM + sportNow(), id || ''); } catch { /* private mode */ }
+    const wanted = String(id == null ? '' : id);
+    const team = teams().find(t => String(t.id) === wanted);
+    try { localStorage.setItem(K_TEAM + sportNow(), team ? String(team.id) : ''); } catch { /* private mode */ }
     emit();
   }
   // Everything a team owns is filtered through here, so one squad never sees
@@ -384,7 +389,7 @@ const Store = (() => {
       await setSetting('teamScopeV1', true);
     }
     // The event planner became team-scoped after V1 had already run on most
-    // devices, so its events sat there with no squad — and scoped() hides every
+    // devices, so its events sat there with no squad â€” and scoped() hides every
     // one of them the moment a squad is active, on this device and on every
     // copy that syncs them.
     if (!(await getSetting('teamScopeV2', false))) {
@@ -447,11 +452,11 @@ const Store = (() => {
   // shared file markedly smaller for free: a key that is not there reads back as
   // undefined, which is what an empty one meant anyway, and merging replaces
   // whole rows by id so clearing a field still travels.
-  // false and 0 are answers, not blanks — those stay.
+  // false and 0 are answers, not blanks â€” those stay.
   const isBlank = v => v === undefined || v === null || v === ''
     || (Array.isArray(v) && !v.length);
   // Blob references sourced from IndexedDB can go stale (a phone reclaiming
-  // memory in the background is the usual trigger) — reading them then throws
+  // memory in the background is the usual trigger) â€” reading them then throws
   // a bare browser NotFoundError ("the object can not be found here"), which
   // used to take the ENTIRE sync down with it. One unreadable photo/thumbnail
   // now just drops out of the pack instead of blocking every other row.
@@ -475,7 +480,7 @@ const Store = (() => {
   }
   // Keys that are not data. JSON.parse happily produces an own "__proto__"
   // property, and copying it onto a plain object with = or Object.assign runs
-  // the inherited setter instead — which is how a shared file or a mailed
+  // the inherited setter instead â€” which is how a shared file or a mailed
   // backup gets to choose the prototype of every row it brings with it.
   const UNSAFE_KEY = k => k === '__proto__' || k === 'constructor' || k === 'prototype';
   function unpack(v) {
@@ -496,7 +501,7 @@ const Store = (() => {
     personal: ['personal'], opponents: ['opponents'],
     matches: ['matches', 'events'], planner: ['planner'],
     // The whole Training Planner page in one file: sessions, the drills they use,
-    // and personal training & max tests — Status & progression is a chart drawn
+    // and personal training & max tests â€” Status & progression is a chart drawn
     // from these same personal rows, so it travels with them for free.
     trainingPlanner: ['training', 'exercises', 'personal'],
     // The team record comes first so the club and season it points at can be found.
@@ -519,7 +524,7 @@ const Store = (() => {
     for (const s of stores) {
       let rows = await DB.getAll(s);
       // The plan on screen is what this squad owns AND what other squads handed
-      // it, so an "export what I see" backup follows the same rule — a strict
+      // it, so an "export what I see" backup follows the same rule â€” a strict
       // ownership filter would silently export nothing for a squad that mostly
       // looks at events other squads shared in.
       if (teamId && s === 'planner') rows = rows.filter(r => !r.teamId || r.teamId === teamId
