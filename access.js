@@ -1,6 +1,6 @@
-/* access.js — who may do what.
+/* access.js â€” who may do what.
 
-   The app already stored a role string ('Coach', 'Player', …) but nothing ever
+   The app already stored a role string ('Coach', 'Player', â€¦) but nothing ever
    read it, so every device could do everything. This turns that string into a
    permission tier and adds the club's member list: the people an admin or a
    coach hands access to, and the role each of them gets. The member list is
@@ -9,7 +9,7 @@
    understand Drive permissions. */
 const Access = (() => {
   // The five role names are unchanged so existing devices and the i18n keys
-  // ('role.Coach', …) keep working; each one maps to a tier.
+  // ('role.Coach', â€¦) keep working; each one maps to a tier.
   const ROLES = ['Super Admin', 'Club Admin', 'Coach', 'Analyst', 'Player'];
   const TIER = {
     'Super Admin': 'admin', 'Club Admin': 'admin',
@@ -50,11 +50,11 @@ const Access = (() => {
     return list.indexOf('*') >= 0 || list.indexOf(perm) >= 0;
   }
   const isAdmin = r => tier(r) === 'admin';
-  // "Admin or coach" — the gate the access panel and the cloud setup use.
+  // "Admin or coach" â€” the gate the access panel and the cloud setup use.
   const isStaff = r => ['admin', 'coach'].indexOf(tier(r)) >= 0;
   // Drive decides who may write the file, so an invitation has to match what the
   // policy promised: with contributions on, everybody invited arrives as an
-  // editor — otherwise a player is handed a code that says "contribute" and a
+  // editor â€” otherwise a player is handed a code that says "contribute" and a
   // file Google will not let them save to.
   function driveRole(r) {
     if (tier(r) === 'player') return 'reader';
@@ -114,15 +114,15 @@ const Access = (() => {
   // ---- What a copy made with the team code may do ------------------------
   // The coach decides this once, next to the code itself; it rides along in the
   // shared file, so every device that joins opens the same way. It only ever
-  // bites on a player-tier device that follows somebody else's file — the owner
+  // bites on a player-tier device that follows somebody else's file â€” the owner
   // and the coaches never see it.
   const PROFILE_KEY = 'memberProfile';
   // What a club can hand a player copy on top of read-only, one tick each: the
   // module itself and the stores its tools have to write.
-  //   own    — the member may only change rows they made themselves.
-  //   events — the module is worthless without the scouting events, so they stop
+  //   own    â€” the member may only change rows they made themselves.
+  //   events â€” the module is worthless without the scouting events, so they stop
   //            being hidden.
-  //   def    — training is the module a player copy has always kept; the rest
+  //   def    â€” training is the module a player copy has always kept; the rest
   //            are off until the coach ticks them.
   const EXTRAS = [
     { key: 'training', routes: ['training'], stores: ['training', 'exercises', 'personal'], own: true, def: true },
@@ -131,7 +131,7 @@ const Access = (() => {
     { key: 'scouting', routes: ['scouting'], stores: ['events', 'matches'], events: true }
   ];
   // Live scouting is the coach's tool at the table, so it is off a player copy
-  // — module and events both — until the club says otherwise.
+  // â€” module and events both â€” until the club says otherwise.
   const NEVER_ROUTES = ['scouting'];
   // Rows a read-only member made themselves carry this, so they can change and
   // remove their own work without ever touching the club's.
@@ -217,7 +217,7 @@ const Access = (() => {
     }
     return squadCoach() ? coachHidden(teamLock()) : [];
   }
-  // Everything the app counts — totals, ratings, reports — is derived from the
+  // Everything the app counts â€” totals, ratings, reports â€” is derived from the
   // scouting events, so hiding them at the source empties all of it at once.
   const hidesEvents = () => memberCopy() && !extrasOn().some(x => x.events);
   // A record the coach marked as staff work. Kept off a player copy wherever the
@@ -226,7 +226,7 @@ const Access = (() => {
   const hidesRow = (store, row) => !!(row && row.coachOnly)
     && COACH_ONLY_STORES.indexOf(store) >= 0 && memberCopy();
   // Is this module one the coach left open to a read-only copy? Training stays
-  // open on a team-code join even before (or without) a role word is claimed —
+  // open on a team-code join even before (or without) a role word is claimed â€”
   // an unproven role must not cost a player the one module that is theirs.
   function moduleOpen(route) {
     if (!readMode()) return true;
@@ -235,14 +235,14 @@ const Access = (() => {
   const openStores = () => {
     const base = extrasOn().reduce((a, x) => a.concat(x.stores), []);
     // Whatever the club opened for contributions has to be writable here too,
-    // or a member would have nothing to send back. Still only their own rows —
+    // or a member would have nothing to send back. Still only their own rows â€”
     // blocks() keeps the club's records the club's. Unproven role passwords
     // still stop here, but never take the training exception above down with them.
     if (unclaimed() || !window.Privacy) return base;
     const pol = Privacy.policy();
     if (!Privacy.contributes(pol)) return base;
     // DB is a top-level const, so it is a global binding but NOT a property of
-    // window — testing window.DB would silently leave this list empty.
+    // window â€” testing window.DB would silently leave this list empty.
     const all = typeof DB === 'undefined' ? [] : DB.STORES;
     const open = all.filter(s => s !== 'settings' && Privacy.mayEdit(pol, s));
     return base.concat(open.filter(s => base.indexOf(s) < 0));
@@ -263,7 +263,7 @@ const Access = (() => {
     // could only read it would leave the player with nothing to answer on.
     if (store === 'playerfiles') return false;
     if (openStores().indexOf(store) < 0) return true;
-    // Re-tagging a drill's category is not the same as rewriting it — a member
+    // Re-tagging a drill's category is not the same as rewriting it â€” a member
     // may do this to ANY drill the training exception already opened, not only
     // the ones stamped as their own.
     if (store === 'exercises' && opts && opts.categoryOnly) return false;
@@ -282,16 +282,16 @@ const Access = (() => {
   // ---- Role passwords ----------------------------------------------------
   // The team code lets a device read the shared file; one of these words decides
   // what that device is allowed to BE. Anybody holding the code can read the
-  // file, so only a salted PBKDF2 hash travels in it — the words themselves stay
+  // file, so only a salted PBKDF2 hash travels in it â€” the words themselves stay
   // on the device that made them, which is the one that hands them out.
-  // A squad has two words of its own — one for its players and one for its
-  // coaches — so whoever joins with either sees that squad and never the
+  // A squad has two words of its own â€” one for its players and one for its
+  // coaches â€” so whoever joins with either sees that squad and never the
   // others.
   const KEYS_KEY = 'roleKeys';          // shared: { v, set, salt, iter, roles, teams }
   const WORDS_KEY = 'roleKeyWords';     // this device only: { set, words }
   const CLAIM_KEY = 'roleClaim';        // this device only: which word it showed
   const KEY_ITER = 310000;
-  // No 0/O, 1/I/L — a password read off a screen and typed on a phone.
+  // No 0/O, 1/I/L â€” a password read off a screen and typed on a phone.
   const KEY_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
   let claiming = false;
 
@@ -327,7 +327,7 @@ const Access = (() => {
     return (v.words && typeof v.words === 'object') ? v.words : v;
   }
   // The words on this device belong to one set of hashes. If the file now holds
-  // a different set — somebody generated new ones elsewhere — these words would
+  // a different set â€” somebody generated new ones elsewhere â€” these words would
   // be refused, so the coach is told rather than handing out a dead password.
   function wordsStale() {
     const rec = Store.find('settings', WORDS_KEY);
@@ -342,7 +342,7 @@ const Access = (() => {
     const set = b64(crypto.getRandomValues(new Uint8Array(6)));
     const words = {}, roles = {}, teams = {};
     // One extra word that reads every squad at once, for whoever should not be
-    // kept to just one — handed out on top of the per-squad words, never
+    // kept to just one â€” handed out on top of the per-squad words, never
     // instead of them.
     const allWord = makeWord();
     words['team:all'] = allWord;
@@ -365,7 +365,7 @@ const Access = (() => {
   }
   // A squad added after the words were made gets one of its own, without
   // touching anything already handed out. Only the device holding the words can
-  // do it — anywhere else the new word would be a hash nobody can read.
+  // do it â€” anywhere else the new word would be a hash nobody can read.
   async function ensureTeamKeys() {
     const rec = roleKeys();
     const wrec = Store.find('settings', WORDS_KEY);
@@ -480,7 +480,10 @@ const Access = (() => {
   function teamLock() {
     if (!following()) return '';
     const c = claim();
-    return (c && c.teamId) ? String(c.teamId) : '';
+    // Privacy.keepTeams() already limits player copies to every squad selected
+    // by the owner. Only squad coaches need the additional one-squad lock.
+    if (!c || !c.teamId || c.role === 'Player') return '';
+    return String(c.teamId);
   }
   // The set carried in a team code, taken on by a device that has none of its
   // own. It goes past the read-only lock the same way a verified word does:
