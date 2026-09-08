@@ -349,30 +349,67 @@ const PlayerFile = (() => {
   const driveDirty = new Set();
   const driveBusy = new Set();
   let driveTimer = null;
+
+  // Keep the exact Drive id in the shared player-file row. A file shared with a
+  // player is not reliably discoverable by name under Drive's narrow
+  // `drive.file` OAuth scope, but it is reachable by id. Carrying the id with
+  // the squad also makes the connection survive a reload on either device.
+  async function rememberDriveId(player, id) {
+    id = String(id || '');
+    if (!player || !player.id || !id) return id;
+    driveIds[player.id] = id;
+    const file = get(player.id);
+    if (file && file.driveId !== id) {
+      await Store.save(STORE, Object.assign({}, file, { driveId: id }),
+        { playerFileKey: holdsKey(player.id) });
+    }
+    return id;
+  }
+
+  async function forgetDriveId(player) {
+    if (!player || !player.id) return;
+    delete driveIds[player.id];
+    const file = get(player.id);
+    if (file && file.driveId) {
+      const next = Object.assign({}, file);
+      delete next.driveId;
+      await Store.save(STORE, next, { playerFileKey: holdsKey(player.id) });
+    }
+  }
+
   async function driveFile(player, create) {
     if (driveIds[player.id]) return driveIds[player.id];
+    const local = get(player.id);
+    if (local && local.driveId) return (driveIds[player.id] = String(local.driveId));
     const name = driveName(player);
     const known = await knownFolder(player);
     if (known) {
-      if (known.own) { const hit = await Drive.findFile(name, known.own); if (hit) return (driveIds[player.id] = hit.id); }
+      if (known.own) {
+        const hit = await Drive.findFile(name, known.own);
+        if (hit) return await rememberDriveId(player, hit.id);
+      }
       const flat = await Drive.findFile(name, known.players);
-      if (flat) return (driveIds[player.id] = flat.id);
+      if (flat) return await rememberDriveId(player, flat.id);
     }
     const byName = await foundFolder(player);
-    if (byName) { const hit = await Drive.findFile(name, byName); if (hit) return (driveIds[player.id] = hit.id); }
+    if (byName) {
+      const hit = await Drive.findFile(name, byName);
+      if (hit) return await rememberDriveId(player, hit.id);
+    }
     const shared = await Drive.listFiles("name='" + qEsc(name) + "' and sharedWithMe = true and trashed=false");
-    if (shared && shared[0]) return (driveIds[player.id] = shared[0].id);
+    if (shared && shared[0]) return await rememberDriveId(player, shared[0].id);
     if (!create) return '';
     const res = await Drive.uploadJson(name, driveDoc(player, get(player.id), []), { parent: await ownFolder(player) });
     const id = (res && res.id) || '';
     if (id) {
-      driveIds[player.id] = id;
+      await rememberDriveId(player, id);
       for (const to of shareTargets(player)) {
         try { await Drive.shareWith(id, to, 'writer'); } catch (e) { /* the invite can be sent later */ }
       }
     }
     return id;
   }
+
 
   // A key block read from a Drive document. It replaces one this copy only took
   // on trust, and one the coach has since replaced; the word itself is never in
@@ -398,7 +435,7 @@ const PlayerFile = (() => {
     if (!fileId) return false;
     let doc = null;
     try { doc = await Drive.downloadJson(fileId); }
-    catch (e) { delete driveIds[player.id]; return false; }
+    catch (e) { await forgetDriveId(player); return false; }
     return await adoptKey(player, doc && doc.key);
   }
 
@@ -431,7 +468,15 @@ const PlayerFile = (() => {
     if (!fileId) return { ok: false, why: 'nofile' };
     let remote = null;
     try { remote = await Drive.downloadJson(fileId); }
-    catch (e) { remote = null; delete driveIds[player.id]; }
+    catch (e) {
+      remote = null;
+      await forgetDriveId(player);
+      // A push may recreate a missing/deleted file immediately; a pull must not.
+      if (push) {
+        try { fileId = await driveFile(player, true); }
+        catch (e2) { return { ok: false, why: 'net' }; }
+      } else return { ok: false, why: 'net' };
+    }
     await adoptKey(player, remote && remote.key);
     const mine = local.messages || [];
     const seen = new Set(mine.map(m => m.id));
@@ -443,7 +488,10 @@ const PlayerFile = (() => {
       // The record is re-read: a key adopted a moment ago has to go back up with
       // the thread, not be written over by the copy held before the merge.
       try { await Drive.uploadJson('', driveDoc(player, get(player.id) || local, merged), { fileId }); }
-      catch (e) { delete driveIds[player.id]; return { ok: false, why: 'net', got: got.length }; }
+      catch (e) {
+        await forgetDriveId(player);
+        return { ok: false, why: 'net', got: got.length };
+      }
     }
     return { ok: true, got: got.length, total: merged.length };
   }
