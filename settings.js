@@ -1566,13 +1566,11 @@ function cloudJoinDialog(onDone) {
         if (!TeamCloud.parseTarget(inp.value)) { state.textContent = T('cloud.badCode'); return; }
         go.disabled = true;
         state.textContent = T('cloud.working');
-        try {
-          const pw = m.querySelector('#jn_pw').value.trim();
-          const n = await TeamCloud.join(inp.value);
+        const pw = m.querySelector('#jn_pw').value.trim();
+        const finishJoin = async n => {
           // The pull brought the club's password hashes with it, so the word can
           // be checked here. No word, or the wrong one, and this copy reads.
           const got = await Access.claimRole(pw);
-          close();
           UI.toast(T('cloud.joined').replace('{0}', n), 'success');
           if (got) UI.toast(T('rk.joinedAs').replace('{0}', Access.label(got)), 'success');
           else if (Access.roleKeys()) UI.toast(T(pw ? 'rk.wrong' : 'rk.noneGiven'), 'error');
@@ -1590,8 +1588,26 @@ function cloudJoinDialog(onDone) {
           const squad = await attachJoinedSquad();
           if (squad) UI.toast(T('cloud.squadAttached').replace('{0}', squad.name || ''), 'success');
           if (onDone) onDone();
+        };
+        try {
+          const n = await TeamCloud.join(inp.value);
+          close();
+          await finishJoin(n);
         } catch (e) {
           state.textContent = cloudJoinExplain(e);
+          const raw = String((e && e.message) || e || '');
+          if (/Failed to fetch|NetworkError|offline/i.test(raw)) {
+            // Keep the useful explanation visible briefly, then get the dialog
+            // out of the way and retry the configured read as a normal sync.
+            await new Promise(resolve => setTimeout(resolve, 3000));
+            close();
+            try {
+              const n = await TeamCloud.sync();
+              await finishJoin(n);
+            } catch (syncError) {
+              UI.toast(cloudJoinExplain(syncError), 'error');
+            }
+          }
         } finally { go.disabled = false; }
       };
     }
