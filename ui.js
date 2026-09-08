@@ -1,4 +1,4 @@
-/* ui.js — shared UI helpers */
+﻿/* ui.js â€” shared UI helpers */
 const UI = (() => {
   const ICONS = {
     close: '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>',
@@ -43,7 +43,7 @@ const UI = (() => {
     let host = document.getElementById('toastHost');
     // Keep toasts visible when a view is in the Fullscreen API. The host is
     // moved into that element, so a view torn down while still fullscreen takes
-    // it with it — then it is simply put back.
+    // it with it â€” then it is simply put back.
     if (!host) {
       host = el('<div id="toastHost" class="toast-host"></div>');
       document.body.appendChild(host);
@@ -59,14 +59,14 @@ const UI = (() => {
   // Translate helper that tolerates i18n not being loaded yet.
   function tr(key, fallback) { return (typeof T === 'function' && T(key)) || fallback; }
 
-  function modal({ title, body, footer, onOpen, width, fullscreen }) {
+  function modal({ title, body, footer, onOpen, width, fullscreen, headActions }) {
     const host = document.getElementById('modalHost');
     host.innerHTML = '';
     // Every dialog is locked: no X, no backdrop click, no Escape. The only way
     // out is one of its own footer buttons (Cancel / Close), so nothing is ever
     // dismissed by accident.
     // When a view is in the Fullscreen API, only descendants of the fullscreen
-    // element are visible — so move the modal host inside it while open.
+    // element are visible â€” so move the modal host inside it while open.
     // Detect across vendor prefixes so it also works in WebKit/Firefox.
     const fsEl = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement || null;
     const homeParent = host.parentNode;
@@ -128,7 +128,7 @@ const UI = (() => {
       if (nativeSupported) {
         let p;
         try { p = req.call(m); } catch (e) { enterCss(); return; }
-        if (p && typeof p.catch === 'function') p.catch(enterCss); // rejected (e.g. iOS) → fallback
+        if (p && typeof p.catch === 'function') p.catch(enterCss); // rejected (e.g. iOS) â†’ fallback
       } else {
         enterCss();
       }
@@ -207,7 +207,7 @@ const UI = (() => {
   }
 
   function fmtDate(ts) {
-    if (!ts) return '—';
+    if (!ts) return 'â€”';
     return new Date(ts).toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' });
   }
   function fmtClock(sec) {
@@ -222,7 +222,7 @@ const UI = (() => {
   function initials(a, b) { return (((a || '?')[0] || '?') + ((b || '')[0] || '')).toUpperCase(); }
 
   // ---- Multi-language record text ----------------------------------------
-  // A drill can carry its own wording per language in `tr` — tr.da.title and so
+  // A drill can carry its own wording per language in `tr` â€” tr.da.title and so
   // on. Falls back to the field as it was typed, so an untranslated record and
   // everything made before this still read correctly.
   function langText(rec, field) {
@@ -240,7 +240,7 @@ const UI = (() => {
   }
 
   // ---- Videos -------------------------------------------------------------
-  // Only http(s) links may reach an href — blocks javascript:/data: payloads.
+  // Only http(s) links may reach an href â€” blocks javascript:/data: payloads.
   function safeUrl(u) {
     const s = String(u || '').trim();
     if (!s) return '';
@@ -275,7 +275,7 @@ const UI = (() => {
     } catch { return ''; }
     return /^[\w-]{10,80}$/.test(id || '') ? id : '';
   }
-  // The embed address for a link we recognise, or '' — nothing else may ever
+  // The embed address for a link we recognise, or '' â€” nothing else may ever
   // reach an iframe src.
   function videoSrc(u) {
     const y = ytId(u);
@@ -296,7 +296,7 @@ const UI = (() => {
     return videosOf(rec).filter(videoSrc).slice(0, max || 4).map(u => playerHtml(u, title)).join('');
   }
   // A poster with a play button, not a live iframe. YouTube answers an embed
-  // request with "Error 153 — video player configuration error" whenever it
+  // request with "Error 153 â€” video player configuration error" whenever it
   // cannot see the embedding page (opened straight from a file, referrer
   // stripped, embedding turned off for that clip), and the coach was left
   // looking at that instead of the drill. The frame is only inserted on the
@@ -304,8 +304,8 @@ const UI = (() => {
   const CAN_EMBED = location.protocol === 'http:' || location.protocol === 'https:';
   function playerHtml(u, title) {
     const y = ytId(u);
-    const open = `<a class="v-open" href="${esc(u)}" target="_blank" rel="noopener noreferrer" title="${esc(tr('exercises.openVideo', 'Open in a new tab'))}">↗</a>`;
-    const play = `<button type="button" class="v-play" aria-label="${esc(tr('exercises.playVideo', 'Play'))}">▶</button>`;
+    const open = `<a class="v-open" href="${esc(u)}" target="_blank" rel="noopener noreferrer" title="${esc(tr('exercises.openVideo', 'Open in a new tab'))}">â†—</a>`;
+    const play = `<button type="button" class="v-play" aria-label="${esc(tr('exercises.playVideo', 'Play'))}">â–¶</button>`;
     if (y) {
       return `<div class="ex-embed lite" data-play="${esc(u)}">
         <img src="https://i.ytimg.com/vi/${esc(y)}/hqdefault.jpg" alt="${esc(title)}" loading="lazy">${play}${open}</div>`;
@@ -328,12 +328,12 @@ const UI = (() => {
       allowfullscreen referrerpolicy="strict-origin-when-cross-origin"
       allow="autoplay; accelerometer; encrypted-media; picture-in-picture; web-share"></iframe>`;
   });
-  // An editable list of video links — used by the drill form and wherever the
+  // An editable list of video links â€” used by the drill form and wherever the
   // app shows links it generated, so a wrong one can always be fixed or removed.
   const MAX_VIDEOS = 8;
   function videoRow(u) {
     return `<div class="vid-row"><input type="url" inputmode="url" placeholder="${esc(tr('exercises.videoPh', ''))}" value="${esc(u || '')}">`
-      + `<button type="button" class="btn sm danger" data-rmvid title="${esc(tr('common.delete', 'Delete'))}">✕</button></div>`;
+      + `<button type="button" class="btn sm danger" data-rmvid title="${esc(tr('common.delete', 'Delete'))}">âœ•</button></div>`;
   }
   function videoEditor(list) {
     const rows = (list && list.length ? list : ['']).map(videoRow).join('');
@@ -414,7 +414,7 @@ const UI = (() => {
           if (onDone) onDone();
         } catch (err) {
           // "nothing to import" means the file parsed fine but held no rows for
-          // this pack — a different message than an unreadable or foreign file.
+          // this pack â€” a different message than an unreadable or foreign file.
           const empty = err && /nothing to import/i.test(err.message || '');
           toast(tr(empty ? 'share.empty' : 'share.badFile',
             empty ? 'That file has nothing to import' : 'That file is not a SportTactic share file'), 'error');
@@ -438,7 +438,7 @@ const UI = (() => {
       const v = localStorage.getItem('stx_acc_' + key);
       if (v !== null) return v === '1';
       // A page whose whole content is one card asks for open and gets it, first
-      // run or not — collapsed, it reads as an empty screen.
+      // run or not â€” collapsed, it reads as an empty screen.
       if (def === true) return true;
       return accTouched() ? def !== false : false;
     } catch { return def !== false; }
@@ -464,7 +464,7 @@ const UI = (() => {
         } catch { /* private mode */ }
       });
       const acts = d.querySelector('.acc-acts');
-      // Buttons live in the header — using one must not fold the card, so the
+      // Buttons live in the header â€” using one must not fold the card, so the
       // click never reaches the <summary> that owns the toggle.
       if (acts) acts.addEventListener('click', e => e.stopPropagation());
     });
@@ -505,3 +505,4 @@ const UI = (() => {
   return { esc, el, toast, modal, confirm, busyBtn, bindBusyClicks, fmtDate, fmtClock, statCard, initials, icon, langText, langsOf, safeUrl, videoSrc, videosOf, videoEmbed, videoEditor, bindVideos, readVideos, shareBar, bindShare, acc, bindAcc, printDoc };
 })();
 if (typeof window !== 'undefined') window.UI = UI;
+

@@ -1,4 +1,4 @@
-/* playerfile.js — one JSON file per player: the private line between the coach
+/* playerfile.js â€” one JSON file per player: the private line between the coach
    and that player.
 
    The file is made the moment the player is created and deleted the moment the
@@ -8,7 +8,7 @@
    carry the thread through the player's own folder on Google Drive. */
 const PlayerFile = (() => {
   const STORE = 'playerfiles';
-  const MAX_MSG = 500;          // a conversation, not a log — the oldest fall off
+  const MAX_MSG = 500;          // a conversation, not a log â€” the oldest fall off
   const MAX_LEN = 2000;
   const AUTO_MINUTES = [1, 5, 10];
   const AUTO_KEY = 'stx_pfile_auto_min';
@@ -89,7 +89,7 @@ const PlayerFile = (() => {
     try { localStorage.setItem(HELD, JSON.stringify(all)); } catch (e) { /* private mode */ }
   }
   // Deriving the hash costs a third of a second, so the word is verified once
-  // and the answer remembered against the hash it was checked against — a key
+  // and the answer remembered against the hash it was checked against â€” a key
   // the coach replaces stops working the moment the new one arrives.
   function holdsKey(playerId) {
     const f = get(playerId);
@@ -153,7 +153,7 @@ const PlayerFile = (() => {
       holdKey(player.id, prettyKey(word), f.key.hash);
       return true;
     }
-    // Neither the squad nor Drive has the coach's key — a club that never syncs
+    // Neither the squad nor Drive has the coach's key â€” a club that never syncs
     // would otherwise leave the player locked out for good. The word handed over
     // is taken on trust and written in, so the player can answer now; it is
     // marked provisional so the coach's own key replaces it when they meet. A
@@ -248,7 +248,7 @@ const PlayerFile = (() => {
       }));
   }
 
-  // ---- Google Drive: one folder per player, one JSON inside it ------------
+  // ---- Google Drive: one JSON per player in the Players folder ------------
   // SportTactic / <squad> / Players / <Player Name>.json.
   // Whichever end writes first makes the folder and the file and shares it with
   // the other, so a player holding the key can send a message before the coach
@@ -271,8 +271,8 @@ const PlayerFile = (() => {
     updatedAt: Date.now(), messages: messages
   });
 
-  // The player's own folder as this account can build it. ensureFolder finds an
-  // existing one, so the coach lands on theirs and a player on their own. The
+  // The shared Players folder as this account can build it. ensureFolder finds
+  // an existing one, so coach and player write the same JSON file. The
   // team folder id in settings is deliberately not written here: it belongs to
   // the coach's cloud setup and a player copy must not overwrite it.
   async function ownFolder(player) {
@@ -296,7 +296,7 @@ const PlayerFile = (() => {
     } catch (e) { return null; }
   }
   // The same path as ownFolder, walked by name and creating nothing: it is how a
-  // copy with no team folder id of its own still finds the player's folder.
+  // copy with no team folder id of its own still finds the Players folder.
   async function foundFolder(player) {
     try {
       const root = await Drive.findFolder('SportTactic', null);
@@ -306,8 +306,7 @@ const PlayerFile = (() => {
       if (!team) return '';
       const players = await Drive.findFolder(DRIVE_DIR, team.id);
       if (!players) return '';
-      const own = await Drive.findFolder(playerDir(player), players.id);
-      return (own && own.id) || '';
+      return players.id;
     } catch (e) { return ''; }
   }
   // The other end, so the file it does not own is still reachable to it.
@@ -366,7 +365,7 @@ const PlayerFile = (() => {
     }), { playerFileKey: true });
     return true;
   }
-  // Fetch the coach's key alone, without touching the thread — what Use key
+  // Fetch the coach's key alone, without touching the thread â€” what Use key
   // calls before it decides whether the typed word is the right one.
   async function driveKey(player) {
     if (!driveOn()) return false;
@@ -582,6 +581,9 @@ const PlayerFile = (() => {
       UI.modal({
         title: t('pfile.title', 'Player file') + ' \u2014 ' + nameOf(player),
         width: 620,
+        headActions: `<label class="pf-auto"><span>${esc(t('pfile.autoUpdate', 'Auto update'))}</span>
+          <select id="pf_auto" aria-label="${esc(t('pfile.autoUpdate', 'Auto update'))}">${AUTO_MINUTES.map(n => `<option value="${n}" ${n === autoMinutes() ? 'selected' : ''}>${n} ${esc(n === 1 ? t('pfile.minute', 'minute') : t('pfile.minutes', 'minutes'))}</option>`).join('')}</select>
+        </label>`,
         body: `
           <p class="hint">${esc(t('pfile.intro', 'A line kept between the coach and this player. It lives with the squad, so both ends read and write the same file.'))}</p>
           ${threadHtml(player)}
@@ -592,9 +594,7 @@ const PlayerFile = (() => {
             ? t('pfile.signedAs', 'Signed as') + ': ' + myName(player) + ' \u00b7 ' + sideLabel(side(player))
             : staff ? t('pfile.readOnly', 'This copy is read-only, so the file can be read but not written to.')
               : t('pfile.needKey', 'Writing needs the message key the coach generates for you. Press Message key and type it in.'))}</p>
-          <label class="field"><span>${esc(t('pfile.autoUpdate', 'Auto update'))}</span>
-            <select id="pf_auto">${AUTO_MINUTES.map(n => `<option value="${n}" ${n === autoMinutes() ? 'selected' : ''}>${n} ${esc(n === 1 ? t('pfile.minute', 'minute') : t('pfile.minutes', 'minutes'))}</option>`).join('')}</select>
-          </label>`,
+`,
         footer: `<button class="btn ghost" data-close2>${esc(T('common.close'))}</button>
           ${staff ? `<button class="btn" data-get>\u2b73 ${esc(t('pfile.dl', 'Get message'))}</button>
           <button class="btn" data-send>\u2b71 ${esc(t('pfile.up', 'Upload message'))}</button>` : ''}
@@ -707,3 +707,4 @@ if (typeof window !== 'undefined') {
   window.PlayerFile = PlayerFile;
   PlayerFile.startDriveSync();
 }
+
