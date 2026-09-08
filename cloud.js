@@ -815,6 +815,10 @@ const TeamCloud = (() => {
       try { await Drive.setClientId(t.clientId); } catch (e) { /* ignore */ }
     }
     await setCfg({ fileId: t.fileId, apiKey: t.apiKey || cfg().apiKey, teamName: t.teamName || cfg().teamName, owner: false });
+    // Joining by team code always starts as a player. This happens before
+    // pulling so the default Coach role is never used for a code holder.
+    // A verified coach word may explicitly promote the device afterward.
+    if (window.Access && Access.beginTeamCodeJoin) await Access.beginTeamCodeJoin();
     const n = await pull('merge');
     // The team code may contain a newer key set than the shared file (for
     // example immediately after a coach regenerated keys). Adopt that set

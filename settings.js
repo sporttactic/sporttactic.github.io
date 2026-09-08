@@ -1145,6 +1145,7 @@ function memberModeDialog(onDone) {
       <h4 class="pol-h">${UI.esc(T('mem.teams'))}</h4>
       <p class="hint">${UI.esc(T('mem.teamsHint'))}</p>
       ${squads.length ? `<div class="menu-picker">${squads.map(squadRow).join('')}</div>
+      <p class="hint" id="mm_team_sum"></p>
       <div class="row" style="flex:0;margin-top:10px;flex-wrap:wrap">
         <button type="button" class="btn sm" id="mm_tall">${UI.esc(T('mem.teamsAll'))}</button>
       </div>` : `<p class="hint">${UI.esc(T('mem.teamsNone'))}</p>`}
@@ -1174,7 +1175,24 @@ function memberModeDialog(onDone) {
       m.querySelector('#mc_min').onclick = () => cpick(['dashboard', 'teams', 'matches', 'planner', 'training', 'tactics']);
       const tboxes = [...m.querySelectorAll('[data-team]')];
       const tall = m.querySelector('#mm_tall');
-      if (tall) tall.onclick = () => tboxes.forEach(b => { b.checked = true; });
+      // Display the exact checked squads whose rows will enter the sync files.
+      const teamSummary = () => {
+        const host = m.querySelector('#mm_team_sum');
+        if (!host) return;
+        const names = tboxes.filter(b => b.checked).map(b => {
+          const team = squads.find(t => String(t.id) === String(b.dataset.team));
+          return team ? (team.name || team.id) : b.dataset.team;
+        });
+        host.textContent = names.length
+          ? 'Included in sync: ' + names.join(', ')
+          : 'Included in sync: no squads';
+      };
+      tboxes.forEach(b => b.addEventListener('change', teamSummary));
+      if (tall) tall.onclick = () => {
+        tboxes.forEach(b => { b.checked = true; });
+        teamSummary();
+      };
+      teamSummary();
       m.querySelector('[data-close2]').onclick = close;
       const goBtn = m.querySelector('[data-go]');
       goBtn.onclick = async () => {

@@ -488,6 +488,19 @@ const Access = (() => {
   // The set carried in a team code, taken on by a device that has none of its
   // own. It goes past the read-only lock the same way a verified word does:
   // this is the club telling the copy what the rules are, not the copy deciding.
+  // A team code is a player entry point. Set that role before the first pull so
+  // an existing/default Coach role is never used while handling somebody
+  // else's shared file. A verified squad-coach word may explicitly promote
+  // the device afterward through claimRole().
+  async function beginTeamCodeJoin() {
+    claiming = true;
+    try {
+      await Store.setSetting(CLAIM_KEY, null);
+      await Store.setSetting('role', 'Player');
+    } finally { claiming = false; }
+    return 'Player';
+  }
+
   async function adoptRoleKeys(keys) {
     if (!keys || !keys.salt || !keys.roles) return false;
     claiming = true;
@@ -524,7 +537,7 @@ const Access = (() => {
     profile, saveProfile, memberCopy, following, readMode, hiddenModules, moduleOpen, blocks, hidesEvents, hidesRow, COACH_ONLY_STORES,
     coachHidden, saveCoachAreas,
     roleKeys, roleKeyWords, newRoleKeys, ensureTeamKeys, pruneTeamKeys, claimRole, claimedRole, claimedTeam: teamLock,
-    unclaimed, wordsStale, adoptRoleKeys, teamLock, squadCoach
+    unclaimed, wordsStale, beginTeamCodeJoin, adoptRoleKeys, teamLock, squadCoach
   };
 })();
 window.Access = Access;
