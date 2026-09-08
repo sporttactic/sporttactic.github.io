@@ -431,7 +431,18 @@ const PlayerFile = (() => {
     let doc = null;
     try { doc = await Drive.downloadJson(fileId); }
     catch (e) { await forgetDriveId(player); return false; }
-    return await adoptKey(player, doc && doc.key);
+    const downloaded = doc && doc.key;
+    if (await adoptKey(player, downloaded)) return true;
+
+    // adoptKey deliberately does nothing when this exact coach key is already
+    // present. That is still a successful fetch: requiring an adoption here
+    // made every valid key look wrong once the player file had already synced.
+    const current = get(player.id);
+    const local = current && current.key;
+    return !!(downloaded && local && !local.prov
+      && String(downloaded.hash) === String(local.hash)
+      && String(downloaded.salt) === String(local.salt)
+      && (+downloaded.iter || KEY_ITER) === (+local.iter || KEY_ITER));
   }
 
   // A verified message key is enough to reach Google sign-in. The player does
