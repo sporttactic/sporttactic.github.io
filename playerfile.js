@@ -12,7 +12,6 @@ const PlayerFile = (() => {
   const MAX_LEN = 2000;
   const AUTO_MINUTES = [1, 5, 10];
   const AUTO_KEY = 'stx_pfile_auto_min';
-  const DRIVE_SYNC_MS = 2 * 60 * 1000; // keep every player file current on Drive
 
   const esc = s => UI.esc(s);
   const t = (k, fallback) => { const r = T(k); return r === k ? fallback : r; };
@@ -250,7 +249,7 @@ const PlayerFile = (() => {
   }
 
   // ---- Google Drive: one folder per player, one JSON inside it ------------
-  // SportTactic / <squad> / Players / <Player Name> / <Player Name>.json.
+  // SportTactic / <squad> / Players / <Player Name>.json.
   // Whichever end writes first makes the folder and the file and shares it with
   // the other, so a player holding the key can send a message before the coach
   // has ever opened Drive and the coach still gets it back.
@@ -280,8 +279,7 @@ const PlayerFile = (() => {
     const root = await Drive.ensureFolder('SportTactic', null);
     const t = Store.activeTeam();
     const team = await Drive.ensureFolder(safeName(t && t.name) || 'Team', root);
-    const players = await Drive.ensureFolder(DRIVE_DIR, team);
-    return await Drive.ensureFolder(playerDir(player), players);
+    return await Drive.ensureFolder(DRIVE_DIR, team);
   }
   // The Players folder this copy already knows about, and the player's own
   // folder inside it when it has been made.
@@ -432,8 +430,8 @@ const PlayerFile = (() => {
     }
   }
 
-  // Every two minutes merge changes from Drive and upload local edits that did
-  // not make it there immediately. This runs even when no dialog is open.
+  // At the interval selected in either player-file dialog, merge changes from
+  // Drive and retry local edits. This also runs while no dialog is open.
   async function syncAll() {
     if (!driveOn()) return;
     let players = [];
@@ -444,14 +442,14 @@ const PlayerFile = (() => {
       try {
         const result = await driveSync(player, driveDirty.has(player.id) ? 'push' : 'pull');
         if (result.ok) driveDirty.delete(player.id);
-      } catch (e) { /* the next two-minute pass retries */ }
+      } catch (e) { /* the next scheduled pass retries */ }
       finally { driveBusy.delete(player.id); }
     }
   }
 
   function startDriveSync() {
     if (driveTimer) clearInterval(driveTimer);
-    driveTimer = setInterval(syncAll, DRIVE_SYNC_MS);
+    driveTimer = setInterval(syncAll, autoMinutes() * 60 * 1000);
   }
 
   async function clearAll(player) {
@@ -673,6 +671,7 @@ const PlayerFile = (() => {
           const startPoll = minutes => {
             if (poll) clearInterval(poll);
             poll = setInterval(autoSync, setAutoMinutes(minutes) * 60 * 1000);
+            startDriveSync();
           };
           const auto = m.querySelector('#pf_auto');
           if (auto) auto.onchange = () => startPoll(auto.value);
@@ -690,7 +689,7 @@ const PlayerFile = (() => {
             refresh();
             UI.toast(t('pfile.saved', 'Written in the player file'), 'success');
             // post() already saved to Drive. If that attempt failed, the
-            // two-minute background pass retries it automatically.
+            // selected background interval retries it automatically.
             pending = driveDirty.has(player.id);
           };
         }
