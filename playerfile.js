@@ -28,7 +28,9 @@ const PlayerFile = (() => {
   }
 
   const fileId = playerId => 'pf_' + playerId;
+  // Shared/player copies can carry one display-name field instead of the roster pair.
   const nameOf = p => [p && p.firstName, p && p.lastName].filter(Boolean).join(' ').trim()
+    || String(p && (p.name || p.playerName || p.displayName) || '').trim()
     || t('pfile.player', 'Player');
 
   function get(playerId) { return playerId ? Store.find(STORE, fileId(playerId)) : undefined; }
@@ -255,6 +257,14 @@ const PlayerFile = (() => {
   const safeName = s => String(s || '').replace(/[/\\?%*:|"<>]+/g, '-').trim();
   const playerDir = player => safeName(nameOf(player)) || String(player.id);
   const driveName = player => playerDir(player) + '.json';
+  // Try the current name, the name retained by the player file, and the legacy id name.
+  const driveNames = player => {
+    const local = get(player && player.id);
+    const names = [driveName(player)];
+    if (local && local.name) names.push((safeName(local.name) || String(player.id)) + '.json');
+    names.push('player-' + String(player.id) + '.json');
+    return names.filter((name, i, all) => name && all.indexOf(name) === i);
+  };
   const qEsc = s => String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
   const driveDoc = (player, file, messages) => ({
     app: 'SportTactic', kind: 'player-file', v: 1,
@@ -356,29 +366,33 @@ const PlayerFile = (() => {
     if (driveIds[player.id]) return driveIds[player.id];
     const local = get(player.id);
     if (local && local.driveId) return (driveIds[player.id] = String(local.driveId));
-    const name = driveName(player);
+    const names = driveNames(player);
+    const name = names[0];
     const known = await knownFolder(player);
     if (known) {
-      if (known.own) {
-        const hit = await Drive.findFile(name, known.own);
-        if (hit) return await rememberDriveId(player, hit.id);
+      for (const candidate of names) {
+        if (known.own) {
+          const hit = await Drive.findFile(candidate, known.own);
+          if (hit) return await rememberDriveId(player, hit.id);
+        }
+        const flat = await Drive.findFile(candidate, known.players);
+        if (flat) return await rememberDriveId(player, flat.id);
       }
-      const flat = await Drive.findFile(name, known.players);
-      if (flat) return await rememberDriveId(player, flat.id);
     }
     const byName = await foundFolder(player);
     if (byName) {
-      const hit = await Drive.findFile(name, byName);
-      if (hit) return await rememberDriveId(player, hit.id);
+      for (const candidate of names) {
+        const hit = await Drive.findFile(candidate, byName);
+        if (hit) return await rememberDriveId(player, hit.id);
+      }
     }
-    // A shared file can be visible to this OAuth client even when Drive does
-    // not expose the owner's folder tree under the narrow drive.file scope.
-    // Search all app-visible files by the exact player filename first because
-    // sharedWithMe is not consistently set for files created by this app.
-    const visible = await Drive.listFiles("name='" + qEsc(name) + "' and trashed=false");
-    if (visible && visible[0]) return await rememberDriveId(player, visible[0].id);
-    const shared = await Drive.listFiles("name='" + qEsc(name) + "' and sharedWithMe and trashed=false");
-    if (shared && shared[0]) return await rememberDriveId(player, shared[0].id);
+    // Search all app-visible files by every compatible exact player filename.
+    for (const candidate of names) {
+      const visible = await Drive.listFiles("name='" + qEsc(candidate) + "' and trashed=false");
+      if (visible && visible[0]) return await rememberDriveId(player, visible[0].id);
+      const shared = await Drive.listFiles("name='" + qEsc(candidate) + "' and sharedWithMe and trashed=false");
+      if (shared && shared[0]) return await rememberDriveId(player, shared[0].id);
+    }
     if (!create) return '';
     const res = await Drive.uploadJson(name, driveDoc(player, get(player.id), []), { parent: await ownFolder(player) });
     const id = (res && res.id) || '';
@@ -448,7 +462,7 @@ const PlayerFile = (() => {
     // A player may only use an existing coach-created file. In particular, a
     // player push must never create a new file containing a locally supplied
     // key and thereby make that key authoritative.
-    const playerCopy = !!(window.Access && Access.readMode && Access.readMode());
+    const playerCopy = side(player) === 'player';
     let fileId = '';
     try { fileId = await driveFile(player, push && !playerCopy); }
     catch (e) { return { ok: false, why: 'net' }; }
@@ -833,5 +847,11 @@ const PlayerFile = (() => {
 if (typeof window !== 'undefined') {
   window.PlayerFile = PlayerFile;
   PlayerFile.startDriveSync();
+  // A restored Google token must publish pending player data immediately too.
+  setTimeout(() => {
+    if (window.Drive && Drive.isConnected && Drive.isConnected()) {
+      PlayerFile.googleConnected().catch(() => {});
+    }
+  }, 0);
 }
 
