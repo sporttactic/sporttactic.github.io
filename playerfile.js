@@ -98,12 +98,19 @@ const PlayerFile = (() => {
     try { const v = JSON.parse(localStorage.getItem(HELD) || '{}'); return (v && typeof v === 'object') ? v : {}; }
     catch (e) { return {}; }
   }
-  async function holdKey(playerId, word, hash) {
+  async function holdKey(playerId, word, hash, trust) {
     const all = heldKeys();
-    all[playerId] = { word, set: String(hash).slice(0, 12) };
+    all[playerId] = { word, set: String(hash || '').slice(0, 12), trust: !!trust };
     try { localStorage.setItem(HELD, JSON.stringify(all)); } catch (e) { /* private mode */ }
     try { await Store.setSetting(HELD_DB, all); } catch (e) { /* no database on this device */ }
     return all;
+  }
+  async function dropKey(playerId) {
+    const all = heldKeys();
+    if (!all[playerId]) return;
+    delete all[playerId];
+    try { localStorage.setItem(HELD, JSON.stringify(all)); } catch (e) { /* private mode */ }
+    try { await Store.setSetting(HELD_DB, all); } catch (e) { /* no database on this device */ }
   }
   // Deriving the hash costs a third of a second, so the word is verified once
   // and the answer remembered against the hash it was checked against â€” a key
@@ -115,14 +122,13 @@ const PlayerFile = (() => {
     const held = heldKeys()[playerId];
     return !!held && held.set === String(k.hash).slice(0, 12);
   }
-  // The same question while the coach's own key is still on its way: a word
-  // taken on trust writes in the local file, but never speaks for Drive.
+  // The same question while the coach's own key is still on its way. A word
+  // taken on trust is kept on this device alone — never written into the file,
+  // where it would overwrite the real key everybody else is checked against.
   function holdsWord(playerId) {
     if (holdsKey(playerId)) return true;
-    const f = get(playerId);
-    const k = f && f.key;
     const held = heldKeys()[playerId];
-    return !!(k && k.hash && k.prov && held && held.set === String(k.hash).slice(0, 12));
+    return !!(held && held.trust && held.word);
   }
   const heldWord = playerId => (heldKeys()[playerId] || {}).word || '';
   // A key a player typed in before the coach's own arrived is provisional: the
@@ -203,16 +209,10 @@ const PlayerFile = (() => {
     if (fresh) return 'bad';
     // Nothing here could be confirmed: the coach's key has not arrived yet, or
     // the block this copy holds is older than the word that was handed over.
-    // Refusing would strand a player holding the right word, so it is taken on
-    // trust and marked provisional: it writes in the local file and speaks for
-    // nothing on Drive until the coach's own key arrives and matches it.
-    const salt = crypto.getRandomValues(new Uint8Array(16));
-    const hash = await hashWord(word, salt, KEY_ITER);
-    await Store.save(STORE, Object.assign({}, current, {
-      key: { salt: b64(salt), iter: KEY_ITER, hash, at: Date.now(),
-        clientId: (key && key.clientId) || '', prov: true }
-    }), { playerFileKey: true });
-    await holdKey(player.id, prettyKey(word), hash);
+    // Refusing would strand a player holding the right word, so it is kept on
+    // trust — on this device only, never written into the file — and checked
+    // for real as soon as the coach's own key can be reached.
+    await holdKey(player.id, prettyKey(word), '', true);
     return 'trust';
   }
 
@@ -225,10 +225,15 @@ const PlayerFile = (() => {
     const word = canonKey(heldWord(id));
     const key = (get(id) || {}).key;
     if (!word || !key || !key.hash || key.prov) return false;
-    if (!await sameWord(word, key)) return false;
-    await holdKey(id, prettyKey(word), key.hash);
-    await useKeyDriveConfig(key);
-    return true;
+    if (await sameWord(word, key)) {
+      await holdKey(id, prettyKey(word), key.hash);
+      await useKeyDriveConfig(key);
+      return true;
+    }
+    // The real key is here and the word does not match it, so the word was
+    // wrong: the trust it was given on arrival is withdrawn.
+    await dropKey(id);
+    return false;
   }
 
   // A frozen backup stays frozen. The coach's own copy writes freely; a copy
