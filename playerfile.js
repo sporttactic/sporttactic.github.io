@@ -326,13 +326,31 @@ const PlayerFile = (() => {
   const DRIVE_DIR = 'Players';
   const driveOn = () => !!(window.Drive && Drive.isConnected && Drive.isConnected());
   const safeName = s => String(s || '').replace(/[/\\?%*:|"<>]+/g, '-').trim();
-  const playerDir = player => safeName(nameOf(player)) || String(player.id);
+  // The file is addressed by the name on the player's profile, so two players
+  // carrying the same name would otherwise land in one document and read each
+  // other's private thread. Whoever already holds a file keeps it (the stored
+  // id is looked up first); the rest take their own id into the name.
+  function twinned(player) {
+    const mine = safeName(nameOf(player));
+    if (!mine || !player || !player.id) return false;
+    let squad = [];
+    try { squad = Store.all('players') || []; } catch (e) { return false; }
+    return squad.some(p => p && p.id !== player.id
+      && String(p.teamId || '') === String(player.teamId || '')
+      && safeName(nameOf(p)) === mine);
+  }
+  const playerDir = player => {
+    const base = safeName(nameOf(player)) || String(player.id);
+    return twinned(player) ? base + ' (' + String(player.id).slice(-4) + ')' : base;
+  };
   const driveName = player => playerDir(player) + '.json';
   // Try the current name, the name retained by the player file, and the legacy id name.
   const driveNames = player => {
     const local = get(player && player.id);
     const names = [driveName(player)];
-    if (local && local.name) names.push((safeName(local.name) || String(player.id)) + '.json');
+    // A shared name must never fall back to the plain file: that one is the
+    // other player's thread.
+    if (local && local.name && !twinned(player)) names.push((safeName(local.name) || String(player.id)) + '.json');
     names.push('player-' + String(player.id) + '.json');
     return names.filter((name, i, all) => name && all.indexOf(name) === i);
   };
