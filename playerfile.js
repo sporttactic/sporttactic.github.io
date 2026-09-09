@@ -172,34 +172,40 @@ const PlayerFile = (() => {
   }
 
   // Returns true for a key checked against the coach's own, 'trust' for one
-  // taken on trust because that key has not reached this device yet, or why it
-  // was refused: 'len' for the wrong length, 'bad' for a word that does not
-  // match the key the file already carries.
+  // taken on trust because that key could not be reached to check it against,
+  // or why it was refused: 'len' for the wrong length, 'nocrypto' where the
+  // browser withholds the hashing needed, 'bad' for a word that does not match
+  // the coach's current key.
   async function claimKey(player, typed) {
     const word = canonKey(typed);
     if (word.length !== KEY_LEN) return 'len';
-    if (!cryptoOk()) return 'bad';
+    // Browsers only expose crypto.subtle on a secure origin, so opening the app
+    // over plain http makes every key impossible to check.
+    if (!cryptoOk()) return 'nocrypto';
     const f = get(player && player.id) || await ensure(player);
     if (!f) return 'bad';
 
     // Prefer the current Drive copy when it is reachable, but do not require a
+    // Prefer the current Drive copy when it is reachable, but do not require a
     // Drive connection just to check a key. The coach-generated key block is
     // already carried by the synced player file and contains the OAuth client
     // configuration needed to make that first player-side connection.
-    if (driveOn()) await driveKey(player);
+    const fresh = driveOn() ? await driveKey(player) : false;
     const current = get(player.id) || f;
     const key = current && current.key;
-    if (key && key.hash && !key.prov) {
-      if (!await sameWord(word, key)) return 'bad';
+    if (key && key.hash && !key.prov && await sameWord(word, key)) {
       await holdKey(player.id, prettyKey(word), key.hash);
       await useKeyDriveConfig(key);
       return true;
     }
-    // The coach's key has not arrived here yet, so there is nothing to judge the
-    // word by. Refusing it would strand a player whose copy simply has not
-    // synced since the key was made, so it is taken on trust and marked
-    // provisional: it writes in the local file and speaks for nothing on Drive
-    // until the coach's own key arrives and matches it.
+    // Judged against the coach's own key, just read from Drive, a word that does
+    // not match is simply the wrong word.
+    if (fresh) return 'bad';
+    // Nothing here could be confirmed: the coach's key has not arrived yet, or
+    // the block this copy holds is older than the word that was handed over.
+    // Refusing would strand a player holding the right word, so it is taken on
+    // trust and marked provisional: it writes in the local file and speaks for
+    // nothing on Drive until the coach's own key arrives and matches it.
     const salt = crypto.getRandomValues(new Uint8Array(16));
     const hash = await hashWord(word, salt, KEY_ITER);
     await Store.save(STORE, Object.assign({}, current, {
@@ -882,6 +888,7 @@ const PlayerFile = (() => {
           const r = await claimKey(player, inp.value);
           btn.disabled = false;
           if (r === 'len') return UI.toast(t('pfile.keyLen', 'A message key is 16 characters'), 'error');
+          if (r === 'nocrypto') return UI.toast(t('pfile.keyNoCrypto', 'This device cannot check message keys. The app has to be opened over https:// for the browser to allow it.'), 'error');
           if (r === 'off') return UI.toast(t('pfile.driveOff', 'Google Drive must be connected before the message key can be checked.'), 'error');
           if (r !== true && r !== 'trust') return UI.toast(t('pfile.keyBad', 'That key was not accepted'), 'error');
           UI.toast(r === 'trust'
