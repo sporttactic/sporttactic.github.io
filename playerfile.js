@@ -250,6 +250,16 @@ const PlayerFile = (() => {
       }));
   }
 
+  // Clear all messages is a per-side watermark rather than a delete, because a
+  // merge only ever adds: without one, the other end simply puts the cleared
+  // messages back the next time it writes.
+  const clearMark = doc => {
+    const c = (doc && doc.cleared) || {};
+    return { coach: +c.coach || 0, player: +c.player || 0 };
+  };
+  const bothMarks = (a, b) => ({ coach: Math.max(a.coach, b.coach), player: Math.max(a.player, b.player) });
+  const keptBy = (mark, m) => (+m.at || 0) > mark[m.side === 'player' ? 'player' : 'coach'];
+
   // ---- Google Drive: one JSON per player in the Players folder ------------
   // <squad database folder> / Players / <Player Name> / <Player Name>.json.
   // Whichever end writes first makes the folders and the file and shares it
@@ -269,7 +279,7 @@ const PlayerFile = (() => {
     return names.filter((name, i, all) => name && all.indexOf(name) === i);
   };
   const qEsc = s => String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-  const driveDoc = (player, file, messages) => ({
+  const driveDoc = (player, file, messages, cleared) => ({
     app: 'SportTactic', kind: 'player-file', v: 1,
     playerId: player.id, playerName: nameOf(player),
     teamId: (file && file.teamId) || '', sport: (file && file.sport) || '',
@@ -279,6 +289,7 @@ const PlayerFile = (() => {
     key: (file && file.key && file.key.hash && !file.key.prov)
       ? { salt: file.key.salt, iter: file.key.iter, hash: file.key.hash, at: file.key.at,
           clientId: file.key.clientId || '' } : null,
+    cleared: cleared || clearMark(file),
     updatedAt: Date.now(), messages: messages
   });
 
@@ -353,7 +364,6 @@ const PlayerFile = (() => {
   // costs four requests, and the dialog asks every few seconds.
   const driveIds = {};
   const driveDirty = new Set();
-  const driveWipe = new Set();      // a Clear that still has to reach Drive
   const driveBusy = new Set();
   let driveTimer = null;
 
@@ -549,22 +559,24 @@ const PlayerFile = (() => {
       await adoptKey(player, remote && remote.key);
     }
 
-    const mine = local.messages || [];
-    const seen = new Set(mine.map(m => m.id));
-    // Clear all messages pushes as a wipe: merging the copy still on Drive back
-    // in is exactly what it was pressed to undo.
-    const wipe = push && driveWipe.has(player.id);
-    const got = wipe ? [] : cleanMsgs(remote && remote.messages, seen);
+    // Whatever either end has cleared stays cleared, on both copies.
+    const store = get(player.id) || local;
+    const mark = bothMarks(clearMark(store), clearMark(remote));
+    const mine = (store.messages || []).filter(m => keptBy(mark, m));
+    const seen = new Set((store.messages || []).map(m => m.id));
+    const got = cleanMsgs(remote && remote.messages, seen).filter(m => keptBy(mark, m));
     const merged = mine.concat(got).sort((a, b) => a.at - b.at).slice(-MAX_MSG);
-    if (got.length) await Store.save(STORE, Object.assign({}, get(player.id) || local, { messages: merged }),
-      { playerFileKey: holdsKey(player.id) });
+    if (merged.length !== (store.messages || []).length || got.length
+      || mark.coach !== clearMark(store).coach || mark.player !== clearMark(store).player) {
+      await Store.save(STORE, Object.assign({}, store, { messages: merged, cleared: mark }),
+        { playerFileKey: holdsKey(player.id) });
+    }
     if (push) {
-      try { await Drive.uploadJson('', driveDoc(player, get(player.id) || local, merged), { fileId }); }
+      try { await Drive.uploadJson('', driveDoc(player, get(player.id) || store, merged, mark), { fileId }); }
       catch (e) {
         await forgetDriveId(player);
         return { ok: false, why: 'net', got: got.length };
       }
-      driveWipe.delete(player.id);
     }
     return { ok: true, got: got.length, total: merged.length };
   }
@@ -626,12 +638,16 @@ const PlayerFile = (() => {
     }
   }
 
+  // Each end clears only what it wrote: what the other one said is theirs.
   async function clearAll(player) {
     const file = get(player && player.id);
     if (!file || !canWrite(player)) return false;
-    await Store.save(STORE, Object.assign({}, file, { messages: [] }),
-      { playerFileKey: holdsKey(player.id) });
-    driveWipe.add(player.id);
+    const mark = clearMark(file);
+    mark[side(player) === 'player' ? 'player' : 'coach'] = Date.now();
+    await Store.save(STORE, Object.assign({}, file, {
+      cleared: mark,
+      messages: (file.messages || []).filter(msg => keptBy(mark, msg))
+    }), { playerFileKey: holdsKey(player.id) });
     await saveToDrive(player);
     return true;
   }
@@ -761,8 +777,12 @@ const PlayerFile = (() => {
     if (!player || !player.id) return;
     const open = () => {
       const writable = canWrite(player);
-      const staff = !(window.Access && Access.readMode && Access.readMode());
+      const mySide = side(player);
+      // Only a copy that is neither read-only nor this player's own generates
+      // keys; every other one is offered the box to type the coach's key into.
+      const staff = !(window.Access && Access.readMode && Access.readMode()) && mySide !== 'player';
       const list = messages(player.id);
+      const hasMine = list.some(msg => msg.side === mySide);
       UI.modal({
         title: t('pfile.title', 'Player file') + ' \u2014 ' + nameOf(player),
         width: 620,
@@ -776,14 +796,14 @@ const PlayerFile = (() => {
             <textarea id="pf_text" rows="3" maxlength="${MAX_LEN}" ${writable ? '' : 'disabled'}
               placeholder="${esc(t('pfile.ph', 'Write to the other end\u2026'))}"></textarea></label>
           <p class="hint">${esc(writable
-            ? t('pfile.signedAs', 'Signed as') + ': ' + myName(player) + ' \u00b7 ' + sideLabel(side(player))
+            ? t('pfile.signedAs', 'Signed as') + ': ' + myName(player) + ' \u00b7 ' + sideLabel(mySide)
             : staff ? t('pfile.readOnly', 'This copy is read-only, so the file can be read but not written to.')
               : t('pfile.needKey', 'Writing needs the message key the coach generates for you. Press Message key and type it in.'))}</p>
 `,
         footer: `<button class="btn ghost" data-close2>${esc(T('common.close'))}</button>
           <button class="btn" data-get>\u2b73 ${esc(t('pfile.dl', 'Get message'))}</button>
           <button class="btn" data-key>\u{1F511} ${esc(t('pfile.key', 'Message key'))}</button>
-          ${writable ? `<button class="btn danger" data-wipe ${list.length ? '' : 'disabled'}>${esc(t('pfile.clear', 'Clear all messages'))}</button>` : ''}
+          ${writable ? `<button class="btn danger" data-wipe data-member-ok ${hasMine ? '' : 'disabled'}>${esc(t('pfile.clear', 'Clear all messages'))}</button>` : ''}
           <button class="btn primary" data-post ${writable ? '' : 'disabled'}>${esc(t('pfile.send', 'Write'))}</button>`,
         onOpen: (m, close) => {
           const box = m.querySelector('.pf-thread');
@@ -802,18 +822,18 @@ const PlayerFile = (() => {
               next.scrollTop = next.scrollHeight;
             }
             const wipe = m.querySelector('[data-wipe]');
-            if (wipe) wipe.disabled = !messages(player.id).length;
+            if (wipe) wipe.disabled = !messages(player.id).some(msg => msg.side === mySide);
           };
           m.querySelector('[data-close2]').onclick = () => { close(); if (typeof onDone === 'function') onDone(); };
           m.querySelector('[data-key]').onclick = () => { close(); (staff ? keyDialog : claimDialog)(player, open); };
           const wipe = m.querySelector('[data-wipe]');
-          if (wipe) wipe.onclick = () => UI.confirm(t('pfile.clearAsk', 'Remove every message in this player file? The key and the file itself stay.'), async () => {
+          if (wipe) wipe.onclick = () => UI.confirm(t('pfile.clearAsk', 'Remove every message you have written in this player file? What the other end wrote stays, and so do the key and the file itself.'), async () => {
             if (!await clearAll(player)) return;
             refresh();
             busy = true;
             pending = !await pushNow();
             busy = false;
-            UI.toast(t('pfile.cleared', 'Player file emptied'), 'success');
+            UI.toast(t('pfile.cleared', 'Your messages were removed'), 'success');
           });
           const driveFail = r => {
             if (r.why === 'off') UI.toast(t('pfile.driveOff', 'Google Drive is not connected \u2014 set it up under Settings.'), 'error');
