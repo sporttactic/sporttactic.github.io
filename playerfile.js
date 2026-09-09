@@ -740,6 +740,15 @@ const PlayerFile = (() => {
     }
   }
 
+  // Make sure this player has a file and that it exists on Drive, shared with
+  // the player's own account. Addressing a message to a name calls this, so the
+  // player can reach the file the moment the coach writes the first line.
+  async function publish(player) {
+    if (!player || !player.id) return { ok: false, why: 'nofile' };
+    await ensure(player);
+    return await saveToDrive(player);
+  }
+
   // Each end clears only what it wrote: what the other one said is theirs.
   async function clearAll(player) {
     const file = get(player && player.id);
@@ -1041,7 +1050,7 @@ const PlayerFile = (() => {
   return {
     STORE, fileId, get, messages, ensure, remove, post, sweep, dialog, threadHtml, clearAll, canWrite, side,
     newKey, claimKey, holdsKey, holdsWord, verifyHeld, hasKey, keyDialog, claimDialog, driveSync, driveName, syncAll,
-    startDriveSync, googleConnected
+    startDriveSync, googleConnected, publish
   };
 })();
 if (typeof window !== 'undefined') {

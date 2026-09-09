@@ -135,6 +135,7 @@ Views.teams = function (mount) {
       ? `<button class="btn ghost" id="cancelSquad">${T('common.cancel')}</button>
          <button class="btn primary" id="saveSquad">${T('teams.saveSquad')}</button>`
       : `<button class="btn sm" id="mailSquad">✉ ${T('mail.title')}</button>
+         <button class="btn sm" id="msgName" data-write>✉ ${T('teams.msgByName')}</button>
          ${Access.readMode() ? '' : UI.shareBar('team', { exportLabel: T('teams.exportSquad'), importLabel: T('teams.importSquad') })}
          <button class="btn sm" id="squadAnims">▶ ${T('teams.anims')} <span class="tag">${teamAnims.length}</span></button>
          <button class="btn sm" id="editSquad" data-write>✎ ${T('teams.editSquad')}</button>
@@ -228,6 +229,8 @@ Views.teams = function (mount) {
       q('#mailSquad').onclick = () => MAIL.compose({
         players, title: T('mail.title') + ' — ' + T('teams.squad')
       });
+      const byName = q('#msgName');
+      if (byName) byName.onclick = () => team ? messageByName(team) : UI.toast(T('teams.noTeamFirst'), 'error');
       UI.bindShare(mount, 'team', () => { App.populateTeamPicker(); render(); }, { scoped: true });
       q('#squadAnims').onclick = () => animListDialog(team, teamAnimations(team));
       mount.querySelectorAll('[data-mail]').forEach(b => b.onclick = () => {
@@ -370,6 +373,78 @@ Views.teams = function (mount) {
           });
         };
         bind();
+      }
+    });
+  }
+
+  // Write to the name on a player's profile. A name the squad does not carry yet
+  // is added to it, so a thread can be started before the player is formally on
+  // the list. The address is what lets that player's own Google account reach
+  // the file.
+  function messageByName(team) {
+    const squad = Store.players(team.id);
+    const full = p => [p.firstName, p.lastName].filter(Boolean).join(' ').trim();
+    const norm = s => String(s || '').trim().replace(/\s+/g, ' ');
+    const match = n => squad.find(p => full(p).toLowerCase() === n.toLowerCase());
+    UI.modal({
+      title: T('teams.msgByName'),
+      width: 520,
+      body: `
+        <p class="hint">${UI.esc(T('teams.msgByNameHint'))}</p>
+        <label class="field"><span>${T('teams.msgName')}</span>
+          <input id="mn_name" list="mn_list" autocomplete="off" spellcheck="false" placeholder="${UI.esc(T('teams.msgNamePh'))}">
+          <datalist id="mn_list">${squad.map(p => `<option value="${UI.esc(full(p))}"></option>`).join('')}</datalist></label>
+        <label class="field"><span>${T('teams.msgMail')}</span>
+          <input id="mn_mail" type="email" autocomplete="off" placeholder="${UI.esc(T('teams.emailPh'))}">
+          <span class="hint">${UI.esc(T('teams.msgMailHint'))}</span></label>`,
+      footer: `<button class="btn ghost" data-close2>${T('common.cancel')}</button>
+        <button class="btn primary" data-go>${T('teams.msgOpen')}</button>`,
+      onOpen: (m, close) => {
+        const nameInp = m.querySelector('#mn_name');
+        const mailInp = m.querySelector('#mn_mail');
+        nameInp.focus();
+        // A name already in the squad brings the address it carries with it.
+        nameInp.oninput = () => {
+          const hit = match(norm(nameInp.value));
+          if (hit && !mailInp.value) mailInp.value = hit.email || '';
+        };
+        m.querySelector('[data-close2]').onclick = close;
+        const go = async () => {
+          const btn = m.querySelector('[data-go]');
+          const name = norm(nameInp.value);
+          if (!name) return UI.toast(T('teams.msgNeedName'), 'error');
+          const raw = mailInp.value.trim();
+          const email = raw ? MAIL.normEmail(raw) : '';
+          if (raw && !email) return UI.toast(T('teams.badEmail'), 'error');
+          btn.disabled = true;
+          let player = match(name);
+          if (player) {
+            if (email && email !== player.email) {
+              player = await Store.save('players', Object.assign({}, player, { email }));
+            }
+          } else {
+            const cut = name.indexOf(' ');
+            player = await Store.save('players', {
+              teamId: team.id, sport: sportId,
+              firstName: cut < 0 ? name : name.slice(0, cut),
+              lastName: cut < 0 ? '' : name.slice(cut + 1),
+              position: SPORTS.positions(sportId)[0] || '',
+              status: 'active', email
+            });
+            UI.toast(T('teams.msgAdded'), 'success');
+          }
+          await PlayerFile.ensure(player);
+          // Puts the file on Drive and invites the address, so the player's own
+          // account can reach it as soon as the first line is written.
+          await PlayerFile.publish(player);
+          btn.disabled = false;
+          close();
+          render();
+          PlayerFile.dialog(player, render);
+        };
+        nameInp.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); mailInp.focus(); } };
+        mailInp.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); go(); } };
+        m.querySelector('[data-go]').onclick = go;
       }
     });
   }
