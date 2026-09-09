@@ -4,8 +4,9 @@
    The file is made the moment the player is created and deleted the moment the
    player is, so a squad and its files can never drift apart. It is a row in the
    club's own database and travels with the squad exactly like every other row;
-   when the two ends do not share a synced copy, Get message and Upload message
-   carry the thread through the player's own folder on Google Drive. */
+   when the two ends do not share a synced copy, the thread goes through the
+   player's own folder on Google Drive — written there as it is typed and
+   fetched back with Get message. */
 const PlayerFile = (() => {
   const STORE = 'playerfiles';
   const MAX_MSG = 500;          // a conversation, not a log â€” the oldest fall off
@@ -250,10 +251,10 @@ const PlayerFile = (() => {
   }
 
   // ---- Google Drive: one JSON per player in the Players folder ------------
-  // SportTactic / <squad> / Players / <Player Name>.json.
-  // Whichever end writes first makes the folder and the file and shares it with
-  // the other, so a player holding the key can send a message before the coach
-  // has ever opened Drive and the coach still gets it back.
+  // <squad database folder> / Players / <Player Name> / <Player Name>.json.
+  // Whichever end writes first makes the folders and the file and shares it
+  // with the other, so a player holding the key can send a message before the
+  // coach has ever opened Drive and the coach still gets it back.
   const DRIVE_DIR = 'Players';
   const driveOn = () => !!(window.Drive && Drive.isConnected && Drive.isConnected());
   const safeName = s => String(s || '').replace(/[/\\?%*:|"<>]+/g, '-').trim();
@@ -281,22 +282,39 @@ const PlayerFile = (() => {
     updatedAt: Date.now(), messages: messages
   });
 
-  // The shared Players folder as this account can build it. ensureFolder finds
-  // an existing one, so coach and player write the same JSON file. The
-  // team folder id in settings is deliberately not written here: it belongs to
-  // the coach's cloud setup and a player copy must not overwrite it.
+  // The squad's database folder on Drive as this copy already knows it: the
+  // coach's own setting, or the id a copy that joined by team code resolved
+  // from the shared manifest. Nothing is searched for or created here.
+  async function teamFolder() {
+    let id = '';
+    try { id = await Drive.getTeamFolderId(); } catch (e) { id = ''; }
+    if (!id && window.TeamCloud && TeamCloud.cfg) {
+      try { id = TeamCloud.cfg().folderId || ''; } catch (e) { id = ''; }
+    }
+    return id;
+  }
+  // <database folder> / Players / <Player Name> / <Player Name>.json, built as
+  // far as this account is allowed to. The squad's own database folder is used
+  // whenever this copy may write in it, so coach and player land on one file;
+  // an account that may not build the same path in its own Drive instead and
+  // shares what it writes with the other end. The team folder id in settings is
+  // deliberately not written here: it belongs to the coach's cloud setup and a
+  // player copy must not overwrite it.
   async function ownFolder(player) {
+    const club = await teamFolder();
+    if (club) {
+      try { return await Drive.ensureFolder(playerDir(player), await Drive.ensureFolder(DRIVE_DIR, club)); }
+      catch (e) { /* no right to create in the club folder; use this account's own */ }
+    }
     const root = await Drive.ensureFolder('SportTactic', null);
     const t = Store.activeTeam();
     const team = await Drive.ensureFolder(safeName(t && t.name) || 'Team', root);
-    return await Drive.ensureFolder(DRIVE_DIR, team);
+    return await Drive.ensureFolder(playerDir(player), await Drive.ensureFolder(DRIVE_DIR, team));
   }
   // The Players folder this copy already knows about, and the player's own
   // folder inside it when it has been made.
   async function knownFolder(player) {
-    let team = '';
-    try { team = await Drive.getTeamFolderId(); } catch (e) { team = ''; }
-    if (!team && window.TeamCloud && TeamCloud.cfg) team = TeamCloud.cfg().folderId || '';
+    const team = await teamFolder();
     if (!team) return null;
     try {
       const dir = await Drive.findFolder(DRIVE_DIR, team);
@@ -310,14 +328,15 @@ const PlayerFile = (() => {
   async function foundFolder(player) {
     try {
       const root = await Drive.findFolder('SportTactic', null);
-      if (!root) return '';
+      if (!root) return null;
       const t = Store.activeTeam();
       const team = await Drive.findFolder(safeName(t && t.name) || 'Team', root.id);
-      if (!team) return '';
+      if (!team) return null;
       const players = await Drive.findFolder(DRIVE_DIR, team.id);
-      if (!players) return '';
-      return players.id;
-    } catch (e) { return ''; }
+      if (!players) return null;
+      const own = await Drive.findFolder(playerDir(player), players.id);
+      return { players: players.id, own: (own && own.id) || '' };
+    } catch (e) { return null; }
   }
   // The other end, so the file it does not own is still reachable to it.
   function shareTargets(player) {
@@ -334,6 +353,7 @@ const PlayerFile = (() => {
   // costs four requests, and the dialog asks every few seconds.
   const driveIds = {};
   const driveDirty = new Set();
+  const driveWipe = new Set();      // a Clear that still has to reach Drive
   const driveBusy = new Set();
   let driveTimer = null;
 
@@ -370,24 +390,23 @@ const PlayerFile = (() => {
     if (local && local.driveId) return (driveIds[player.id] = String(local.driveId));
     const names = driveNames(player);
     const name = names[0];
-    const known = await knownFolder(player);
-    if (known) {
+    // The player's own folder first, then the Players folder itself, where
+    // copies made before each player had a folder of their own still sit.
+    const lookIn = async dir => {
+      if (!dir) return '';
       for (const candidate of names) {
-        if (known.own) {
-          const hit = await Drive.findFile(candidate, known.own);
+        for (const parent of [dir.own, dir.players]) {
+          if (!parent) continue;
+          const hit = await Drive.findFile(candidate, parent);
           if (hit) return await rememberDriveId(player, hit.id);
         }
-        const flat = await Drive.findFile(candidate, known.players);
-        if (flat) return await rememberDriveId(player, flat.id);
       }
-    }
-    const byName = await foundFolder(player);
-    if (byName) {
-      for (const candidate of names) {
-        const hit = await Drive.findFile(candidate, byName);
-        if (hit) return await rememberDriveId(player, hit.id);
-      }
-    }
+      return '';
+    };
+    const inKnown = await lookIn(await knownFolder(player));
+    if (inKnown) return inKnown;
+    const inFound = await lookIn(await foundFolder(player));
+    if (inFound) return inFound;
     // Search all app-visible files by every compatible exact player filename.
     for (const candidate of names) {
       const visible = await Drive.listFiles("name='" + qEsc(candidate) + "' and trashed=false");
@@ -472,21 +491,23 @@ const PlayerFile = (() => {
     const local = get(player.id) || await ensure(player);
     if (!local) return { ok: false, why: 'nofile' };
 
-    // A player may only use an existing coach-created file. In particular, a
-    // player push must never create a new file containing a locally supplied
-    // key and thereby make that key authoritative.
+    // A player copy writes only with the coach's own key: the block it holds
+    // came down with the squad and is the one it publishes, so a locally
+    // invented key can never become the authoritative one. Without that key a
+    // player copy may still read an existing file, never make one.
     const playerCopy = side(player) === 'player';
+    const keyed = !playerCopy || holdsKey(player.id);
     let fileId = '';
-    try { fileId = await driveFile(player, push && !playerCopy); }
+    try { fileId = await driveFile(player, push && keyed); }
     catch (e) { return { ok: false, why: 'net' }; }
-    if (!fileId) return { ok: false, why: playerCopy ? 'badkey' : 'nofile' };
+    if (!fileId) return { ok: false, why: keyed ? 'nofile' : 'badkey' };
 
     let remote = null;
     try { remote = await Drive.downloadJson(fileId); }
     catch (e) {
       // A remembered id may point at a deleted or replaced file. Clear it and
       // retry the full filename lookup during this operation, rather than
-      // requiring a second press of Get message or Upload message.
+      // requiring a second press of Get message.
       await forgetDriveId(player);
       try {
         fileId = await driveFile(player, false);
@@ -495,29 +516,32 @@ const PlayerFile = (() => {
         await forgetDriveId(player);
         fileId = '';
       }
-      // Only the coach may recreate an authoritative player file.
-      if (!fileId && push && !playerCopy) {
+      if (!fileId && push && keyed) {
         try {
           fileId = await driveFile(player, true);
           remote = fileId ? await Drive.downloadJson(fileId) : null;
         } catch (e3) { return { ok: false, why: 'net' }; }
       } else if (!fileId) {
-        return { ok: false, why: playerCopy ? 'badkey' : 'net' };
+        return { ok: false, why: keyed ? 'net' : 'badkey' };
       }
     }
 
     if (playerCopy) {
       // Recheck the held word against the key currently inside the Google file
       // before every merge or upload. Replacing a key therefore revokes an old
-      // player copy before it can write again.
+      // player copy before it can write again. A file that carries no key of
+      // its own yet is judged by the coach key that arrived with the squad.
       const word = canonKey(heldWord(player.id));
-      const remoteKey = remote && remote.key;
-      if (!word || !await sameWord(word, remoteKey)) {
+      const remoteKey = (remote && remote.key) || null;
+      const localKey = (get(player.id) || local).key;
+      const against = (remoteKey && remoteKey.hash) ? remoteKey
+        : (localKey && localKey.hash && !localKey.prov ? localKey : null);
+      if (!word || !against || !await sameWord(word, against)) {
         return { ok: false, why: 'badkey' };
       }
       await adoptKey(player, remoteKey);
       const verified = get(player.id);
-      if (!verified || !verified.key || verified.key.hash !== remoteKey.hash) {
+      if (!verified || !verified.key || verified.key.hash !== against.hash) {
         return { ok: false, why: 'badkey' };
       }
       holdKey(player.id, prettyKey(word), verified.key.hash);
@@ -527,7 +551,10 @@ const PlayerFile = (() => {
 
     const mine = local.messages || [];
     const seen = new Set(mine.map(m => m.id));
-    const got = cleanMsgs(remote && remote.messages, seen);
+    // Clear all messages pushes as a wipe: merging the copy still on Drive back
+    // in is exactly what it was pressed to undo.
+    const wipe = push && driveWipe.has(player.id);
+    const got = wipe ? [] : cleanMsgs(remote && remote.messages, seen);
     const merged = mine.concat(got).sort((a, b) => a.at - b.at).slice(-MAX_MSG);
     if (got.length) await Store.save(STORE, Object.assign({}, get(player.id) || local, { messages: merged }),
       { playerFileKey: holdsKey(player.id) });
@@ -537,6 +564,7 @@ const PlayerFile = (() => {
         await forgetDriveId(player);
         return { ok: false, why: 'net', got: got.length };
       }
+      driveWipe.delete(player.id);
     }
     return { ok: true, got: got.length, total: merged.length };
   }
@@ -603,6 +631,7 @@ const PlayerFile = (() => {
     if (!file || !canWrite(player)) return false;
     await Store.save(STORE, Object.assign({}, file, { messages: [] }),
       { playerFileKey: holdsKey(player.id) });
+    driveWipe.add(player.id);
     await saveToDrive(player);
     return true;
   }
@@ -710,6 +739,14 @@ const PlayerFile = (() => {
           if (r === 'off') return UI.toast(t('pfile.driveOff', 'Google Drive must be connected before the message key can be checked.'), 'error');
           if (r !== true) return UI.toast(t('pfile.keyBad', 'That key was not accepted'), 'error');
           UI.toast(t('pfile.keyOk', 'Key accepted \u2014 you can write in your file'), 'success');
+          // The key carries the coach's public OAuth configuration, so Google
+          // can be signed in to from here: the player never needs Settings.
+          if (!driveOn()) {
+            btn.disabled = true;
+            const on = await connectWithKey(player);
+            btn.disabled = false;
+            if (!on) UI.toast(t('pfile.driveOff', 'Google Drive is not connected \u2014 set it up under Settings.'), 'error');
+          }
           done();
         };
         inp.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); claim(); } };
@@ -745,9 +782,8 @@ const PlayerFile = (() => {
 `,
         footer: `<button class="btn ghost" data-close2>${esc(T('common.close'))}</button>
           <button class="btn" data-get>\u2b73 ${esc(t('pfile.dl', 'Get message'))}</button>
-          <button class="btn" data-send>\u2b71 ${esc(t('pfile.up', 'Upload message'))}</button>
           <button class="btn" data-key>\u{1F511} ${esc(t('pfile.key', 'Message key'))}</button>
-          ${staff ? `<button class="btn danger" data-wipe ${list.length ? '' : 'disabled'}>${esc(t('pfile.clear', 'Clear all messages'))}</button>` : ''}
+          ${writable ? `<button class="btn danger" data-wipe ${list.length ? '' : 'disabled'}>${esc(t('pfile.clear', 'Clear all messages'))}</button>` : ''}
           <button class="btn primary" data-post ${writable ? '' : 'disabled'}>${esc(t('pfile.send', 'Write'))}</button>`,
         onOpen: (m, close) => {
           const box = m.querySelector('.pf-thread');
@@ -774,6 +810,9 @@ const PlayerFile = (() => {
           if (wipe) wipe.onclick = () => UI.confirm(t('pfile.clearAsk', 'Remove every message in this player file? The key and the file itself stay.'), async () => {
             if (!await clearAll(player)) return;
             refresh();
+            busy = true;
+            pending = !await pushNow();
+            busy = false;
             UI.toast(t('pfile.cleared', 'Player file emptied'), 'success');
           });
           const driveFail = r => {
@@ -782,32 +821,41 @@ const PlayerFile = (() => {
             else if (r.why === 'nofile') UI.toast(t('pfile.driveNone', 'Nothing has been sent to Drive for this player yet.'), 'error');
             else UI.toast(t('pfile.driveFail', 'Drive could not be reached'), 'error');
           };
-          // pending is a push that never got through. It is the only way a
-          // message leaves a copy whose Drive buttons are hidden, so the next
-          // turn of the poll sends it instead of only asking.
+          // pending is a push that never got through, retried by the poll.
           let busy = false, pending = false;
-          const drive = async (btn, mode) => {
-            btn.disabled = true;
-            busy = true;
+          // There is no upload button: whatever is written here goes to Drive
+          // by itself, signing in with the message key when that is all this
+          // device was given.
+          const pushNow = async () => {
+            if (!driveDirty.has(player.id)) return true;
+            // A copy that does not use Drive at all is not nagged about it: the
+            // line is saved either way and the poll sends it if Drive appears.
             if (!driveOn() && !await connectWithKey(player)) {
-              busy = false;
-              btn.disabled = false;
-              return driveFail({ why: 'off' });
+              if (holdsKey(player.id)) driveFail({ why: 'off' });
+              return false;
             }
-            const r = await driveSync(player, mode);
-            busy = false;
-            btn.disabled = false;
-            if (!r.ok) return driveFail(r);
-            refresh();
-            if (mode === 'pull') {
-              UI.toast(r.got ? t('pfile.driveGot', 'Fetched from Drive') + ' (' + r.got + ')'
-                : t('pfile.driveNothing', 'Nothing new on Drive'), r.got ? 'success' : 'info');
-            } else UI.toast(t('pfile.driveSent', 'Player file is up to date on Drive'), 'success');
+            const r = await driveSync(player, 'push');
+            if (!r.ok) { driveFail(r); return false; }
+            driveDirty.delete(player.id);
+            return true;
           };
           const getBtn = m.querySelector('[data-get]');
-          if (getBtn) getBtn.onclick = () => drive(getBtn, 'pull');
-          const sendBtn = m.querySelector('[data-send]');
-          if (sendBtn) sendBtn.onclick = () => drive(sendBtn, 'push');
+          if (getBtn) getBtn.onclick = async () => {
+            getBtn.disabled = true;
+            busy = true;
+            if (!driveOn() && !await connectWithKey(player)) driveFail({ why: 'off' });
+            else {
+              const r = await driveSync(player, 'pull');
+              if (!r.ok) driveFail(r);
+              else {
+                refresh();
+                UI.toast(r.got ? t('pfile.driveGot', 'Fetched from Drive') + ' (' + r.got + ')'
+                  : t('pfile.driveNothing', 'Nothing new on Drive'), r.got ? 'success' : 'info');
+              }
+            }
+            busy = false;
+            getBtn.disabled = false;
+          };
           // Both ends sit on the same file, so each keeps looking for what the
           // other one wrote for as long as the dialog is open. The modal being
           // off the page is what stops it, which covers every way out.
@@ -835,16 +883,24 @@ const PlayerFile = (() => {
             if (!text) return UI.toast(t('pfile.needText', 'Write something first'), 'error');
             const btn = m.querySelector('[data-post]');
             btn.disabled = true;
+            busy = true;
             const saved = await post(player, text);
-            btn.disabled = false;
-            if (!saved) return UI.toast(t('pfile.needKey', 'Writing needs the message key the coach generates for you.'), 'error');
+            if (!saved) {
+              busy = false;
+              btn.disabled = false;
+              return UI.toast(t('pfile.needKey', 'Writing needs the message key the coach generates for you.'), 'error');
+            }
             inp.value = '';
-            inp.focus();
             refresh();
-            UI.toast(t('pfile.saved', 'Written in the player file'), 'success');
-            // post() already saved to Drive. If that attempt failed, the
-            // selected background interval retries it automatically.
-            pending = driveDirty.has(player.id);
+            // post() already tried Drive; this covers a copy that still has to
+            // sign in. A push that gets nowhere is left to the poll to retry.
+            const sent = await pushNow();
+            pending = !sent;
+            busy = false;
+            btn.disabled = false;
+            inp.focus();
+            if (sent) UI.toast(t('pfile.driveSent', 'Message sent to the Drive folder'), 'success');
+            else UI.toast(t('pfile.saved', 'Written in the player file'), 'success');
           };
         }
       });
