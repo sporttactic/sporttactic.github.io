@@ -563,7 +563,10 @@ const PlayerFile = (() => {
   // not need access to Settings; the client id arrived with the coach's key.
   async function connectWithKey(player) {
     if (driveOn()) return true;
-    if (!player || !holdsWord(player.id) || !window.Drive || !Drive.connect) return false;
+    if (!player || !window.Drive || !Drive.connect) return false;
+    // A player copy needs the key to get this far; a copy that owns the data may
+    // always re-authorise here, since a Google token only lasts about an hour.
+    if (memberPlayer(player) && !holdsWord(player.id)) return false;
     const f = get(player.id);
     await useKeyDriveConfig(f && f.key);
     try {
@@ -715,17 +718,19 @@ const PlayerFile = (() => {
     if (driveTimer) clearInterval(driveTimer);
     driveTimer = setInterval(syncAll, autoMinutes() * 60 * 1000);
   }
-  // A player who has just connected Google must publish their local private
-  // file immediately. A normal clean background pass pulls, so waiting for the
-  // timer could leave the account connected without creating its Drive file.
+  // Whatever was written while the account was away has to go up the moment it
+  // comes back. A normal clean background pass pulls, so waiting for the timer
+  // would leave Google connected with nothing published.
   async function googleConnected() {
     if (!driveOn()) return;
     let players = [];
     try { players = Store.all('players') || []; } catch (e) { return; }
     for (const player of players) {
-      // A held message key identifies the player represented by this device.
-      // Never publish another squad member's private file from a player login.
-      if (!player || !player.id || !holdsKey(player.id) || driveBusy.has(player.id)) continue;
+      if (!player || !player.id || driveBusy.has(player.id)) continue;
+      // A held message key identifies the player this device speaks for; a copy
+      // that owns the data publishes whatever it has queued for anybody. Never
+      // another squad member's private file from a player login.
+      if (!holdsKey(player.id) && !driveDirty.has(player.id)) continue;
       driveBusy.add(player.id);
       try {
         const result = await driveSync(player, 'push');
@@ -949,10 +954,12 @@ const PlayerFile = (() => {
           // device was given.
           const pushNow = async () => {
             if (!driveDirty.has(player.id)) return true;
-            // A copy that does not use Drive at all is not nagged about it: the
-            // line is saved either way and the poll sends it if Drive appears.
             if (!driveOn() && !await connectWithKey(player)) {
-              if (holdsWord(player.id)) driveFail({ why: 'off' });
+              // Only a copy that never set Google up at all stays quiet about it.
+              let setUp = false;
+              try { setUp = !!(window.Drive && Drive.isConfigured && await Drive.isConfigured()); }
+              catch (e) { setUp = false; }
+              if (setUp || holdsWord(player.id)) driveFail({ why: 'off' });
               return false;
             }
             const r = await driveSync(player, 'push');
