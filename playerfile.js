@@ -49,6 +49,11 @@ const PlayerFile = (() => {
     return 'coach';
   }
   const sideLabel = s => s === 'player' ? t('pfile.player', 'Player') : t('pfile.coach', 'Coach');
+  // Only a copy that FOLLOWS somebody else's database has to prove itself with
+  // the message key. Switching the club's own device to the Player role changes
+  // who a message is signed by, not whether that device owns the file.
+  const memberPlayer = player => side(player) === 'player'
+    && !!(window.Access && Access.following && Access.following());
   function myName(player) {
     if (side(player) === 'player') return nameOf(player);
     let n = '';
@@ -254,7 +259,11 @@ const PlayerFile = (() => {
     if (!body || !player || !player.id || !canWrite(player)) return null;
     const file = get(player.id) || await ensure(player);
     if (!file) return null;
-    const msg = { id: Store.uid('msg'), at: Date.now(), side: side(player), by: myName(player), text: body };
+    const mine = side(player);
+    // A line written in the same millisecond as a Clear would otherwise fall
+    // under that watermark and vanish without a word.
+    const at = Math.max(Date.now(), clearMark(file)[mine] + 1);
+    const msg = { id: Store.uid('msg'), at, side: mine, by: myName(player), text: body };
     const saved = await Store.save(STORE, Object.assign({}, file, {
       messages: (file.messages || []).concat([msg]).slice(-MAX_MSG)
     }), { playerFileKey: holdsWord(player.id) });
@@ -402,7 +411,7 @@ const PlayerFile = (() => {
   function shareTargets(player) {
     const norm = e => (window.MAIL && MAIL.normEmail) ? MAIL.normEmail(e) : String(e || '').trim();
     const out = [];
-    if (side(player) === 'player') (Store.coaches() || []).forEach(c => { const e = norm(c.email); if (e) out.push(e); });
+    if (memberPlayer(player)) (Store.coaches() || []).forEach(c => { const e = norm(c.email); if (e) out.push(e); });
     else { const e = norm(player.email); if (e) out.push(e); }
     return out.slice(0, 5);
   }
@@ -554,7 +563,7 @@ const PlayerFile = (() => {
     // came down with the squad and is the one it publishes, so a locally
     // invented key can never become the authoritative one. Without that key a
     // player copy may still read an existing file, never make one.
-    const playerCopy = side(player) === 'player';
+    const playerCopy = memberPlayer(player);
     const keyed = !playerCopy || holdsKey(player.id);
     let fileId = '';
     try { fileId = await driveFile(player, push && keyed); }
