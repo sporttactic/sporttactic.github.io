@@ -415,6 +415,30 @@ const PlayerFile = (() => {
     else { const e = norm(player.email); if (e) out.push(e); }
     return out.slice(0, 5);
   }
+  // One file, written by both ends, so the other end needs writer access to it —
+  // and needs it whenever its address turns up, not only in the instant the file
+  // was made. A player whose e-mail was filled in afterwards is invited on the
+  // next push; an address already invited is never sent again.
+  async function ensureShared(player, id) {
+    if (!id || !window.Drive || !Drive.shareWith) return;
+    const want = shareTargets(player);
+    if (!want.length) return;
+    const file = get(player.id);
+    // The record is tied to the file it was granted on: a replaced file starts over.
+    const done = (file && file.sharedId === id && Array.isArray(file.sharedWith)) ? file.sharedWith : [];
+    const missing = want.filter(e => done.indexOf(e) < 0);
+    if (!missing.length) return;
+    const added = [];
+    for (const to of missing) {
+      try { await Drive.shareWith(id, to, 'writer'); added.push(to); }
+      catch (e) { /* an invite Drive refuses now is retried on the next push */ }
+    }
+    const cur = added.length && get(player.id);
+    if (cur) {
+      await Store.save(STORE, Object.assign({}, cur, { sharedId: id, sharedWith: done.concat(added) }),
+        { playerFileKey: holdsWord(player.id) });
+    }
+  }
 
   // The file in the player's folder, the one shared with this account, or a new
   // one. Copies made before each player had a folder of their own sit straight
@@ -453,9 +477,12 @@ const PlayerFile = (() => {
   }
 
   async function driveFile(player, create) {
-    if (driveIds[player.id]) return driveIds[player.id];
+    // The id carried by the squad row wins over anything this device resolved
+    // for itself: it is the one pointer both ends share, so preferring it is
+    // what keeps them on a single file.
     const local = get(player.id);
     if (local && local.driveId) return (driveIds[player.id] = String(local.driveId));
+    if (driveIds[player.id]) return driveIds[player.id];
     const names = driveNames(player);
     const name = names[0];
     // The player's own folder first, then the Players folder itself, where
@@ -487,9 +514,7 @@ const PlayerFile = (() => {
     const id = (res && res.id) || '';
     if (id) {
       await rememberDriveId(player, id);
-      for (const to of shareTargets(player)) {
-        try { await Drive.shareWith(id, to, 'writer'); } catch (e) { /* the invite can be sent later */ }
-      }
+      await ensureShared(player, id);
     }
     return id;
   }
@@ -519,7 +544,7 @@ const PlayerFile = (() => {
     if (!fileId) return false;
     let doc = null;
     try { doc = await Drive.downloadJson(fileId); }
-    catch (e) { await forgetDriveId(player); return false; }
+    catch (e) { return false; }   // a key that cannot be read must not cost the file pointer
     const downloaded = doc && doc.key;
     if (await adoptKey(player, downloaded)) return true;
 
@@ -573,9 +598,15 @@ const PlayerFile = (() => {
     let remote = null;
     try { remote = await Drive.downloadJson(fileId); }
     catch (e) {
-      // A remembered id may point at a deleted or replaced file. Clear it and
-      // retry the full filename lookup during this operation, rather than
-      // requiring a second press of Get message.
+      // The id the squad carries is the coach's own file. A player copy that
+      // cannot reach it has not been given access to it yet, and making a
+      // second file here would split the one thread in two for good.
+      if (playerCopy && local.driveId && String(local.driveId) === fileId) {
+        return { ok: false, why: 'noaccess' };
+      }
+      // Otherwise a remembered id may point at a deleted or replaced file.
+      // Clear it and retry the full filename lookup during this operation,
+      // rather than requiring a second press of Get message.
       await forgetDriveId(player);
       try {
         fileId = await driveFile(player, false);
@@ -623,7 +654,11 @@ const PlayerFile = (() => {
     const mine = (store.messages || []).filter(m => keptBy(mark, m));
     const seen = new Set((store.messages || []).map(m => m.id));
     const got = cleanMsgs(remote && remote.messages, seen).filter(m => keptBy(mark, m));
-    const merged = mine.concat(got).sort((a, b) => a.at - b.at).slice(-MAX_MSG);
+    // The id breaks a tie, so two lines written in the same millisecond come out
+    // in the same order on both ends rather than one order each.
+    const merged = mine.concat(got)
+      .sort((a, b) => a.at - b.at || String(a.id).localeCompare(String(b.id)))
+      .slice(-MAX_MSG);
     if (merged.length !== (store.messages || []).length || got.length
       || mark.coach !== clearMark(store).coach || mark.player !== clearMark(store).player) {
       await Store.save(STORE, Object.assign({}, store, { messages: merged, cleared: mark }),
@@ -632,9 +667,13 @@ const PlayerFile = (() => {
     if (push) {
       try { await Drive.uploadJson('', driveDoc(player, get(player.id) || store, merged, mark), { fileId }); }
       catch (e) {
+        if (playerCopy && local.driveId && String(local.driveId) === fileId) {
+          return { ok: false, why: 'noaccess', got: got.length };
+        }
         await forgetDriveId(player);
         return { ok: false, why: 'net', got: got.length };
       }
+      await ensureShared(player, fileId);
     }
     return { ok: true, got: got.length, total: merged.length };
   }
@@ -898,6 +937,7 @@ const PlayerFile = (() => {
           });
           const driveFail = r => {
             if (r.why === 'off') UI.toast(t('pfile.driveOff', 'Google Drive is not connected \u2014 set it up under Settings.'), 'error');
+            else if (r.why === 'noaccess') UI.toast(t('pfile.driveShare', 'This file has not been shared with your Google account yet. The coach opening the player file once is what sends the invitation.'), 'error');
             else if (r.why === 'badkey') UI.toast(t('pfile.keyBad', 'The message key does not match the key in this player file.'), 'error');
             else if (r.why === 'nofile') UI.toast(t('pfile.driveNone', 'Nothing has been sent to Drive for this player yet.'), 'error');
             else UI.toast(t('pfile.driveFail', 'Drive could not be reached'), 'error');
