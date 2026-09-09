@@ -1888,6 +1888,7 @@ Views.settings = async function (mount) {
         <button class="btn" id="offCache">${T('offline.download')}</button>
         <button class="btn" id="offUpdate">${T('offline.update')}</button>
         <button class="btn" id="offGuide">${T('cloud.showMeHow')}</button>
+        <button class="btn danger" id="offClear" data-member-ok>${T('offline.clear')}</button>
       </div>
       <p class="hint">${T('offline.hint')}</p>`);
   }
@@ -2046,6 +2047,29 @@ Views.settings = async function (mount) {
     on('#offGuide', () => guideDialog(T('offline.guideTitle'), UI.esc(T('offline.desc')), [
       UI.esc(T('offline.g1')), UI.esc(T('offline.g2')), UI.esc(T('offline.g3')), UI.esc(T('offline.g4'))
     ], `<p class="hint">${UI.esc(T('offline.hint'))}</p>`));
+
+    // Throws away the stored app files and the worker serving them, so the next
+    // load fetches everything fresh. The club's own data is in IndexedDB and is
+    // not touched.
+    const clrBtn = mount.querySelector('#offClear');
+    if (clrBtn) clrBtn.disabled = !swOk && !window.caches;
+    on('#offClear', () => UI.confirm(T('offline.clearAsk'), async () => {
+      if (clrBtn) clrBtn.disabled = true;
+      try {
+        if (window.caches) {
+          const keys = await caches.keys();
+          for (const k of keys.filter(x => x.indexOf('sporttactic-') === 0)) await caches.delete(k);
+        }
+      } catch (e) { /* storage blocked (private mode) */ }
+      try {
+        if (swOk) {
+          const regs = await navigator.serviceWorker.getRegistrations();
+          for (const r of regs) await r.unregister();
+        }
+      } catch (e) { /* nothing was registered */ }
+      UI.toast(T('offline.cleared'), 'success');
+      setTimeout(() => location.reload(), 800);
+    }));
   }
 
   // ---- Module menu ----
