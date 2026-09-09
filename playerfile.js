@@ -41,7 +41,7 @@ const PlayerFile = (() => {
   // player's key is the player, whatever role it calls itself.
   function side(player) {
     try {
-      if (player && player.id && window.Access && Access.readMode && Access.readMode() && holdsKey(player.id)) return 'player';
+      if (player && player.id && window.Access && Access.readMode && Access.readMode() && holdsWord(player.id)) return 'player';
       if (window.Access && Access.tier && Access.role) {
         return Access.tier(Access.role()) === 'player' ? 'player' : 'coach';
       }
@@ -64,7 +64,8 @@ const PlayerFile = (() => {
   const KEY_ITER = 310000;
   const KEY_LEN = 16;
   const KEY_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';   // no 0/O, 1/I/L
-  const HELD = 'stx_pfile_keys';                          // this device only
+  const HELD = 'stx_pfile_keys';        // this device only, when IndexedDB is not available
+  const HELD_DB = 'pfileKeys';          // the same map as a settings row, so it lives in IndexedDB
 
   const cryptoOk = () => !!(window.crypto && crypto.subtle && crypto.getRandomValues);
   const b64 = buf => { let s = ''; new Uint8Array(buf).forEach(b => { s += String.fromCharCode(b); }); return btoa(s); };
@@ -82,14 +83,22 @@ const PlayerFile = (() => {
     const r = crypto.getRandomValues(new Uint8Array(KEY_LEN));
     return prettyKey([...r].map(n => KEY_CHARS[n % KEY_CHARS.length]).join(''));
   }
+  // The words this device holds. Kept in IndexedDB beside the rest of the app's
+  // data (a settings row never enters the shared file or an exported pack), with
+  // localStorage as the fallback for a browser that refuses the database. Read
+  // synchronously, because every render asks whether this copy may write.
   function heldKeys() {
+    const row = (window.Store && Store.find) ? Store.find('settings', HELD_DB) : null;
+    if (row && row.value && typeof row.value === 'object') return Object.assign({}, row.value);
     try { const v = JSON.parse(localStorage.getItem(HELD) || '{}'); return (v && typeof v === 'object') ? v : {}; }
     catch (e) { return {}; }
   }
-  function holdKey(playerId, word, hash) {
+  async function holdKey(playerId, word, hash) {
     const all = heldKeys();
     all[playerId] = { word, set: String(hash).slice(0, 12) };
     try { localStorage.setItem(HELD, JSON.stringify(all)); } catch (e) { /* private mode */ }
+    try { await Store.setSetting(HELD_DB, all); } catch (e) { /* no database on this device */ }
+    return all;
   }
   // Deriving the hash costs a third of a second, so the word is verified once
   // and the answer remembered against the hash it was checked against â€” a key
@@ -100,6 +109,15 @@ const PlayerFile = (() => {
     if (!k || !k.hash || k.prov) return false;
     const held = heldKeys()[playerId];
     return !!held && held.set === String(k.hash).slice(0, 12);
+  }
+  // The same question while the coach's own key is still on its way: a word
+  // taken on trust writes in the local file, but never speaks for Drive.
+  function holdsWord(playerId) {
+    if (holdsKey(playerId)) return true;
+    const f = get(playerId);
+    const k = f && f.key;
+    const held = heldKeys()[playerId];
+    return !!(k && k.hash && k.prov && held && held.set === String(k.hash).slice(0, 12));
   }
   const heldWord = playerId => (heldKeys()[playerId] || {}).word || '';
   // A key a player typed in before the coach's own arrived is provisional: the
@@ -123,7 +141,7 @@ const PlayerFile = (() => {
     await Store.save(STORE, Object.assign({}, file, {
       key: { salt: b64(salt), iter: KEY_ITER, hash, at: Date.now(), clientId: clientId || '' }
     }));
-    holdKey(player.id, word, hash);
+    await holdKey(player.id, word, hash);
     // The key is put beside the player file on Drive as it is made, because that
     // document is the only thing the player's copy can check the word against.
     if (driveOn()) { try { await driveSync(player, 'push'); } catch (e) { /* the buttons can send it later */ } }
@@ -148,8 +166,10 @@ const PlayerFile = (() => {
     } catch (e) { return false; }
   }
 
-  // Returns true, or why it was refused: 'len' for the wrong length, 'bad' for
-  // a key that does not match the one the file carries.
+  // Returns true for a key checked against the coach's own, 'trust' for one
+  // taken on trust because that key has not reached this device yet, or why it
+  // was refused: 'len' for the wrong length, 'bad' for a word that does not
+  // match the key the file already carries.
   async function claimKey(player, typed) {
     const word = canonKey(typed);
     if (word.length !== KEY_LEN) return 'len';
@@ -164,9 +184,38 @@ const PlayerFile = (() => {
     if (driveOn()) await driveKey(player);
     const current = get(player.id) || f;
     const key = current && current.key;
-    if (!key || key.prov || !await sameWord(word, key)) return 'bad';
+    if (key && key.hash && !key.prov) {
+      if (!await sameWord(word, key)) return 'bad';
+      await holdKey(player.id, prettyKey(word), key.hash);
+      await useKeyDriveConfig(key);
+      return true;
+    }
+    // The coach's key has not arrived here yet, so there is nothing to judge the
+    // word by. Refusing it would strand a player whose copy simply has not
+    // synced since the key was made, so it is taken on trust and marked
+    // provisional: it writes in the local file and speaks for nothing on Drive
+    // until the coach's own key arrives and matches it.
+    const salt = crypto.getRandomValues(new Uint8Array(16));
+    const hash = await hashWord(word, salt, KEY_ITER);
+    await Store.save(STORE, Object.assign({}, current, {
+      key: { salt: b64(salt), iter: KEY_ITER, hash, at: Date.now(),
+        clientId: (key && key.clientId) || '', prov: true }
+    }), { playerFileKey: true });
+    await holdKey(player.id, prettyKey(word), hash);
+    return 'trust';
+  }
 
-    holdKey(player.id, prettyKey(word), key.hash);
+  // The word held here against a key block that has since been replaced — by a
+  // squad sync or by Drive — is matched again, so a player who typed the right
+  // word is not quietly locked out the moment the real key lands.
+  async function verifyHeld(player) {
+    const id = player && player.id;
+    if (!id || !cryptoOk() || holdsKey(id)) return false;
+    const word = canonKey(heldWord(id));
+    const key = (get(id) || {}).key;
+    if (!word || !key || !key.hash || key.prov) return false;
+    if (!await sameWord(word, key)) return false;
+    await holdKey(id, prettyKey(word), key.hash);
     await useKeyDriveConfig(key);
     return true;
   }
@@ -176,7 +225,7 @@ const PlayerFile = (() => {
   function canWrite(player) {
     // A valid key permits writes only to this player's private file, including
     // on an otherwise locked/read-only player copy.
-    if (player && holdsKey(player.id)) return true;
+    if (player && holdsWord(player.id)) return true;
     if (window.Store && Store.locked && Store.locked()) return false;
     if (!(window.Access && Access.readMode && Access.readMode())) return true;
     return false;
@@ -208,7 +257,7 @@ const PlayerFile = (() => {
     const msg = { id: Store.uid('msg'), at: Date.now(), side: side(player), by: myName(player), text: body };
     const saved = await Store.save(STORE, Object.assign({}, file, {
       messages: (file.messages || []).concat([msg]).slice(-MAX_MSG)
-    }), { playerFileKey: holdsKey(player.id) });
+    }), { playerFileKey: holdsWord(player.id) });
     if (saved) await saveToDrive(player);
     return saved;
   }
@@ -378,7 +427,7 @@ const PlayerFile = (() => {
     const file = get(player.id);
     if (file && file.driveId !== id) {
       await Store.save(STORE, Object.assign({}, file, { driveId: id }),
-        { playerFileKey: holdsKey(player.id) });
+        { playerFileKey: holdsWord(player.id) });
     }
     return id;
   }
@@ -390,7 +439,7 @@ const PlayerFile = (() => {
     if (file && file.driveId) {
       const next = Object.assign({}, file);
       delete next.driveId;
-      await Store.save(STORE, next, { playerFileKey: holdsKey(player.id) });
+      await Store.save(STORE, next, { playerFileKey: holdsWord(player.id) });
     }
   }
 
@@ -480,7 +529,7 @@ const PlayerFile = (() => {
   // not need access to Settings; the client id arrived with the coach's key.
   async function connectWithKey(player) {
     if (driveOn()) return true;
-    if (!player || !holdsKey(player.id) || !window.Drive || !Drive.connect) return false;
+    if (!player || !holdsWord(player.id) || !window.Drive || !Drive.connect) return false;
     const f = get(player.id);
     await useKeyDriveConfig(f && f.key);
     try {
@@ -554,7 +603,7 @@ const PlayerFile = (() => {
       if (!verified || !verified.key || verified.key.hash !== against.hash) {
         return { ok: false, why: 'badkey' };
       }
-      holdKey(player.id, prettyKey(word), verified.key.hash);
+      await holdKey(player.id, prettyKey(word), verified.key.hash);
     } else {
       await adoptKey(player, remote && remote.key);
     }
@@ -569,7 +618,7 @@ const PlayerFile = (() => {
     if (merged.length !== (store.messages || []).length || got.length
       || mark.coach !== clearMark(store).coach || mark.player !== clearMark(store).player) {
       await Store.save(STORE, Object.assign({}, store, { messages: merged, cleared: mark }),
-        { playerFileKey: holdsKey(player.id) });
+        { playerFileKey: holdsWord(player.id) });
     }
     if (push) {
       try { await Drive.uploadJson('', driveDoc(player, get(player.id) || store, merged, mark), { fileId }); }
@@ -647,7 +696,7 @@ const PlayerFile = (() => {
     await Store.save(STORE, Object.assign({}, file, {
       cleared: mark,
       messages: (file.messages || []).filter(msg => keptBy(mark, msg))
-    }), { playerFileKey: holdsKey(player.id) });
+    }), { playerFileKey: holdsWord(player.id) });
     await saveToDrive(player);
     return true;
   }
@@ -728,7 +777,7 @@ const PlayerFile = (() => {
   // Player side: type the word the coach handed over, once, on this device.
   function claimDialog(player, onDone) {
     const held = holdsKey(player.id);
-    const waiting = !held && !driveOn();
+    const trusted = !held && holdsWord(player.id);
     UI.modal({
       title: t('pfile.key', 'Message key') + ' \u2014 ' + nameOf(player),
       width: 480,
@@ -736,7 +785,8 @@ const PlayerFile = (() => {
         <p class="hint">${esc(held
     ? t('pfile.keyHeld', 'This copy holds the key for this player and may write in the file.')
     : t('pfile.keyAsk', 'Type the message key the coach gave you. It is only needed once on this device.'))}</p>
-        ${waiting ? `<p class="hint">${esc(t('pfile.keyConnect', 'Connect Google Drive first. The key is accepted only when it matches the key stored in this player file.'))}</p>` : ''}
+        ${held ? '' : `<p class="hint">${esc(t('pfile.keyTrust', 'The key you type is checked against this player\u2019s file on Google Drive. If that cannot be reached, the word is taken on trust so you can write straight away, and checked for real the next time this copy and the coach\u2019s meet.'))}</p>`}
+        ${trusted ? `<p class="hint">${esc(t('pfile.keyTaken', 'A key is being held on trust here. It is checked for real as soon as the coach copy can be reached.'))}</p>` : ''}
         <label class="field"><span>${esc(t('pfile.key', 'Message key'))}</span>
           <input id="pf_key_in" maxlength="24" autocomplete="off" spellcheck="false" placeholder="ABCD-EFGH-JKMN-PQRS"></label>`,
       footer: `<button class="btn ghost" data-close2>${esc(T('common.close'))}</button>
@@ -753,8 +803,10 @@ const PlayerFile = (() => {
           btn.disabled = false;
           if (r === 'len') return UI.toast(t('pfile.keyLen', 'A message key is 16 characters'), 'error');
           if (r === 'off') return UI.toast(t('pfile.driveOff', 'Google Drive must be connected before the message key can be checked.'), 'error');
-          if (r !== true) return UI.toast(t('pfile.keyBad', 'That key was not accepted'), 'error');
-          UI.toast(t('pfile.keyOk', 'Key accepted \u2014 you can write in your file'), 'success');
+          if (r !== true && r !== 'trust') return UI.toast(t('pfile.keyBad', 'That key was not accepted'), 'error');
+          UI.toast(r === 'trust'
+            ? t('pfile.keyTaken', 'A key is being held on trust here. It is checked for real as soon as the coach copy can be reached.')
+            : t('pfile.keyOk', 'Key accepted \u2014 you can write in your file'), 'success');
           // The key carries the coach's public OAuth configuration, so Google
           // can be signed in to from here: the player never needs Settings.
           if (!driveOn()) {
@@ -851,7 +903,7 @@ const PlayerFile = (() => {
             // A copy that does not use Drive at all is not nagged about it: the
             // line is saved either way and the poll sends it if Drive appears.
             if (!driveOn() && !await connectWithKey(player)) {
-              if (holdsKey(player.id)) driveFail({ why: 'off' });
+              if (holdsWord(player.id)) driveFail({ why: 'off' });
               return false;
             }
             const r = await driveSync(player, 'push');
@@ -925,12 +977,15 @@ const PlayerFile = (() => {
         }
       });
     };
-    open();
+    // A key that arrived after the word was typed is matched against it first,
+    // so the dialog knows whether this copy may write before it draws itself.
+    verifyHeld(player).then(open, open);
   }
 
   return {
     STORE, fileId, get, messages, ensure, remove, post, sweep, dialog, threadHtml, clearAll, canWrite, side,
-    newKey, claimKey, holdsKey, hasKey, keyDialog, claimDialog, driveSync, driveName, syncAll, startDriveSync, googleConnected
+    newKey, claimKey, holdsKey, holdsWord, verifyHeld, hasKey, keyDialog, claimDialog, driveSync, driveName, syncAll,
+    startDriveSync, googleConnected
   };
 })();
 if (typeof window !== 'undefined') {
