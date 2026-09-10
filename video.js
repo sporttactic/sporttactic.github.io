@@ -47,8 +47,11 @@ Views.video = function (mount) {
       if (host === 'dai.ly') { const id = u.pathname.slice(1); if (id) return 'https://www.dailymotion.com/embed/video/' + id; }
       // Facebook video
       if (host === 'facebook.com' || host === 'fb.watch') return 'https://www.facebook.com/plugins/video.php?href=' + encodeURIComponent(url) + '&show_text=false';
-      // Direct file or already-embed URL — return as-is
-      return url;
+      // A direct file or an already-embeddable address. Anything the provider
+      // branches above did not build has to clear the bar on its own: only
+      // https reaches the player, so a javascript:, data: or file: link cannot
+      // be framed in this origin.
+      return u.protocol === 'https:' ? u.href : null;
     } catch (e) { return null; }
   }
 
