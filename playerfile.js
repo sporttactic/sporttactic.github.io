@@ -37,10 +37,16 @@ const PlayerFile = (() => {
   function get(playerId) { return playerId ? Store.find(STORE, fileId(playerId)) : undefined; }
   function messages(playerId) { const f = get(playerId); return (f && f.messages) || []; }
 
+  // A row this device adopted as the player's own end of the line: it was built
+  // from the file on Drive rather than from a squad, so nothing else on the
+  // device says who this copy speaks for.
+  const claimed = playerId => { const f = get(playerId); return !!(f && f.mine); };
+
   // Which end of the line this device writes from. A following copy holding the
   // player's key is the player, whatever role it calls itself.
   function side(player) {
     try {
+      if (player && player.id && claimed(player.id)) return 'player';
       if (player && player.id && window.Access && Access.readMode && Access.readMode() && holdsWord(player.id)) return 'player';
       if (window.Access && Access.tier && Access.role) {
         return Access.tier(Access.role()) === 'player' ? 'player' : 'coach';
@@ -49,11 +55,13 @@ const PlayerFile = (() => {
     return 'coach';
   }
   const sideLabel = s => s === 'player' ? t('pfile.player', 'Player') : t('pfile.coach', 'Coach');
-  // Only a copy that FOLLOWS somebody else's database has to prove itself with
-  // the message key. Switching the club's own device to the Player role changes
-  // who a message is signed by, not whether that device owns the file.
+  // Only a copy that speaks for somebody else's file has to prove itself with
+  // the message key: one that FOLLOWS the club's database, or one that adopted
+  // a single player file straight off Drive. Switching the club's own device to
+  // the Player role changes who a message is signed by, not whether that device
+  // owns the file.
   const memberPlayer = player => side(player) === 'player'
-    && !!(window.Access && Access.following && Access.following());
+    && !!(claimed(player && player.id) || (window.Access && Access.following && Access.following()));
   function myName(player) {
     if (side(player) === 'player') return nameOf(player);
     let n = '';
@@ -604,6 +612,129 @@ const PlayerFile = (() => {
     } catch (e) { return false; }
   }
 
+  // ---- The player's own end, on a device that never held the squad ---------
+  // A player is handed three things: the name on their profile, the message key
+  // and a Google account the coach's copy shared the file with. That is enough
+  // to find the file, rebuild the two rows this app keeps for it and join the
+  // conversation — no team code, no copy of the club's database.
+
+  // A Drive id out of whatever the coach pasted over: a share link, an "open"
+  // URL or the bare id itself.
+  function driveIdFrom(link) {
+    const raw = String(link == null ? '' : link).trim();
+    if (!raw) return '';
+    const inUrl = /\/d\/([-\w]{20,})|[?&]id=([-\w]{20,})/.exec(raw);
+    if (inUrl) return inUrl[1] || inUrl[2];
+    return /^[-\w]{20,}$/.test(raw) ? raw : '';
+  }
+  const isPlayerDoc = doc => !!(doc && typeof doc === 'object'
+    && doc.kind === 'player-file' && doc.playerId && doc.playerName);
+
+  async function readDoc(id) {
+    try { const doc = await Drive.downloadJson(id); return isPlayerDoc(doc) ? doc : null; }
+    catch (e) { return null; }
+  }
+
+  // The player's file on Drive, addressed by the name on their profile. The
+  // coach's copy made it and invited this account, so it is looked for both
+  // among the files this account can already see and among the ones shared
+  // with it. Nothing is created here: a name that finds nothing means the
+  // coach has not written to it yet, not that a second file should be made.
+  async function findMine(name) {
+    const wanted = safeName(String(name == null ? '' : name).trim().replace(/\s+/g, ' '));
+    if (!wanted || !driveOn()) return null;
+    const file = wanted + '.json';
+    const seen = new Set();
+    for (const q of ["name='" + qEsc(file) + "' and trashed=false",
+      "name='" + qEsc(file) + "' and sharedWithMe and trashed=false"]) {
+      let list = [];
+      try { list = await Drive.listFiles(q); } catch (e) { list = []; }
+      for (const hit of (list || [])) {
+        if (!hit || !hit.id || seen.has(hit.id)) continue;
+        seen.add(hit.id);
+        const doc = await readDoc(hit.id);
+        if (doc) return { doc: doc, id: hit.id };
+      }
+    }
+    return null;
+  }
+
+  // Rebuild the squad row and the player file from the document itself. The
+  // coach's own player id travels in it, so the rows made here address the very
+  // same file instead of starting a second thread beside it.
+  async function adoptDoc(doc, driveFileId) {
+    if (!isPlayerDoc(doc)) return null;
+    const id = String(doc.playerId).slice(0, 60);
+    const name = String(doc.playerName).trim().replace(/\s+/g, ' ').slice(0, 80);
+    if (!name) return null;
+    const cut = name.indexOf(' ');
+    const known = Store.raw('players', id);
+    const player = await Store.save('players', Object.assign(
+      { position: '', status: 'active' }, known, {
+        id: id,
+        firstName: cut < 0 ? name : name.slice(0, cut),
+        lastName: cut < 0 ? '' : name.slice(cut + 1),
+        teamId: String(doc.teamId || (known && known.teamId) || '').slice(0, 60),
+        sport: String(doc.sport || (known && known.sport) || '').slice(0, 40)
+      }));
+    if (!player) return null;
+    const cur = get(id);
+    await Store.save(STORE, Object.assign(
+      { id: fileId(id), playerId: id, createdAt: Date.now(), messages: [] }, cur, {
+        name: name, teamId: player.teamId || '', sport: player.sport || '',
+        mine: true, driveId: String(driveFileId || (cur && cur.driveId) || '')
+      }), { playerFileKey: true });
+    driveIds[id] = String(driveFileId || '');
+    return player;
+  }
+
+  // The whole player-side join in one call, so it can be driven from a dialog
+  // or straight from a test. `why` says which step refused.
+  async function openMine(name, word, link) {
+    const clean = String(name == null ? '' : name).trim().replace(/\s+/g, ' ');
+    if (!clean) return { ok: false, why: 'noname' };
+    if (!window.Drive) return { ok: false, why: 'nogoogle' };
+    let configured = false;
+    try { configured = !!(Drive.isConfigured && await Drive.isConfigured()); }
+    catch (e) { configured = false; }
+    if (!configured) return { ok: false, why: 'nogoogle' };
+    if (!driveOn()) {
+      try { await Drive.connect(); } catch (e) { /* reported as off below */ }
+      if (!driveOn()) return { ok: false, why: 'off' };
+    }
+
+    let found = null;
+    const pasted = driveIdFrom(link);
+    if (pasted) {
+      const doc = await readDoc(pasted);
+      if (!doc) return { ok: false, why: 'noaccess' };
+      found = { doc: doc, id: pasted };
+    }
+    if (!found) {
+      try { found = await findMine(clean); }
+      catch (e) { return { ok: false, why: 'net' }; }
+    }
+    if (!found) return { ok: false, why: 'notfound' };
+    // The key is what proves which of the two ends this device is, so a file
+    // the coach has not generated one for cannot be joined yet.
+    if (!found.doc.key || !found.doc.key.hash) return { ok: false, why: 'nokey' };
+
+    const player = await adoptDoc(found.doc, found.id);
+    if (!player) return { ok: false, why: 'notfound' };
+    await adoptKey(player, found.doc.key);
+    const ok = await claimKey(player, word);
+    if (ok !== true) return { ok: false, why: ok === 'bad' ? 'badkey' : ok, player: player };
+    const pulled = await driveSync(player, 'pull');
+    if (!pulled.ok) return { ok: false, why: pulled.why, player: player };
+    return { ok: true, player: player, got: pulled.got || 0 };
+  }
+  // The files this device has adopted as its own end, newest line first.
+  function minePlayers() {
+    return Store.all(STORE).filter(f => f && f.mine)
+      .map(f => Store.find('players', f.playerId))
+      .filter(Boolean);
+  }
+
   // Read what is on Drive and add whatever this copy has not seen; a push then
   // writes the whole thread back. The player sends their message with a push
   // and the coach retrieves it with a pull. A pull never creates the file: the
@@ -822,6 +953,26 @@ const PlayerFile = (() => {
     }
   }
 
+  // A link straight to the file on Drive, once it has one. A Google account
+  // that cannot turn up a shared file by name on its own can still open it by
+  // id, so this is what makes the invitation work everywhere.
+  function fileLink(player) {
+    const f = get(player && player.id);
+    const id = f && f.driveId;
+    return (id && window.Drive && Drive.fileLink) ? Drive.fileLink(id) : '';
+  }
+  // Everything the player is handed, in one block to paste into a message: the
+  // name their file is addressed by, the word that proves which end they are,
+  // and the link to the file itself.
+  function inviteText(player) {
+    const link = fileLink(player);
+    return [
+      t('pfile.mineName', 'Player profile name') + ': ' + nameOf(player),
+      t('pfile.key', 'Message key') + ': ' + (heldWord(player.id) || '\u2014'),
+      link ? t('pfile.mineLink', 'File link') + ': ' + link : ''
+    ].filter(Boolean).join('\n');
+  }
+
   // Coach side: make the word, read it back, hand it over.
   function keyDialog(player, onDone) {
     const back = () => { if (typeof onDone === 'function') onDone(); };
@@ -829,6 +980,7 @@ const PlayerFile = (() => {
       const word = heldWord(player.id);
       const made = hasKey(player.id);
       const stale = made && !word;      // generated on another device
+      const link = fileLink(player);
       UI.modal({
         title: t('pfile.key', 'Message key') + ' \u2014 ' + nameOf(player),
         width: 520,
@@ -839,15 +991,23 @@ const PlayerFile = (() => {
       ? t('pfile.keyElsewhere', 'A key exists, but it was generated on another device and only that one can read it. Generate a new one to replace it.')
       : t('pfile.keyNone', 'No key has been generated for this player yet.'))}</p>`}
           <p class="hint">${esc(t('pfile.keyPrivacy', 'Only a salted hash of the word travels with the squad. The word itself stays on this device and on the one the player types it into.'))}</p>
+          <p class="hint">${esc(link
+    ? t('pfile.inviteReady', 'Copy invitation sends the player everything they need: the name their file is addressed by, this key, and a link straight to the file.')
+    : t('pfile.inviteNone', 'The file reaches Drive the first time something is written in it or Google is connected. Until then there is no link to send with the key.'))}</p>
           ${made ? `<p class="hint">${esc(t('pfile.keyReplace', 'Generating a new key replaces the old one, and a copy still holding it stops being able to write.'))}</p>` : ''}`,
         footer: `<button class="btn ghost" data-close2>${esc(T('common.close'))}</button>
           <button class="btn" data-copy ${word ? '' : 'disabled'}>\u29c9 ${esc(t('pfile.keyCopy', 'Copy key'))}</button>
+          <button class="btn" data-invite ${word ? '' : 'disabled'}>\u29c9 ${esc(t('pfile.invite', 'Copy invitation'))}</button>
           <button class="btn primary" data-gen>\u{1F511} ${esc(made ? t('pfile.keyNew', 'Generate new key') : t('pfile.keyGen', 'Generate message key'))}</button>`,
         onOpen: (m, close) => {
           m.querySelector('[data-close2]').onclick = () => { close(); back(); };
           m.querySelector('[data-copy]').onclick = async () => {
             const ok = await copyText(heldWord(player.id));
             UI.toast(ok ? t('pfile.keyCopied', 'Message key copied') : t('pfile.keyCopyFail', 'Could not copy \u2014 read the word off the screen instead'), ok ? 'success' : 'error');
+          };
+          m.querySelector('[data-invite]').onclick = async () => {
+            const ok = await copyText(inviteText(player));
+            UI.toast(ok ? t('pfile.inviteCopied', 'Invitation copied \u2014 send it to the player') : t('pfile.keyCopyFail', 'Could not copy \u2014 read the word off the screen instead'), ok ? 'success' : 'error');
           };
           m.querySelector('[data-gen]').onclick = async () => {
             const btn = m.querySelector('[data-gen]');
@@ -911,6 +1071,74 @@ const PlayerFile = (() => {
         };
         inp.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); claim(); } };
         m.querySelector('[data-claim]').onclick = claim;
+      }
+    });
+  }
+
+  // Player side, on a device that holds nothing else: the name on the profile,
+  // the word the coach handed over, and the Google account the file was shared
+  // with. Only that one file is opened — none of the rest of the club comes
+  // with it.
+  function mineDialog(onDone) {
+    const back = () => { if (typeof onDone === 'function') onDone(); };
+    const known = minePlayers();
+    UI.modal({
+      title: t('pfile.mine', 'My player file'),
+      width: 540,
+      body: `
+        <p class="hint">${esc(t('pfile.mineIntro', 'Open the file your coach writes to you in. Type the name on your player profile exactly as the coach has it and the message key they gave you, then sign in with the Google account the file was shared with.'))}</p>
+        ${known.length ? `<p class="hint">${esc(t('pfile.mineOpened', 'Already opened on this device'))}</p>
+        <div class="row" style="flex:0;flex-wrap:wrap;margin-bottom:10px">
+          ${known.map(p => `<button class="btn sm" data-open="${esc(p.id)}">${esc(nameOf(p))}</button>`).join('')}
+        </div>` : ''}
+        <label class="field"><span>${esc(t('pfile.mineName', 'Player profile name'))}</span>
+          <input id="pf_mine_name" autocomplete="off" spellcheck="false" placeholder="Alex Jones"></label>
+        <label class="field"><span>${esc(t('pfile.key', 'Message key'))}</span>
+          <input id="pf_mine_key" maxlength="24" autocomplete="off" spellcheck="false" placeholder="ABCD-EFGH-JKMN-PQRS"></label>
+        <label class="field"><span>${esc(t('pfile.mineLink', 'File link'))}</span>
+          <input id="pf_mine_link" autocomplete="off" spellcheck="false" placeholder="https://drive.google.com/file/d/\u2026">
+          <span class="hint">${esc(t('pfile.mineLinkHint', 'Only needed if the name alone does not find the file. It is in the invitation the coach copies out of the message key window.'))}</span></label>
+        <p class="hint">${esc(t('pfile.mineHint', 'Nothing else of the club is opened or copied here \u2014 only your own file, and only the Google account it was shared with can reach it.'))}</p>`,
+      footer: `<button class="btn ghost" data-close2>${esc(T('common.close'))}</button>
+        <button class="btn primary" data-mine>${esc(t('pfile.mineOpen', 'Open my file'))}</button>`,
+      onOpen: (m, close) => {
+        const name = m.querySelector('#pf_mine_name');
+        const key = m.querySelector('#pf_mine_key');
+        const link = m.querySelector('#pf_mine_link');
+        name.focus();
+        m.querySelector('[data-close2]').onclick = () => { close(); back(); };
+        m.querySelectorAll('[data-open]').forEach(b => { b.onclick = () => {
+          const p = Store.find('players', b.dataset.open);
+          if (!p) return UI.toast(t('pfile.mineGone', 'That file is no longer on this device'), 'error');
+          close();
+          dialog(p, onDone);
+        }; });
+        const fail = why => {
+          if (why === 'noname') return UI.toast(t('pfile.mineNeedName', 'Type the name on your player profile'), 'error');
+          if (why === 'nogoogle') return UI.toast(t('pfile.mineNoGoogle', 'Google Drive has to be set up on this device first \u2014 Settings, then Shared team database.'), 'error');
+          if (why === 'off') return UI.toast(t('pfile.driveOff', 'Google Drive is not connected \u2014 set it up under Settings.'), 'error');
+          if (why === 'notfound') return UI.toast(t('pfile.mineNotFound', 'No file with that name could be reached from this Google account. Check the spelling with your coach, or paste the file link they sent.'), 'error');
+          if (why === 'noaccess') return UI.toast(t('pfile.driveShare', 'This file has not been shared with your Google account yet. The coach opening the player file once is what sends the invitation.'), 'error');
+          if (why === 'nokey') return UI.toast(t('pfile.mineNoKey', 'Your coach has not generated a message key for this file yet. Ask them for one.'), 'error');
+          if (why === 'len') return UI.toast(t('pfile.keyLen', 'A message key is 16 characters'), 'error');
+          if (why === 'nocrypto') return UI.toast(t('pfile.keyNoCrypto', 'This device cannot check message keys. The app has to be opened over https:// for the browser to allow it.'), 'error');
+          if (why === 'badkey' || why === 'bad') return UI.toast(t('pfile.keyBad', 'That key was not accepted'), 'error');
+          return UI.toast(t('pfile.driveFail', 'Drive could not be reached'), 'error');
+        };
+        const go = async () => {
+          const btn = m.querySelector('[data-mine]');
+          btn.disabled = true;
+          let r;
+          try { r = await openMine(name.value, key.value, link.value); }
+          catch (e) { r = { ok: false, why: 'net' }; }
+          btn.disabled = false;
+          if (!r.ok) return fail(r.why);
+          close();
+          UI.toast(t('pfile.mineOk', 'Your file is open'), 'success');
+          dialog(r.player, onDone);
+        };
+        [name, key, link].forEach(el => { el.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); go(); } }; });
+        m.querySelector('[data-mine]').onclick = go;
       }
     });
   }
@@ -1080,7 +1308,8 @@ const PlayerFile = (() => {
   return {
     STORE, fileId, get, messages, ensure, remove, post, sweep, dialog, threadHtml, clearAll, canWrite, side,
     newKey, claimKey, holdsKey, holdsWord, verifyHeld, hasKey, keyDialog, claimDialog, driveSync, driveName, syncAll,
-    startDriveSync, googleConnected, publish
+    startDriveSync, googleConnected, publish,
+    findMine, adoptDoc, openMine, minePlayers, mineDialog, inviteText, fileLink, driveIdFrom
   };
 })();
 if (typeof window !== 'undefined') {

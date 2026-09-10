@@ -136,6 +136,7 @@ Views.teams = function (mount) {
          <button class="btn primary" id="saveSquad">${T('teams.saveSquad')}</button>`
       : `<button class="btn sm" id="mailSquad">✉ ${T('mail.title')}</button>
          <button class="btn sm" id="msgName" data-write>✉ ${T('teams.msgByName')}</button>
+         <button class="btn sm" id="myFile" data-member-ok>${T('pfile.mine')}</button>
          ${Access.readMode() ? '' : UI.shareBar('team', { exportLabel: T('teams.exportSquad'), importLabel: T('teams.importSquad') })}
          <button class="btn sm" id="squadAnims">▶ ${T('teams.anims')} <span class="tag">${teamAnims.length}</span></button>
          <button class="btn sm" id="editSquad" data-write>✎ ${T('teams.editSquad')}</button>
@@ -231,6 +232,10 @@ Views.teams = function (mount) {
       });
       const byName = q('#msgName');
       if (byName) byName.onclick = () => team ? messageByName(team) : UI.toast(T('teams.noTeamFirst'), 'error');
+      // The player's own way in. It needs no squad and no team: the file itself
+      // carries who it belongs to.
+      const mine = q('#myFile');
+      if (mine) mine.onclick = () => PlayerFile.mineDialog(render);
       UI.bindShare(mount, 'team', () => { App.populateTeamPicker(); render(); }, { scoped: true });
       q('#squadAnims').onclick = () => animListDialog(team, teamAnimations(team));
       mount.querySelectorAll('[data-mail]').forEach(b => b.onclick = () => {
