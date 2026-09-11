@@ -343,8 +343,7 @@ const MAIL = (() => {
     const pickRow = p => {
       const addr = normEmail(p.email);
       return `<label class="pick-row"><input type="checkbox" data-to="${esc(addr)}" data-pid="${esc(p.id)}" ${addr ? (preset.has(p.id) ? 'checked' : '') : 'disabled'}>
-            <span class="pick-name">${esc(label(p))}</span><span class="pick-sub">${esc(addr || t('mail.rowNoAddress', 'No e-mail address'))}</span>
-            <button type="button" class="btn sm pick-msg" data-msg="${esc(p.id)}">\u2709 ${esc(t('pfile.btn', 'Message'))}</button></label>`;
+            <span class="pick-name">${esc(label(p))}</span><span class="pick-sub">${esc(addr || t('mail.rowNoAddress', 'No e-mail address'))}</span></label>`;
     };
     const ready = canSendDirect() && !!able.length;
     const from = senders();
@@ -358,7 +357,7 @@ const MAIL = (() => {
           <span class="hint">${esc(t('mail.sendAsHint', 'The player sees this name and answers to this address. Staff get an address under Teams & Players \u2192 Staff.'))}</span></label>` : ''}
         <label class="field"><span>${esc(t('mail.recipients', 'Recipients'))}</span></label>
         <div class="pick-list">${all.map(pickRow).join('')}</div>
-        ${missing ? `<p class="hint">${esc(t('mail.msgInstead', 'A player without an e-mail address cannot be mailed \u2014 write in their player file with Message instead.'))}</p>` : ''}
+        ${missing ? `<p class="hint">${esc(t('mail.msgInstead', 'A player without an e-mail address cannot be mailed.'))}</p>` : ''}
         <label class="field"><span>${esc(t('mail.subject', 'Subject'))}</span>
           <input id="mail_subj" maxlength="120" value="${esc(opts.subject || t('mail.subjectDef', 'From your coach'))}"></label>
         <label class="field"><span>${esc(t('mail.message', 'Message'))}</span>
@@ -417,13 +416,91 @@ const MAIL = (() => {
     });
   }
 
+  // ---- Player list --------------------------------------------------------
+  // The squad as one plain list, sent to a single address the coach types in —
+  // a board member or the club office, who is not a player and has no row here.
+  function listText(players, contacts) {
+    return (players || []).map(p => {
+      const bits = [label(p), p.position || '\u2014'];
+      if (contacts) bits.push(normEmail(p.email) || '\u2014', p.phone || '\u2014');
+      return bits.join(' \u00b7 ');
+    }).join('\n');
+  }
+
+  // sendList({ players, subject, title })
+  function sendList(opts) {
+    opts = opts || {};
+    if (window.Access && Access.readMode()) return UI.toast(t('mem.blocked', 'Read-only copy'), 'error');
+    const players = (opts.players || []).slice(0, 200);
+    if (!players.length) return UI.toast(t('mail.noPlayers', 'No players to write to'), 'error');
+
+    const ready = canSendDirect();
+    const from = senders();
+    const cur = currentSender();
+    UI.modal({
+      title: opts.title || t('mail.listTitle', 'Send player list'),
+      width: 640,
+      body: `<p>${esc(t('mail.listIntro', 'The whole squad as one list, sent to a single address \u2014 a board member or the club office, who has no row in the squad.'))}</p>
+        ${from.length ? `<label class="field"><span>${esc(t('mail.sendAs', 'Send as'))}</span>
+          <select id="pl_from">${from.map(x => `<option value="${esc(x.id)}" ${x.id === cur.id ? 'selected' : ''}>${esc(x.name || x.role || x.email)}${x.name && x.role ? ' \u00b7 ' + esc(x.role) : ''} \u2014 ${esc(x.email)}</option>`).join('')}</select></label>` : ''}
+        <label class="field"><span>${esc(t('mail.listTo', 'Send to'))}</span>
+          <input id="pl_to" type="email" autocomplete="off" spellcheck="false" placeholder="${esc(T('teams.coachEmailPh'))}">
+          <span class="hint">${esc(t('mail.listToHint', 'One e-mail address. The list is sent there and nowhere else.'))}</span></label>
+        <label class="field"><span>${esc(t('mail.subject', 'Subject'))}</span>
+          <input id="pl_subj" maxlength="120" value="${esc(opts.subject || t('mail.listSubject', 'Player list'))}"></label>
+        <label class="field"><span>${esc(t('mail.message', 'Message'))}</span>
+          <textarea id="pl_body" rows="3" maxlength="4000" placeholder="${esc(t('mail.messagePh', 'Write your message\u2026'))}"></textarea></label>
+        <div class="mail-picker">
+          <label class="check-row"><input type="checkbox" id="pl_contacts"><span>${esc(t('mail.listContacts', 'Include phone numbers and e-mail addresses'))}</span></label>
+        </div>
+        <label class="field"><span>${esc(t('mail.listPreview', 'This is what is sent'))} \u00b7 ${players.length}</span>
+          <textarea id="pl_prev" rows="7" readonly></textarea></label>
+        <p class="hint">${esc(t('mail.listPrivacy', 'Contact details belong to the players. Only send them to someone in the club who needs them.'))}</p>
+        ${ready ? '' : `<p class="hint">${esc(t('mail.howNoRelay', 'Sending is switched off until EmailJS is set up under Settings \u2192 Send e-mail \u2192 E-mail sending.'))}</p>`}`,
+      footer: `<button class="btn ghost" data-close2>${esc(T('common.cancel'))}</button>
+        <button class="btn" data-setup>${esc(t('mailsrv.title', 'E-mail sending'))}</button>
+        <button class="btn primary" data-send ${ready ? '' : 'disabled'}>${esc(t('mail.sendMail', 'Send mail'))}</button>`,
+      onOpen: (m, close) => {
+        const q = id => m.querySelector('#' + id);
+        const contacts = () => q('pl_contacts').checked;
+        const preview = () => { q('pl_prev').value = listText(players, contacts()); };
+        preview();
+        q('pl_contacts').onchange = preview;
+
+        m.querySelector('[data-close2]').onclick = close;
+        m.querySelector('[data-setup]').onclick = () => { close(); serverDialog(); };
+
+        const send = m.querySelector('[data-send]');
+        send.onclick = async () => {
+          const to = normEmail(q('pl_to').value);
+          if (!to) return UI.toast(t('mail.listNeedTo', 'Write the e-mail address the list should be sent to'), 'error');
+          const subject = q('pl_subj').value.trim();
+          if (!subject) return UI.toast(t('mail.needSubject', 'Write a subject first'), 'error');
+          const sel = q('pl_from');
+          if (sel) write(K_SENDER, sel.value);
+          const me = (sel && from.find(x => x.id === sel.value)) || currentSender();
+          const body = [q('pl_body').value.trim(), '\u2014 ' + t('mail.dSquad', 'Squad list') + ' \u2014\n' + listText(players, contacts())]
+            .filter(Boolean).join('\n\n') + signature(me);
+          send.disabled = true;
+          try {
+            await sendDirect(to, subject, body, me);
+            UI.toast(t('mail.listSent', 'Player list sent') + ' \u00b7 ' + to, 'success');
+            close();
+          } catch (e) {
+            UI.toast(t('mail.sendFailed', 'Some mail could not be sent') + ': ' + String(e && e.message ? e.message : e).slice(0, 160), 'error');
+          } finally { send.disabled = false; }
+        };
+      }
+    });
+  }
+
   // Markup for the button every view mounts, so they all look the same.
   function btn(attr, text, cls) {
     return `<button class="btn ${cls || 'sm'}" ${attr}>\u2709 ${esc(text || t('mail.mail', 'Mail'))}</button>`;
   }
 
   return {
-    compose, btn, normEmail, withEmail, setupDialog,
+    compose, sendList, btn, normEmail, withEmail, setupDialog,
     serverDialog, emailJsGuide, serverSettings, serverLabel,
     canSendDirect, sendDirect
   };

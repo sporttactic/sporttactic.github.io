@@ -55,7 +55,6 @@ Views.teams = function (mount) {
     const players = team ? Store.players(team.id) : [];
     const coaches = team ? Store.coaches(team.id) : [];
     const positions = SPORTS.positions(sportId);
-    const mailTitle = T('pfile.title');
 
     const readRow = p => `
       <tr data-p="${p.id}">
@@ -69,7 +68,6 @@ Views.teams = function (mount) {
         <td data-label="${UI.esc(T('teams.contact'))}" class="wide"><div class="contact-cell"><span>${UI.esc(p.phone || '—')}</span><span class="contact-mail">${UI.esc(p.email || '—')}</span></div></td>
         <td class="acts-cell">
           <div class="row-acts icons">
-            <button class="btn sm" data-mail="${p.id}" title="${UI.esc(mailTitle)}" aria-label="${UI.esc(mailTitle)}">✉</button>
             <button class="btn sm" data-chat="${p.id}" title="${UI.esc(T('teams.chat'))}" aria-label="${UI.esc(T('teams.chat'))}">💬</button>
             <button class="btn sm" data-edit="${p.id}" title="${UI.esc(T('common.edit'))}" aria-label="${UI.esc(T('common.edit'))}">✎</button>
             <button class="btn sm danger" data-del="${p.id}" title="${UI.esc(T('common.delete'))}" aria-label="${UI.esc(T('common.delete'))}">${UI.icon('trash', 14)}</button>
@@ -135,8 +133,7 @@ Views.teams = function (mount) {
       ? `<button class="btn ghost" id="cancelSquad">${T('common.cancel')}</button>
          <button class="btn primary" id="saveSquad">${T('teams.saveSquad')}</button>`
       : `<button class="btn sm" id="mailSquad">✉ ${T('mail.title')}</button>
-         <button class="btn sm" id="msgName" data-write>✉ ${T('teams.msgByName')}</button>
-         <button class="btn sm" id="myFile" data-member-ok>${T('pfile.mine')}</button>
+         <button class="btn sm" id="listSquad">📋 ${T('teams.playerList')}</button>
          ${Access.readMode() ? '' : UI.shareBar('team', { exportLabel: T('teams.exportSquad'), importLabel: T('teams.importSquad') })}
          <button class="btn sm" id="squadAnims">▶ ${T('teams.anims')} <span class="tag">${teamAnims.length}</span></button>
          <button class="btn sm" id="editSquad" data-write>✎ ${T('teams.editSquad')}</button>
@@ -206,7 +203,6 @@ Views.teams = function (mount) {
       if (!team) return;
       UI.confirm(T('teams.delTeamAsk'), async () => {
         // Everything the team owns goes with it, so no orphan rows are left behind.
-        for (const p of Store.all('players').filter(x => x.teamId === team.id)) await PlayerFile.remove(p.id);
         for (const s of ['players', 'coaches', 'matches', 'opponents', 'training', 'personal']) {
           for (const r of Store.all(s).filter(x => x.teamId === team.id)) await Store.remove(s, r.id);
         }
@@ -230,19 +226,12 @@ Views.teams = function (mount) {
       q('#mailSquad').onclick = () => MAIL.compose({
         players, title: T('mail.title') + ' — ' + T('teams.squad')
       });
-      const byName = q('#msgName');
-      if (byName) byName.onclick = () => team ? messageByName(team) : UI.toast(T('teams.noTeamFirst'), 'error');
-      // The player's own way in. It needs no squad and no team: the file itself
-      // carries who it belongs to.
-      const mine = q('#myFile');
-      if (mine) mine.onclick = () => PlayerFile.mineDialog(render);
+      // The squad in one message to one address, for someone who is not a player.
+      q('#listSquad').onclick = () => MAIL.sendList({
+        players, subject: T('teams.playerList') + (team ? ' — ' + team.name : '')
+      });
       UI.bindShare(mount, 'team', () => { App.populateTeamPicker(); render(); }, { scoped: true });
       q('#squadAnims').onclick = () => animListDialog(team, teamAnimations(team));
-      mount.querySelectorAll('[data-mail]').forEach(b => b.onclick = () => {
-        const p = Store.find('players', b.dataset.mail);
-        // One player is a conversation, not a mailing: this is their file.
-        if (p) PlayerFile.dialog(p);
-      });
       mount.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => form(team, Store.find('players', b.dataset.edit)));
       mount.querySelectorAll('[data-chat]').forEach(b => b.onclick = () => {
         const p = Store.find('players', b.dataset.chat);
@@ -256,7 +245,7 @@ Views.teams = function (mount) {
       const c = Store.find('coaches', b.dataset.staffchat);
       if (c) App.go('messenger', { playerId: c.id, playerName: c.name, memberStore: 'coaches', from: 'teams' });
     });
-    mount.querySelectorAll('[data-del]').forEach(b => b.onclick = () => UI.confirm(T('teams.delPlayer'), async () => { await Store.remove('players', b.dataset.del); await PlayerFile.remove(b.dataset.del); UI.toast(T('common.delete')); render(); }));
+    mount.querySelectorAll('[data-del]').forEach(b => b.onclick = () => UI.confirm(T('teams.delPlayer'), async () => { await Store.remove('players', b.dataset.del); UI.toast(T('common.delete')); render(); }));
     AI.bind(mount);
   }
 
@@ -382,78 +371,6 @@ Views.teams = function (mount) {
     });
   }
 
-  // Write to the name on a player's profile. A name the squad does not carry yet
-  // is added to it, so a thread can be started before the player is formally on
-  // the list. The address is what lets that player's own Google account reach
-  // the file.
-  function messageByName(team) {
-    const squad = Store.players(team.id);
-    const full = p => [p.firstName, p.lastName].filter(Boolean).join(' ').trim();
-    const norm = s => String(s || '').trim().replace(/\s+/g, ' ');
-    const match = n => squad.find(p => full(p).toLowerCase() === n.toLowerCase());
-    UI.modal({
-      title: T('teams.msgByName'),
-      width: 520,
-      body: `
-        <p class="hint">${UI.esc(T('teams.msgByNameHint'))}</p>
-        <label class="field"><span>${T('teams.msgName')}</span>
-          <input id="mn_name" list="mn_list" autocomplete="off" spellcheck="false" placeholder="${UI.esc(T('teams.msgNamePh'))}">
-          <datalist id="mn_list">${squad.map(p => `<option value="${UI.esc(full(p))}"></option>`).join('')}</datalist></label>
-        <label class="field"><span>${T('teams.msgMail')}</span>
-          <input id="mn_mail" type="email" autocomplete="off" placeholder="${UI.esc(T('teams.emailPh'))}">
-          <span class="hint">${UI.esc(T('teams.msgMailHint'))}</span></label>`,
-      footer: `<button class="btn ghost" data-close2>${T('common.cancel')}</button>
-        <button class="btn primary" data-go>${T('teams.msgOpen')}</button>`,
-      onOpen: (m, close) => {
-        const nameInp = m.querySelector('#mn_name');
-        const mailInp = m.querySelector('#mn_mail');
-        nameInp.focus();
-        // A name already in the squad brings the address it carries with it.
-        nameInp.oninput = () => {
-          const hit = match(norm(nameInp.value));
-          if (hit && !mailInp.value) mailInp.value = hit.email || '';
-        };
-        m.querySelector('[data-close2]').onclick = close;
-        const go = async () => {
-          const btn = m.querySelector('[data-go]');
-          const name = norm(nameInp.value);
-          if (!name) return UI.toast(T('teams.msgNeedName'), 'error');
-          const raw = mailInp.value.trim();
-          const email = raw ? MAIL.normEmail(raw) : '';
-          if (raw && !email) return UI.toast(T('teams.badEmail'), 'error');
-          btn.disabled = true;
-          let player = match(name);
-          if (player) {
-            if (email && email !== player.email) {
-              player = await Store.save('players', Object.assign({}, player, { email }));
-            }
-          } else {
-            const cut = name.indexOf(' ');
-            player = await Store.save('players', {
-              teamId: team.id, sport: sportId,
-              firstName: cut < 0 ? name : name.slice(0, cut),
-              lastName: cut < 0 ? '' : name.slice(cut + 1),
-              position: SPORTS.positions(sportId)[0] || '',
-              status: 'active', email
-            });
-            UI.toast(T('teams.msgAdded'), 'success');
-          }
-          await PlayerFile.ensure(player);
-          // Puts the file on Drive and invites the address, so the player's own
-          // account can reach it as soon as the first line is written.
-          await PlayerFile.publish(player);
-          btn.disabled = false;
-          close();
-          render();
-          PlayerFile.dialog(player, render);
-        };
-        nameInp.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); mailInp.focus(); } };
-        mailInp.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); go(); } };
-        m.querySelector('[data-go]').onclick = go;
-      }
-    });
-  }
-
   function form(team, p = {}) {
     const positions = SPORTS.positions(sportId);
     UI.modal({
@@ -510,7 +427,6 @@ Views.teams = function (mount) {
           if (raw && !phone) return UI.toast(T('teams.badPhone'), 'error');
           if (rawMail && !email) return UI.toast(T('teams.badEmail'), 'error');
           const saved = await Store.save('players', obj);
-          await PlayerFile.ensure(saved || obj);
           close(); UI.toast(T('common.save'), 'success'); render();
         };
       }
@@ -635,12 +551,11 @@ Views.teams = function (mount) {
           const picked = boxes.filter(b => b.checked).map(b => list[+b.dataset.draft]);
           if (!picked.length) return UI.toast(T('exercises.aiNonePicked'), 'error');
           for (const p of picked) {
-            const saved = await Store.save('players', {
+            await Store.save('players', {
               teamId: team.id, sport: sportId, status: 'active',
               firstName: p.firstName, lastName: p.lastName, number: p.number,
               position: p.position, height: p.height, weight: p.weight
             });
-            await PlayerFile.ensure(saved);
           }
           close();
           UI.toast(picked.length + ' ' + T('teams.aiSquadSaved'), 'success');
