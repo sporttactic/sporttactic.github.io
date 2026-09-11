@@ -135,7 +135,7 @@ Views.teams = function (mount) {
       : `<button class="btn sm" id="mailSquad">✉ ${T('mail.title')}</button>
          <button class="btn sm" id="listSquad">📋 ${T('teams.playerList')}</button>
          ${Access.readMode() ? '' : UI.shareBar('team', { exportLabel: T('teams.exportSquad'), importLabel: T('teams.importSquad') })}
-         <button class="btn sm" id="squadAnims">▶ ${T('teams.anims')} <span class="tag">${teamAnims.length}</span></button>
+         <button class="btn sm" id="squadAnims">${UI.icon('play', 14)} ${T('teams.anims')} <span class="tag">${teamAnims.length}</span></button>
          <button class="btn sm" id="editSquad" data-write>✎ ${T('teams.editSquad')}</button>
          <button class="btn sm" id="aiSquad" data-write>🤖 ${T('teams.aiSquad')}</button>
          <button class="btn primary" id="addPlayer">+ ${T('teams.addPlayer')}</button>`;
@@ -297,10 +297,10 @@ Views.teams = function (mount) {
       <span class="acc-person-main">
         <b>${UI.esc(a.name || T('tactics.animTitle'))}</b>
         <span class="tag">${(a.frames || []).length} ${UI.esc(T('tactics.frameList'))}</span>
-        ${(a.clips || []).length ? `<span class="tag green">▶ ${(a.clips || []).length}</span>` : ''}
+        ${(a.clips || []).length ? `<span class="tag green">${UI.icon('play', 14)} ${(a.clips || []).length}</span>` : ''}
       </span>
       <span class="bm-acts">
-        <button class="btn sm" data-anim-show="${UI.esc(a.id)}">▶ ${T('teams.animShowNow')}</button>
+        <button class="btn sm" data-anim-show="${UI.esc(a.id)}">${UI.icon('play', 14)} ${T('teams.animShowNow')}</button>
         <button class="btn sm primary" data-anim-open="${UI.esc(a.id)}">${T('common.go')}</button>
         ${team ? `<button class="btn sm danger" data-anim-rm="${UI.esc(a.id)}">${T('teams.animRemove')}</button>` : ''}
       </span>

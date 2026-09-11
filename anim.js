@@ -46,7 +46,7 @@ window.ANIM = (function () {
     const list = (ids || []).map(byId).filter(Boolean);
     if (!list.length) return `<p class="hint">${T('training.noAnimsPicked')}</p>`;
     return `<div class="anim-chips">` + list.map(s =>
-      `<button type="button" class="btn sm" data-anim-show="${UI.esc(s.id)}">▶ ${UI.esc(s.name)}</button>`).join('') + `</div>`;
+      `<button type="button" class="btn sm" data-anim-show="${UI.esc(s.id)}">${UI.icon('play', 14)} ${UI.esc(s.name)}</button>`).join('') + `</div>`;
   }
   function bind(root) {
     if (!root) return;
@@ -260,8 +260,8 @@ window.ANIM = (function () {
           <canvas class="anim-canvas"></canvas>
           <div class="anim-bar">
             <button type="button" class="btn sm" data-prev>◀</button>
-            <button type="button" class="btn sm primary" data-play>▶ ${T('tactics.play')}</button>
-            <button type="button" class="btn sm" data-next>▶</button>
+            <button type="button" class="btn sm primary" data-play>${UI.icon('play', 14)} ${T('tactics.play')}</button>
+            <button type="button" class="btn sm" data-next>${UI.icon('play', 14)}</button>
             <span class="hint" data-lbl></span>
             <div class="tool-group" title="${UI.esc(T('tactics.pspeedHint'))}">
               <button type="button" class="btn sm" data-spd="slow">${T('tactics.speedSlow')}</button>
@@ -284,7 +284,7 @@ window.ANIM = (function () {
           playing = false;
           if (raf) { cancelAnimationFrame(raf); raf = null; }
           if (hold) { clearTimeout(hold); hold = null; }
-          playBtn.textContent = '▶ ' + T('tactics.play');
+          playBtn.innerHTML = UI.icon('play', 14) + ' ' + T('tactics.play');
         }
         // Each pair of frames eases across its whole span, so play stays one
         // continuous motion instead of a quick move and a freeze before the

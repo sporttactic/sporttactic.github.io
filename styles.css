@@ -538,6 +538,8 @@ body[data-member="read"] #modalHost [data-mail] { display: none !important; }
 .row-acts.icons { flex-direction: row; flex-wrap: nowrap; justify-content: flex-end; gap: 4px; min-width: 0; }
 .row-acts.icons > .btn { width: auto; min-width: 32px; padding: 6px 8px; font-size: 13px; line-height: 1.2; }
 .row-acts.icons > .btn svg { display: block; }
+/* An SVG icon standing in for a glyph (e.g. the play triangle) beside button text. */
+.btn .i { vertical-align: -2px; }
 
 .tag { display: inline-flex; align-items: center; justify-content: center; padding: 2px 8px; border-radius: 12px; font-size: 11px; line-height: 1.45; background: var(--surface-2); border: 1px solid var(--border); white-space: normal; overflow-wrap: break-word; text-align: center; max-width: 100%; }
 .tag.green { color: var(--accent); border-color: var(--accent); }

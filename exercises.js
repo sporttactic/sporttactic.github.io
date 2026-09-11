@@ -204,7 +204,7 @@ Views.exerciseLib = function (mount, opts) {
     const rest = videoList(e).filter(u => !embedSrc(u));
     if (!rest.length) return '';
     return `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">${rest.map(u =>
-      `<a class="btn sm" href="${UI.esc(u)}" target="_blank" rel="noopener noreferrer">▶ ${UI.esc(linkLabel(u))}</a>`).join('')}</div>`;
+      `<a class="btn sm" href="${UI.esc(u)}" target="_blank" rel="noopener noreferrer">${UI.icon('play', 14)} ${UI.esc(linkLabel(u))}</a>`).join('')}</div>`;
   }
 
   // The printed body map has to carry its own look: the print window is a page

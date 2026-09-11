@@ -229,7 +229,7 @@ Views.tactics = function (mount, params) {
             <div class="frames-anim" id="framesAnim">
             ${UI.acc('tacticsFrames', T('tactics.frames'), `
             <div class="tool-group">
-              <button class="btn sm" id="playAnim">▶ ${T('tactics.play')}</button>
+              <button class="btn sm" id="playAnim">${UI.icon('play', 14)} ${T('tactics.play')}</button>
               <button class="btn sm primary" id="recFramesBtn">● ${T('tactics.recFrames')}</button>
               <button class="btn sm" id="saveAnim">＋ ${T('tactics.saveAnim')}</button>
             </div>
@@ -247,7 +247,7 @@ Views.tactics = function (mount, params) {
               <button class="btn sm danger" id="animDel" disabled title="${T('common.delete')}">✕</button>
             </div>
             <button class="btn sm" id="animSend" disabled title="${T('tactics.animSendHint')}">👥 ${T('tactics.animSend')}</button>
-            <button class="btn sm" id="animPlayAll" title="${T('tactics.animPlayAllHint')}">▶▶ ${T('tactics.animPlayAll')}</button>
+            <button class="btn sm" id="animPlayAll" title="${T('tactics.animPlayAllHint')}">${UI.icon('play', 14)}${UI.icon('play', 14)} ${T('tactics.animPlayAll')}</button>
             <div class="tool-group anim-acts" style="margin-top:6px;gap:6px">
               <button class="btn sm" id="animExportBtn" title="${T('tactics.exportAnimsHint')}">⭳ ${T('tactics.exportAnims')}</button>
               <label class="btn sm" style="cursor:pointer" title="${T('tactics.importAnimsHint')}">⭱ ${T('tactics.importAnims')}<input id="animImportInput" type="file" accept="application/json" hidden></label>
@@ -1303,7 +1303,7 @@ Views.tactics = function (mount, params) {
   // Animation — whistle resets & replays on every start
   function updatePlayBtn() {
     const b = mount.querySelector('#playAnim');
-    if (b) b.textContent = animTimer ? '■ ' + T('tactics.stop') : '▶ ' + T('tactics.play');
+    if (b) b.innerHTML = animTimer ? '■ ' + T('tactics.stop') : UI.icon('play', 14) + ' ' + T('tactics.play');
   }
   function stopAnimation() {
     if (animStep) { clearInterval(animStep); animStep = null; }
@@ -1928,8 +1928,8 @@ Views.tactics = function (mount, params) {
     const box = mount.querySelector('#animList');
     const on = box ? box.value : '';
     strip.innerHTML = mine.map(s =>
-      `<button type="button" class="btn sm anim-chip${s.id === on ? ' active' : ''}" data-strip="${UI.esc(s.id)}">▶ ${UI.esc(s.name)}</button>`).join('')
-      + `<button type="button" class="btn sm" data-strip-all>▶▶ ${T('tactics.animPlayAll')}</button>`;
+      `<button type="button" class="btn sm anim-chip${s.id === on ? ' active' : ''}" data-strip="${UI.esc(s.id)}">${UI.icon('play', 14)} ${UI.esc(s.name)}</button>`).join('')
+      + `<button type="button" class="btn sm" data-strip-all>${UI.icon('play', 14)}${UI.icon('play', 14)} ${T('tactics.animPlayAll')}</button>`;
     strip.querySelectorAll('[data-strip]').forEach(b => b.onclick = () => {
       stopPlayAll();
       const sel = mount.querySelector('#animList');
@@ -1945,7 +1945,7 @@ Views.tactics = function (mount, params) {
   function updatePlayAllBtn() {
     const b = mount.querySelector('#animPlayAll');
     if (!b) return;
-    b.textContent = playQueue ? '■ ' + T('tactics.stop') : '▶▶ ' + T('tactics.animPlayAll');
+    b.innerHTML = playQueue ? '■ ' + T('tactics.stop') : UI.icon('play', 14) + UI.icon('play', 14) + ' ' + T('tactics.animPlayAll');
     b.classList.toggle('danger', !!playQueue);
   }
   function stopPlayAll() {

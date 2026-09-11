@@ -27,7 +27,7 @@ Views.training = function (mount) {
     const link = UI.videosOf(e).find(u => !UI.videoSrc(u));
     return `<li><span class="drill-head">${UI.esc(ex(e))} <span class="tag">${e.duration || 0} ${T('training.min')}</span>`
       + (withCat ? ` <span class="tag">${UI.esc(tt('cat', e.category))}</span>` : '')
-      + (link ? ` <a href="${UI.esc(link)}" target="_blank" rel="noopener noreferrer">▶ ${T('training.video')}</a>` : '')
+      + (link ? ` <a href="${UI.esc(link)}" target="_blank" rel="noopener noreferrer">${UI.icon('play', 14)} ${T('training.video')}</a>` : '')
       + `</span>${UI.videoEmbed(e, 1)}</li>`;
   }
 
@@ -52,7 +52,7 @@ Views.training = function (mount) {
             <div style="margin-top:10px">
               ${(s.exercises || []).map(id => { const e = Store.find('exercises', id); return e ? `<div class="tag" style="margin:2px">${UI.esc(ex(e))}</div>` : ''; }).join('') || `<span style="color:var(--muted)">${T('common.noData')}</span>`}
             </div>
-            ${(s.animations || []).length ? `<div style="margin-top:8px"><span class="tag blue">▶ ${(s.animations || []).length} ${T('training.anims')}</span></div>` : ''}
+            ${(s.animations || []).length ? `<div style="margin-top:8px"><span class="tag blue">${UI.icon('play', 14)} ${(s.animations || []).length} ${T('training.anims')}</span></div>` : ''}
             <div style="margin-top:12px"><button class="btn sm" data-show="${s.id}">${T('common.show')}</button> ${mayChange(null) ? `<button class="btn sm" data-copy="${s.id}">📋 ${T('training.copySession')}</button> ` : ''}<button class="btn sm" data-srep="${s.id}">📄 ${T('training.report')}</button>${mayChange(s) ? ` <button class="btn sm" data-edit="${s.id}">${T('common.edit')}</button> <button class="btn sm danger" data-del="${s.id}">${T('common.delete')}</button>` : ''}</div>
           </div>`).join('') || `<div class="empty"><div class="big">${UI.icon('calendar', 40)}</div>${T('training.noSessions')}</div>`}
       </div>`;

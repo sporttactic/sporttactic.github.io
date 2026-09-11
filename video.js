@@ -182,7 +182,7 @@ Views.video = function (mount) {
             <button class="btn sm local-only" data-rate="2">2×</button>
             <button class="btn sm" data-seek="5">5s »</button>
             <span class="tool-group stream-only" id="clockGroup" title="${T('video.clockHint')}">
-              <button class="btn sm" id="clockRun">▶ ${T('video.clock')}</button>
+              <button class="btn sm" id="clockRun">${UI.icon('play', 14)} ${T('video.clock')}</button>
               <input id="clockTime" class="clock-input" value="0:00" placeholder="mm:ss">
               <button class="btn sm" id="clockReset" title="${T('video.clockReset')}">↺</button>
             </span>
@@ -1471,7 +1471,7 @@ Views.video = function (mount) {
           <span><span class="tag blue">${UI.esc(fmtRange(b))}</span> <span class="tag">${Math.round(bmLen(b))}s</span> ${UI.esc(b.tag)}${(b.shapes || []).length ? ` <span class="tag green">✎ ${(b.shapes || []).length}</span>` : ''}</span>
           <span class="bm-acts">
             <button class="btn sm" data-go="${i}">${T('common.go')}</button>
-            <button class="btn sm" data-play="${i}">▶ ${T('video.playRange')}</button>
+            <button class="btn sm" data-play="${i}">${UI.icon('play', 14)} ${T('video.playRange')}</button>
             <button class="btn sm" data-edit="${i}">${T('common.edit')}</button>
             <button class="btn sm primary" data-webm="${i}">${T('video.exportWebm')}</button>
             <button class="btn sm primary" data-mp4="${i}"${mp4Ok ? '' : ` disabled title="${UI.esc(T('video.noMp4'))}"`}>${T('video.exportMp4')}</button>
