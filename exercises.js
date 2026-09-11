@@ -219,7 +219,11 @@ Views.exerciseLib = function (mount, opts) {
     .body-map .blbl { fill: #111; font-size: 12px; }
     .mus-key { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; margin: 0 0 6px; }
     .mus-key span::before { content: ""; display: inline-block; width: 10px; height: 10px; border: 1px solid #6f0d0d;
-      background: #d81b1b; margin-right: 6px; vertical-align: -1px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }`;
+      background: #d81b1b; margin-right: 6px; vertical-align: -1px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .print-back { position: fixed; top: 14px; left: 14px; padding: 8px 14px; border-radius: 8px;
+      border: 1px solid #999; background: #fff; color: #111; font: inherit; font-size: 13px; cursor: pointer; }
+    .print-back:hover { background: #eee; }
+    @media print { .print-back { display: none; } }`;
 
   // One drill on paper, with the body map showing what it loads — the sheet a
   // coach hands to a player or takes to the hall.
@@ -230,6 +234,7 @@ Views.exerciseLib = function (mount, opts) {
       .filter(Boolean).join(' \u00b7 ');
     const links = videoList(e).map(u => `<li>${UI.esc(u)}</li>`).join('');
     const html = `<style>${PRINT_BODY_CSS}</style>
+      <button type="button" class="print-back" onclick="window.close()">${UI.esc(T('exercises.printBack'))}</button>
       <h2>${T('training.description')}</h2>
       ${exDesc(e) ? `<p style="white-space:pre-line">${UI.esc(exDesc(e))}</p>` : `<p class="none">${T('common.noData')}</p>`}
       ${(e.tags || []).length ? `<h2>${T('exercises.tagsHead')}</h2><p>${(e.tags || []).map(t => '#' + UI.esc(t)).join(' \u00b7 ')}</p>` : ''}
