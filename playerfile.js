@@ -337,12 +337,16 @@ const PlayerFile = (() => {
   const bothMarks = (a, b) => ({ coach: Math.max(a.coach, b.coach), player: Math.max(a.player, b.player) });
   const keptBy = (mark, m) => (+m.at || 0) > mark[m.side === 'player' ? 'player' : 'coach'];
 
-  // ---- Google Drive: one JSON per player in the Players folder ------------
-  // <squad database folder> / Players / <Player Name> / <Player Name>.json.
-  // Whichever end writes first makes the folders and the file and shares it
-  // with the other, so a player holding the key can send a message before the
-  // coach has ever opened Drive and the coach still gets it back.
-  const DRIVE_DIR = 'Players';
+  // ---- Google Drive: one JSON per player in the Squad folder ---------------
+  // <squad database folder> / Squad / <Player Name>.json.
+  // Whichever end writes first makes the Squad folder and the file and shares
+  // it with the other, so a player holding the key can send a message before
+  // the coach has ever opened Drive and the coach still gets it back.
+  const DRIVE_DIR = 'Squad';
+  // Earlier builds filed the same document under Players/, and under a folder
+  // per player inside it. Both are still read, so an existing thread is found
+  // where it lies instead of a second file being made beside it.
+  const LEGACY_DIRS = ['Players'];
   const driveOn = () => !!(window.Drive && Drive.isConnected && Drive.isConnected());
   const safeName = s => String(s || '').replace(/[/\\?%*:|"<>]+/g, '-').trim();
   // The file is addressed by the name on the player's profile, so two players
@@ -399,50 +403,58 @@ const PlayerFile = (() => {
     }
     return id;
   }
-  // <database folder> / Players / <Player Name> / <Player Name>.json, built as
-  // far as this account is allowed to. The squad's own database folder is used
-  // whenever this copy may write in it, so coach and player land on one file;
-  // an account that may not build the same path in its own Drive instead and
-  // shares what it writes with the other end. The team folder id in settings is
+  // <database folder> / Squad / <Player Name>.json, built as far as this
+  // account is allowed to. The squad's own database folder is used whenever
+  // this copy may write in it, so coach and player land on one file; an account
+  // that may not builds the same path in its own Drive instead and shares what
+  // it writes with the other end. The team folder id in settings is
   // deliberately not written here: it belongs to the coach's cloud setup and a
   // player copy must not overwrite it.
-  async function ownFolder(player) {
+  async function ownFolder() {
     const club = await teamFolder();
     if (club) {
-      try { return await Drive.ensureFolder(playerDir(player), await Drive.ensureFolder(DRIVE_DIR, club)); }
+      try { return await Drive.ensureFolder(DRIVE_DIR, club); }
       catch (e) { /* no right to create in the club folder; use this account's own */ }
     }
     const root = await Drive.ensureFolder('SportTactic', null);
     const t = Store.activeTeam();
     const team = await Drive.ensureFolder(safeName(t && t.name) || 'Team', root);
-    return await Drive.ensureFolder(playerDir(player), await Drive.ensureFolder(DRIVE_DIR, team));
+    return await Drive.ensureFolder(DRIVE_DIR, team);
   }
-  // The Players folder this copy already knows about, and the player's own
-  // folder inside it when it has been made.
+  // Every folder this player's file could be lying in under one team folder,
+  // current layout first: Squad, then the legacy Players folder, then the
+  // per-player folder older builds made inside each of them. Nothing is
+  // created here.
+  async function dirsUnder(teamId, player) {
+    const out = [];
+    for (const name of [DRIVE_DIR].concat(LEGACY_DIRS)) {
+      let dir = null;
+      try { dir = await Drive.findFolder(name, teamId); } catch (e) { dir = null; }
+      if (!dir) continue;
+      out.push(dir.id);
+      let own = null;
+      try { own = await Drive.findFolder(playerDir(player), dir.id); } catch (e) { own = null; }
+      if (own) out.push(own.id);
+    }
+    return out;
+  }
+  // The folders under the database folder this copy already knows about.
   async function knownFolder(player) {
     const team = await teamFolder();
-    if (!team) return null;
-    try {
-      const dir = await Drive.findFolder(DRIVE_DIR, team);
-      if (!dir) return null;
-      const own = await Drive.findFolder(playerDir(player), dir.id);
-      return { players: dir.id, own: (own && own.id) || '' };
-    } catch (e) { return null; }
+    if (!team) return [];
+    return await dirsUnder(team, player);
   }
   // The same path as ownFolder, walked by name and creating nothing: it is how a
-  // copy with no team folder id of its own still finds the Players folder.
+  // copy with no team folder id of its own still finds the Squad folder.
   async function foundFolder(player) {
     try {
       const root = await Drive.findFolder('SportTactic', null);
-      if (!root) return null;
+      if (!root) return [];
       const t = Store.activeTeam();
       const team = await Drive.findFolder(safeName(t && t.name) || 'Team', root.id);
-      if (!team) return null;
-      const players = await Drive.findFolder(DRIVE_DIR, team.id);
-      if (!players) return null;
-      const own = await Drive.findFolder(playerDir(player), players.id);
-      return { players: players.id, own: (own && own.id) || '' };
-    } catch (e) { return null; }
+      if (!team) return [];
+      return await dirsUnder(team.id, player);
+    } catch (e) { return []; }
   }
   // The other end, so the file it does not own is still reachable to it.
   function shareTargets(player) {
@@ -522,12 +534,11 @@ const PlayerFile = (() => {
     if (driveIds[player.id]) return driveIds[player.id];
     const names = driveNames(player);
     const name = names[0];
-    // The player's own folder first, then the Players folder itself, where
-    // copies made before each player had a folder of their own still sit.
-    const lookIn = async dir => {
-      if (!dir) return '';
+    // The Squad folder first, then the folders earlier builds filed the same
+    // document in, so an existing thread is picked up rather than replaced.
+    const lookIn = async dirs => {
       for (const candidate of names) {
-        for (const parent of [dir.own, dir.players]) {
+        for (const parent of (dirs || [])) {
           if (!parent) continue;
           const hit = await Drive.findFile(candidate, parent);
           if (hit) return await rememberDriveId(player, hit.id);
@@ -547,7 +558,7 @@ const PlayerFile = (() => {
       if (shared && shared[0]) return await rememberDriveId(player, shared[0].id);
     }
     if (!create) return '';
-    const res = await Drive.uploadJson(name, driveDoc(player, get(player.id), []), { parent: await ownFolder(player) });
+    const res = await Drive.uploadJson(name, driveDoc(player, get(player.id), []), { parent: await ownFolder() });
     const id = (res && res.id) || '';
     if (id) {
       await rememberDriveId(player, id);
@@ -909,6 +920,51 @@ const PlayerFile = (() => {
     return await saveToDrive(player);
   }
 
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const normEmail = e => (window.MAIL && MAIL.normEmail) ? MAIL.normEmail(e) : String(e == null ? '' : e).trim();
+  // Hand the player's own Google account writer access to their file in the
+  // coach's Squad folder. Both ends write the one document, so reader access
+  // would be useless. The file has to exist before a permission can sit on it,
+  // so the Squad folder and the named file are made here when the coach has
+  // not written the first line yet.
+  async function inviteAccount(player, email) {
+    const to = normEmail(email);
+    if (!to || !EMAIL_RE.test(to)) return { ok: false, why: 'bademail' };
+    if (!player || !player.id) return { ok: false, why: 'nofile' };
+    if (!driveOn()) { try { await Drive.connect(); } catch (e) { /* reported below */ } }
+    if (!driveOn()) return { ok: false, why: 'off' };
+    // The background pass writes the same document, so the two must not
+    // overlap: one of the two uploads would otherwise carry the older thread.
+    if (driveBusy.has(player.id)) return { ok: false, why: 'busy' };
+    await ensure(player);
+    driveBusy.add(player.id);
+    let id = '';
+    try {
+      try { id = await driveFile(player, true); } catch (e) { return { ok: false, why: 'net' }; }
+      if (!id) return { ok: false, why: 'net' };
+      const pushed = await driveSync(player, 'push');
+      if (!pushed.ok) return { ok: false, why: pushed.why };
+      driveDirty.delete(player.id);
+    } finally { driveBusy.delete(player.id); }
+    try { await Drive.shareWith(id, to, 'writer'); }
+    catch (e) { return { ok: false, why: 'share' }; }
+    const file = get(player.id);
+    if (file) {
+      const done = (file.sharedId === id && Array.isArray(file.sharedWith)) ? file.sharedWith : [];
+      await Store.save(STORE, Object.assign({}, file, {
+        sharedId: id, sharedWith: done.indexOf(to) < 0 ? done.concat([to]) : done
+      }), { playerFileKey: holdsWord(player.id) });
+    }
+    // Kept on the profile so every later push keeps the invitation alive by
+    // itself, and so the coach never has to type the address twice.
+    const known = Store.raw('players', player.id);
+    if (known && !normEmail(known.email)) {
+      try { await Store.save('players', Object.assign({}, known, { email: to })); }
+      catch (e) { /* a read-only roster still keeps the share */ }
+    }
+    return { ok: true, id: id, link: (window.Drive && Drive.fileLink) ? Drive.fileLink(id) : '' };
+  }
+
   // Each end clears only what it wrote: what the other one said is theirs.
   async function clearAll(player) {
     const file = get(player && player.id);
@@ -981,6 +1037,9 @@ const PlayerFile = (() => {
       const made = hasKey(player.id);
       const stale = made && !word;      // generated on another device
       const link = fileLink(player);
+      const row = get(player.id) || {};
+      const invited = Array.isArray(row.sharedWith) ? row.sharedWith : [];
+      const shared = normEmail(player.email) || '';
       UI.modal({
         title: t('pfile.key', 'Message key') + ' \u2014 ' + nameOf(player),
         width: 520,
@@ -994,10 +1053,15 @@ const PlayerFile = (() => {
           <p class="hint">${esc(link
     ? t('pfile.inviteReady', 'Copy invitation sends the player everything they need: the name their file is addressed by, this key, and a link straight to the file.')
     : t('pfile.inviteNone', 'The file reaches Drive the first time something is written in it or Google is connected. Until then there is no link to send with the key.'))}</p>
-          ${made ? `<p class="hint">${esc(t('pfile.keyReplace', 'Generating a new key replaces the old one, and a copy still holding it stops being able to write.'))}</p>` : ''}`,
+          ${made ? `<p class="hint">${esc(t('pfile.keyReplace', 'Generating a new key replaces the old one, and a copy still holding it stops being able to write.'))}</p>` : ''}
+          <label class="field"><span>${esc(t('pfile.inviteMail', 'Player Google account'))}</span>
+            <input id="pf_share" type="email" autocomplete="off" spellcheck="false" placeholder="player@gmail.com" value="${esc(shared)}">
+            <span class="hint">${esc(t('pfile.inviteMailHint', 'Gives that Google account writer access to this file in the Squad folder, so the player can answer in it. The Squad folder and the file are made now if they do not exist yet.'))}</span></label>
+          ${invited.length ? `<p class="hint">${esc(t('pfile.inviteDone', 'Already invited') + ': ' + invited.join(', '))}</p>` : ''}`,
         footer: `<button class="btn ghost" data-close2>${esc(T('common.close'))}</button>
           <button class="btn" data-copy ${word ? '' : 'disabled'}>\u29c9 ${esc(t('pfile.keyCopy', 'Copy key'))}</button>
           <button class="btn" data-invite ${word ? '' : 'disabled'}>\u29c9 ${esc(t('pfile.invite', 'Copy invitation'))}</button>
+          <button class="btn" data-share>${esc(t('pfile.inviteSend', 'Give access'))}</button>
           <button class="btn primary" data-gen>\u{1F511} ${esc(made ? t('pfile.keyNew', 'Generate new key') : t('pfile.keyGen', 'Generate message key'))}</button>`,
         onOpen: (m, close) => {
           m.querySelector('[data-close2]').onclick = () => { close(); back(); };
@@ -1008,6 +1072,25 @@ const PlayerFile = (() => {
           m.querySelector('[data-invite]').onclick = async () => {
             const ok = await copyText(inviteText(player));
             UI.toast(ok ? t('pfile.inviteCopied', 'Invitation copied \u2014 send it to the player') : t('pfile.keyCopyFail', 'Could not copy \u2014 read the word off the screen instead'), ok ? 'success' : 'error');
+          };
+          m.querySelector('[data-share]').onclick = async () => {
+            const btn = m.querySelector('[data-share]');
+            const box = m.querySelector('#pf_share');
+            btn.disabled = true;
+            let r;
+            try { r = await inviteAccount(player, box.value); }
+            catch (e) { r = { ok: false, why: 'net' }; }
+            btn.disabled = false;
+            if (r.ok) {
+              close();
+              UI.toast(t('pfile.inviteOk', 'That Google account can now write in the file'), 'success');
+              return open();
+            }
+            if (r.why === 'bademail') return UI.toast(t('pfile.inviteBadMail', 'Type the Google address the player signs in with'), 'error');
+            if (r.why === 'busy') return UI.toast(t('pfile.inviteBusy', 'This file is being synced right now \u2014 try again in a moment'), 'error');
+            if (r.why === 'off') return UI.toast(t('pfile.driveOff', 'Google Drive is not connected \u2014 set it up under Settings.'), 'error');
+            if (r.why === 'share') return UI.toast(t('pfile.inviteFail', 'Google refused that invitation. Check the address is a Google account.'), 'error');
+            UI.toast(t('pfile.driveFail', 'Drive could not be reached'), 'error');
           };
           m.querySelector('[data-gen]').onclick = async () => {
             const btn = m.querySelector('[data-gen]');
@@ -1308,7 +1391,7 @@ const PlayerFile = (() => {
   return {
     STORE, fileId, get, messages, ensure, remove, post, sweep, dialog, threadHtml, clearAll, canWrite, side,
     newKey, claimKey, holdsKey, holdsWord, verifyHeld, hasKey, keyDialog, claimDialog, driveSync, driveName, syncAll,
-    startDriveSync, googleConnected, publish,
+    startDriveSync, googleConnected, publish, inviteAccount,
     findMine, adoptDoc, openMine, minePlayers, mineDialog, inviteText, fileLink, driveIdFrom
   };
 })();
