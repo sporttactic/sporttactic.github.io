@@ -84,6 +84,7 @@ Views.messenger = function (mount, params) {
       roster: 'Team chat setup', rosterDesc: 'Give each player or staff member their own key. Share it once, then one tap opens a private chat.',
       rosterEmpty: 'No players or staff yet. Add them under Teams & Players.', rosterStaff: 'Staff', rosterPlayers: 'Players',
       rosterSetup: 'Set up', rosterReady: 'Ready', rosterChat: 'Chat', rosterShare: 'Share key', rosterNewKey: 'New key',
+      rosterOnline: 'Online — connected now', rosterChatting: 'In a chat right now',
       rosterCreated: 'Chat key created', rosterRotated: 'New chat key created — share it again',
       rosterRotateAsk: 'Create a new chat key? The old key stops working for this person.',
       generateKey: 'Generate a key', keyPlaceholder: 'Enter a shared key…', connect: 'Connect', keyChat: 'Shared-key chat', sharedKey: 'Shared key',
@@ -129,6 +130,7 @@ Views.messenger = function (mount, params) {
       roster: 'Opsæt holdchat', rosterDesc: 'Giv hver spiller eller træner sin egen nøgle. Del den én gang, så åbner ét tryk en privat chat.',
       rosterEmpty: 'Ingen spillere eller trænere endnu. Tilføj dem under Hold & Spillere.', rosterStaff: 'Trænerstab', rosterPlayers: 'Spillere',
       rosterSetup: 'Opsæt', rosterReady: 'Klar', rosterChat: 'Chat', rosterShare: 'Del nøgle', rosterNewKey: 'Ny nøgle',
+      rosterOnline: 'Online — forbundet nu', rosterChatting: 'I gang med en chat lige nu',
       rosterCreated: 'Chat-nøgle oprettet', rosterRotated: 'Ny chat-nøgle oprettet — del den igen',
       rosterRotateAsk: 'Lav en ny chat-nøgle? Den gamle nøgle virker ikke længere for denne person.',
       generateKey: 'Lav en nøgle', keyPlaceholder: 'Indtast en fælles nøgle…', connect: 'Forbind', keyChat: 'Nøgle-chat', sharedKey: 'Fælles nøgle',
@@ -262,6 +264,8 @@ Views.messenger = function (mount, params) {
   // ---------- state ----------
   let contacts = [];
   let active = null;                 // active contact id
+  let activeRosterRef = '';          // 'store:id' of the roster member the live connection belongs to
+  let lastConnState = 'new';         // mirrors #connStatus, so the roster light matches it exactly
   let pc = null, dc = null, wireKey = null;
   let dcContact = null;              // contact the open data channel belongs to
   let sig = null;                    // active shared-key rendezvous session
@@ -364,7 +368,15 @@ Views.messenger = function (mount, params) {
     const saveQcName = async () => { const nm = cleanName(mount.querySelector('#qcName').value); if (nm !== identity.name) { identity.name = nm; await MDB.put('identity', identity); } };
     mount.querySelector('#qcName').onchange = saveQcName;
     mount.querySelector('#qcGen').onclick = () => { const i = mount.querySelector('#qcKey'); i.value = generateKey(); i.focus(); };
-    mount.querySelector('#qcConnect').onclick = async () => { const k = mount.querySelector('#qcKey').value; if (!normalizeKey(k)) return toast(tx('keyNeeded'), 'error'); await saveQcName(); keyConnect(k, mount.querySelector('#qcMode').value); };
+    mount.querySelector('#qcConnect').onclick = async () => {
+      const k = mount.querySelector('#qcKey').value; if (!normalizeKey(k)) return toast(tx('keyNeeded'), 'error');
+      await saveQcName();
+      // Typing a key by hand still lights up its owner's row, if it matches one.
+      const { staff, players } = rosterMembers();
+      const hit = staff.concat(players).find(m => m.key && normalizeKey(m.key) === normalizeKey(k));
+      activeRosterRef = hit ? hit.store + ':' + hit.id : '';
+      keyConnect(k, mount.querySelector('#qcMode').value);
+    };
     mount.querySelector('#qcShare').onclick = () => { const k = mount.querySelector('#qcKey').value.trim(); if (!normalizeKey(k)) return toast(tx('keyNeeded'), 'error'); shareOrCopy(k, 'key'); };
     mount.querySelector('#qcCopy').onclick = () => { const k = mount.querySelector('#qcKey').value.trim(); if (!normalizeKey(k)) return toast(tx('keyNeeded'), 'error'); copy(k); };
     mount.querySelector('#qcKey').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); mount.querySelector('#qcConnect').click(); } });
@@ -403,9 +415,17 @@ Views.messenger = function (mount, params) {
     const box = mount.querySelector('#rosterList'); if (!box) return;
     const { staff, players } = rosterMembers();
     if (!staff.length && !players.length) { box.innerHTML = `<p class="hint">${tx('rosterEmpty')}</p>`; return; }
-    const row = m => `
+    // The live connection is a single session for the whole page, so only the
+    // one roster member it belongs to (if any) can show a light at a time:
+    // green once the far end has proved it holds the key, red while that
+    // handshake is still under way.
+    const row = m => {
+      const isActive = activeRosterRef === m.store + ':' + m.id;
+      const live = isActive && (authed ? 'online' : (lastConnState === 'connecting' ? 'busy' : ''));
+      const dot = live ? `<span class="chat-dot ${live}" title="${esc(tx(live === 'online' ? 'rosterOnline' : 'rosterChatting'))}"></span>` : '';
+      return `
       <div class="roster-row">
-        <span class="roster-name">${esc(m.name)}</span>
+        ${dot}<span class="roster-name">${esc(m.name)}</span>
         <span class="tag">${esc(m.role)}</span>
         <span class="tag ${m.key ? 'green' : ''}">${m.key ? '🔑 ' + tx('rosterReady') : tx('rosterSetup')}</span>
         <span class="roster-acts">
@@ -414,6 +434,7 @@ Views.messenger = function (mount, params) {
           <button class="btn sm" data-mnew="${esc(m.store)}:${esc(m.id)}" title="${tx('rosterNewKey')}">🎲</button>
         </span>
       </div>`;
+    };
     box.innerHTML =
       (staff.length ? `<h4 class="roster-head">${tx('rosterStaff')}</h4>` + staff.map(row).join('') : '') +
       (players.length ? `<h4 class="roster-head">${tx('rosterPlayers')}</h4>` + players.map(row).join('') : '');
@@ -441,6 +462,7 @@ Views.messenger = function (mount, params) {
   async function memberChat(ref) {
     const key = await memberKey(ref);
     if (!key) return;
+    activeRosterRef = ref;
     const input = mount.querySelector('#qcKey'); if (input) input.value = key;
     const nm = mount.querySelector('#qcName');
     if (nm) { const clean = cleanName(nm.value); if (clean !== identity.name) { identity.name = clean; await MDB.put('identity', identity); } }
@@ -468,6 +490,7 @@ Views.messenger = function (mount, params) {
       try { await Store.save(peer.store, rec); } catch (e) { return; }
       renderRoster();
     }
+    activeRosterRef = peer.store + ':' + peer.id;
     if (!input.value) input.value = rec.chatKey;
     keyConnect(rec.chatKey, (mount.querySelector('#qcMode') || {}).value || 'chat');
   }
@@ -493,7 +516,7 @@ Views.messenger = function (mount, params) {
 
   function selectContact(id) {
     if (active !== id) closeConn();
-    active = id; renderContacts(); renderConversation();
+    active = id; activeRosterRef = ''; renderContacts(); renderConversation();
   }
 
   function renderConversation() {
@@ -647,6 +670,8 @@ Views.messenger = function (mount, params) {
   }
 
   function setStatus(state) {
+    lastConnState = state;
+    if (activeRosterRef) renderRoster();
     const el = mount.querySelector('#connStatus'); if (!el) return;
     const map = { new: tx('disconnected'), connecting: tx('connecting'), connected: tx('connected'), disconnected: tx('closed'), failed: tx('closed'), closed: tx('closed') };
     el.textContent = map[state] || state;
