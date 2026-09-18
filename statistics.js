@@ -102,7 +102,7 @@ Views.statistics = function (mount) {
       list.forEach(e => { tally[e.type] = (tally[e.type] || 0) + 1; });
       const when = m ? UI.fmtDate(m.date) : '—';
       const who = m ? ((m.home ? T('common.vs') : T('common.at')) + ' ' + m.opponent) : '—';
-      const what = Object.keys(tally).sort().map(k => k + ' × ' + tally[k]).join(', ');
+      const what = Object.keys(tally).sort().map(k => SPORTS.eventLabel(k, (m && m.sport) || App.getSport(), I18N.getLang()) + ' × ' + tally[k]).join(', ');
       return `<tr><td>${UI.esc(when)}</td><td>${UI.esc(who)}</td><td>${UI.esc(what)}</td></tr>`;
     }).join('');
     const html = `<div class="kpi">${kpi}</div>`

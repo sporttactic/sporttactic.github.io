@@ -512,6 +512,41 @@ const Store = (() => {
   // they arrive with instead of being re-stamped onto the active squad.
   const SELF_TEAM = ['team'];
   function packKinds() { return Object.keys(PACK_STORES); }
+  // Readable statistics accompany the raw records; imports still use data only.
+  function statsPlayerSummaries(players, events) {
+    const byPlayer = new Map();
+    events.forEach(event => {
+      if (!byPlayer.has(event.playerId)) byPlayer.set(event.playerId, []);
+      byPlayer.get(event.playerId).push(event);
+    });
+    function tally(rows) {
+      const counts = new Map();
+      rows.forEach(event => {
+        if (typeof event.type !== 'string' || !event.type) return;
+        counts.set(event.type, (counts.get(event.type) || 0) + 1);
+      });
+      const eventCounts = [...counts.keys()].sort().map(type => ({ type, count: counts.get(type) }));
+      return {
+        eventCounts,
+        eventSummary: eventCounts.map(item => item.type + ' \u00d7 ' + item.count).join(', ')
+      };
+    }
+    return players.map(player => {
+      const rows = byPlayer.get(player.id) || [];
+      const byMatch = new Map();
+      rows.forEach(event => {
+        const matchId = event.matchId == null ? null : event.matchId;
+        if (!byMatch.has(matchId)) byMatch.set(matchId, []);
+        byMatch.get(matchId).push(event);
+      });
+      return {
+        playerId: player.id,
+        name: [player.firstName, player.lastName].filter(Boolean).join(' '),
+        ...tally(rows),
+        perMatch: [...byMatch.entries()].map(([matchId, list]) => ({ matchId, ...tally(list) }))
+      };
+    });
+  }
   // opts.teamId narrows the file to ONE squad: team-scoped stores are filtered
   // on teamId, and the events store follows the matches that survived.
   async function exportPack(kind, opts) {
@@ -521,25 +556,56 @@ const Store = (() => {
     const data = {};
     let keep = null;
     let mine = null;
+    let statsPlayers = null;
+    let statsEvents = null;
+    let historyMatches = null;
     for (const s of stores) {
-      let rows = await DB.getAll(s);
+      let rows = s === 'events' && statsEvents ? statsEvents : await DB.getAll(s);
+      const unfiltered = rows;
       // The plan on screen is what this squad owns AND what other squads handed
       // it, so an "export what I see" backup follows the same rule â€” a strict
       // ownership filter would silently export nothing for a squad that mostly
       // looks at events other squads shared in.
       if (teamId && s === 'planner') rows = rows.filter(r => !r.teamId || r.teamId === teamId
         || r.allTeams || (Array.isArray(r.teams) && r.teams.indexOf(teamId) >= 0));
-      else if (teamId && TEAM_SCOPED.indexOf(s) >= 0) rows = rows.filter(r => r.teamId === teamId);
-      if (teamId && s === 'teams') { rows = rows.filter(r => r.id === teamId); mine = rows; }
+      else if (teamId && TEAM_SCOPED.indexOf(s) >= 0) rows = rows.filter(r => String(r.teamId == null ? '' : r.teamId) === String(teamId));
+      if (teamId && s === 'teams') { rows = rows.filter(r => String(r.id) === String(teamId)); mine = rows; }
       if (mine && (s === 'clubs' || s === 'seasons')) {
         const want = new Set(mine.map(t => s === 'clubs' ? t.clubId : t.seasonId).filter(Boolean));
         rows = rows.filter(r => want.has(r.id));
       }
-      if (s === 'matches') keep = new Set(rows.map(r => r.id));
-      if (s === 'events' && keep) rows = rows.filter(r => keep.has(r.matchId));
+      // Player totals include history from previous squads and events whose
+      // match record no longer exists. Export every source of those totals.
+      if (kind === 'stats' && teamId && s === 'players') {
+        statsPlayers = new Set(rows.map(r => r.id));
+        statsEvents = await DB.getAll('events');
+        historyMatches = new Set(statsEvents.filter(r => statsPlayers.has(r.playerId)).map(r => r.matchId));
+      }
+      if (s === 'matches') {
+        // Historical match context must not pull in unrelated player events.
+        keep = new Set(rows.map(r => r.id));
+        if (historyMatches) rows = unfiltered.filter(r => keep.has(r.id) || historyMatches.has(r.id));
+      }
+      if (s === 'events' && keep && (kind !== 'stats' || teamId)) rows = rows.filter(r => keep.has(r.matchId)
+        || (statsPlayers && statsPlayers.has(r.playerId)));
       data[s] = await pack(rows);
     }
-    return { app: 'SportTactic', pack: kind, format: 1, exportedAt: new Date().toISOString(), teamId: teamId || '', stores, data };
+    const dump = { app: 'SportTactic', pack: kind, format: 1, exportedAt: new Date().toISOString(), teamId: teamId || '', stores, data };
+    if (kind === 'stats') dump.playerStats = statsPlayerSummaries(data.players, data.events);
+    if (kind === 'matches') {
+      // Readable summaries use only this pack's events, not season history.
+      // Keep player profiles out of data so importing matches cannot overwrite them.
+      const referenced = new Set(data.events.map(event => event.playerId)
+        .filter(id => id !== undefined && id !== null && id !== ''));
+      const players = (await DB.getAll('players')).filter(player => !teamId
+        || String(player.teamId == null ? '' : player.teamId) === String(teamId)
+        || referenced.has(player.id));
+      const known = new Set(players.map(player => player.id));
+      // A deleted player can still have recorded events; retain their ID and counts.
+      referenced.forEach(id => { if (!known.has(id)) players.push({ id }); });
+      dump.playerStats = statsPlayerSummaries(players, data.events);
+    }
+    return dump;
   }
   // Rows are merged by id: re-importing the same file updates instead of duplicating.
   // opts.teamId re-stamps every team-scoped row, so a file from another club

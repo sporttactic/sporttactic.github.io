@@ -208,7 +208,7 @@ const UI = (() => {
 
   function fmtDate(ts) {
     if (!ts) return 'â€”';
-    return new Date(ts).toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' });
+    return new Date(ts).toLocaleDateString(I18N.getLang(), { day: '2-digit', month: 'short', year: 'numeric' });
   }
   function fmtClock(sec) {
     const m = Math.floor(sec / 60), s = sec % 60;
@@ -493,7 +493,7 @@ const UI = (() => {
   function printDoc(title, sub, html, onBlocked) {
     const w = window.open('', '_blank');
     if (!w) { if (onBlocked) onBlocked(); return false; }
-    w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>' + esc(title) + '</title><style>' + PRINT_CSS + '</style></head><body>'
+    w.document.write('<!doctype html><html lang="' + esc(I18N.getLang()) + '"><head><meta charset="utf-8"><title>' + esc(title) + '</title><style>' + PRINT_CSS + '</style></head><body>'
       + '<h1>' + esc(title) + '</h1>' + (sub ? '<p class="sub">' + esc(sub) + '</p>' : '') + html
       + '<p class="foot">SportTactic \u00b7 ' + esc(fmtDate(Date.now())) + '</p></body></html>');
     w.document.close();

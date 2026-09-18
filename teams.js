@@ -68,6 +68,7 @@ Views.teams = function (mount) {
         <td data-label="${UI.esc(T('teams.contact'))}" class="wide"><div class="contact-cell"><span>${UI.esc(p.phone || '—')}</span><span class="contact-mail">${UI.esc(p.email || '—')}</span></div></td>
         <td class="acts-cell">
           <div class="row-acts icons">
+            <button type="button" class="btn sm" data-mail="${UI.esc(p.id)}" title="${UI.esc(T('mail.title'))}" aria-label="${UI.esc(T('mail.title') + ' — ' + [p.firstName, p.lastName].filter(Boolean).join(' '))}" ${Access.readMode() ? 'disabled' : ''}>${UI.icon('mail', 14)}</button>
             <button class="btn sm" data-chat="${p.id}" title="${UI.esc(T('teams.chat'))}" aria-label="${UI.esc(T('teams.chat'))}">💬</button>
             <button class="btn sm" data-edit="${p.id}" title="${UI.esc(T('common.edit'))}" aria-label="${UI.esc(T('common.edit'))}">✎</button>
             <button class="btn sm danger" data-del="${p.id}" title="${UI.esc(T('common.delete'))}" aria-label="${UI.esc(T('common.delete'))}">${UI.icon('trash', 14)}</button>
@@ -233,6 +234,13 @@ Views.teams = function (mount) {
       UI.bindShare(mount, 'team', () => { App.populateTeamPicker(); render(); }, { scoped: true });
       q('#squadAnims').onclick = () => animListDialog(team, teamAnimations(team));
       mount.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => form(team, Store.find('players', b.dataset.edit)));
+      mount.querySelectorAll('[data-mail]').forEach(b => b.onclick = () => {
+        const p = Store.find('players', b.dataset.mail);
+        if (p) MAIL.compose({
+          players: [p],
+          title: T('mail.title') + ' — ' + [p.firstName, p.lastName].filter(Boolean).join(' ')
+        });
+      });
       mount.querySelectorAll('[data-chat]').forEach(b => b.onclick = () => {
         const p = Store.find('players', b.dataset.chat);
         if (p) App.go('messenger', { playerId: p.id, playerName: (p.firstName + ' ' + p.lastName).trim(), memberStore: 'players', from: 'teams' });
