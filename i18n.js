@@ -178,7 +178,7 @@ const I18N = (() => {
       'scout.focusNeed': 'Keep at least one focus area', 'scout.focusSaved': 'Focus areas saved',
       // Statistics
       'stats.title': 'Statistics', 'stats.subtitle': 'Team & player performance',
-      'stats.playerPdf': 'Print this player as a PDF', 'stats.profile': 'Profile', 'stats.perMatch': 'Match by match',
+      'stats.viewPlayer': 'View player', 'stats.printPdf': 'Print PDF', 'stats.playerPdf': 'Print this player as a PDF', 'stats.profile': 'Profile', 'stats.perMatch': 'Match by match',
       'stats.season': 'Season totals', 'stats.leaderboard': 'Player Leaderboard',
       'stat.totalGoals': 'Total Goals', 'stat.shootingPct': 'Shooting %', 'stat.assists': 'Assists', 'stat.turnovers': 'Turnovers',
       'stat.fastBreaks': 'Fast Breaks', 'stat.gkSaves': 'GK Saves', 'stat.suspensions': '2-min Suspensions', 'stat.matches': 'Matches',
@@ -1212,7 +1212,7 @@ const I18N = (() => {
       'evt.Bad pass': 'Dårlig aflevering', 'evt.Technical fault': 'Teknisk fejl', 'evt.Stepping': 'Skridtfejl', 'evt.Double dribble': 'Dobbeltdrible',
       // Statistics
       'stats.title': 'Statistik', 'stats.subtitle': 'Hold- og spillerpræstation',
-      'stats.playerPdf': 'Udskriv denne spiller som PDF', 'stats.profile': 'Profil', 'stats.perMatch': 'Kamp for kamp',
+      'stats.viewPlayer': 'Vis spiller', 'stats.printPdf': 'Udskriv PDF', 'stats.playerPdf': 'Udskriv denne spiller som PDF', 'stats.profile': 'Profil', 'stats.perMatch': 'Kamp for kamp',
       'stats.season': 'Sæsontotaler', 'stats.leaderboard': 'Spillerrangliste',
       'stat.totalGoals': 'Mål i alt', 'stat.shootingPct': 'Skudprocent', 'stat.assists': 'Assists', 'stat.turnovers': 'Boldtab',
       'stat.fastBreaks': 'Kontraangreb', 'stat.gkSaves': 'Redninger', 'stat.suspensions': '2-min udvisninger', 'stat.matches': 'Kampe',

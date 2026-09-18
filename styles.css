@@ -594,6 +594,16 @@ input:focus, select:focus, textarea:focus { border-color: var(--primary); }
 .to-top.show { opacity: 1; visibility: visible; transform: translateY(0); }
 .to-top:hover { border-color: var(--primary); color: var(--primary); }
 
+/* Statistics player preview; print styling remains in UI.printDoc. */
+.stats-player-view { min-width: 0; overflow-wrap: anywhere; }
+.stats-player-view .kpi { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 12px; margin: 16px 0; }
+.stats-player-view .kpi > div { padding: 12px; border: 1px solid var(--border); border-radius: 8px; }
+.stats-player-view .kpi b { display: block; font-size: 24px; }
+.stats-player-view .kpi span { color: var(--muted); font-size: 12px; }
+.stats-player-view h2 { margin: 20px 0 10px; font-size: 17px; }
+.stats-player-view table { width: 100%; table-layout: fixed; }
+.stats-player-view th, .stats-player-view td { white-space: normal; overflow-wrap: anywhere; }
+
 /* Modal */
 .modal-host { position: fixed; inset: 0; background: rgba(0,0,0,.5); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 16px; }
 .modal { background: var(--surface); border-radius: 16px; width: 100%; max-width: 560px; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 40px rgba(0,0,0,.4); }

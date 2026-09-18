@@ -50,7 +50,7 @@ Views.statistics = function (mount) {
               <td data-label="${UI.esc(T('teams.weight'))}">${p.weight ? p.weight + ' kg' : '—'}</td>
               <td class="acts-cell">
                 <div class="row-acts icons">
-                  <button class="btn sm" data-pdf="${p.id}" title="${UI.esc(T('stats.playerPdf'))}" aria-label="${UI.esc(T('stats.playerPdf'))}">⬇</button>
+                  <button class="btn sm" data-view-player="${p.id}" title="${UI.esc(T('stats.viewPlayer'))}" aria-label="${UI.esc(T('stats.viewPlayer'))}">${UI.esc(T('stats.viewPlayer'))}</button>
                   <button class="btn sm" data-chat="${p.id}" title="${UI.esc(T('chat.title'))}" aria-label="${UI.esc(T('chat.title'))}">💬</button>
                   <button class="btn sm" data-aip="${p.id}" title="${UI.esc(T('stats.aiPlayer'))}" aria-label="${UI.esc(T('stats.aiPlayer'))}">🤖</button>
                 </div>
@@ -73,9 +73,9 @@ Views.statistics = function (mount) {
   UI.bindShare(mount, 'stats', () => App.render(), { scoped: true });
   AI.bind(mount);
 
-  // One player on one page: profile, season totals and every event they were
-  // registered for, match by match. Printing it is how a PDF is saved.
-  function playerPdf(p) {
+  // Preview a player: profile, season totals and every event they were
+  // registered for, match by match. Print only when requested in the dialog.
+  function viewPlayer(p) {
     if (!p) return;
     const s = Store.playerStats(p.id);
     const name = ('#' + (p.number || '?') + ' ' + [p.firstName, p.lastName].filter(Boolean).join(' ')).trim();
@@ -111,9 +111,19 @@ Views.statistics = function (mount) {
       + (perMatch ? `<table><thead><tr><th>${T('training.date')}</th><th>${T('matches.opponent')}</th><th>${T('scout.events')}</th></tr></thead><tbody>${perMatch}</tbody></table>`
         : `<p class="none">${T('common.noData')}</p>`);
     const sub = [team && team.name, SPORTS.name(App.getSport(), I18N.getLang()), matches.length + ' ' + T('stat.matches')].filter(Boolean).join(' · ');
-    UI.printDoc(T('reports.playerReport') + ' — ' + name, sub, html, () => UI.toast(T('training.popupBlocked'), 'error'));
+    UI.modal({
+      title: T('stats.viewPlayer') + ' — ' + name,
+      width: 900,
+      body: `<div class="stats-player-view"><p class="muted">${UI.esc(sub)}</p>${html}</div>`,
+      footer: `<button type="button" class="btn" data-close-player>${UI.esc(T('common.close'))}</button><button type="button" class="btn primary" data-print-player>${UI.icon('printer')} ${UI.esc(T('stats.printPdf'))}</button>`,
+      onOpen(dialog, close) {
+        dialog.querySelector('[data-close-player]').onclick = close;
+        dialog.querySelector('[data-print-player]').onclick = () =>
+          UI.printDoc(T('reports.playerReport') + ' — ' + name, sub, html, () => UI.toast(T('training.popupBlocked'), 'error'));
+      }
+    });
   }
-  mount.querySelectorAll('[data-pdf]').forEach(b => b.onclick = () => playerPdf(Store.find('players', b.dataset.pdf)));
+  mount.querySelectorAll('[data-view-player]').forEach(b => b.onclick = () => viewPlayer(Store.find('players', b.dataset.viewPlayer)));
   // Talk the squad through the numbers they just produced.
   const chatBoard = mount.querySelector('#chatBoard');
   if (chatBoard) chatBoard.onclick = () => App.go('messenger', { from: 'statistics' });
