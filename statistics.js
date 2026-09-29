@@ -31,6 +31,7 @@ Views.statistics = function (mount) {
   // A player copy reads the team's own totals; the squad's individual numbers,
   // ratings and profiles are the coach's business unless the club opened the
   // module up, so the board is not built.
+  const mayClear = !Store.locked() && !Access.readMode();
   const board = !Access.moduleOpen('statistics') ? '' : `
     <div class="table-wrap">
       <table class="compact stack">
@@ -53,6 +54,7 @@ Views.statistics = function (mount) {
                   <button class="btn sm" data-view-player="${p.id}" title="${UI.esc(T('stats.viewPlayer'))}" aria-label="${UI.esc(T('stats.viewPlayer'))}">${UI.esc(T('stats.viewPlayer'))}</button>
                   <button class="btn sm" data-chat="${p.id}" title="${UI.esc(T('chat.title'))}" aria-label="${UI.esc(T('chat.title'))}">💬</button>
                   <button class="btn sm" data-aip="${p.id}" title="${UI.esc(T('stats.aiPlayer'))}" aria-label="${UI.esc(T('stats.aiPlayer'))}">🤖</button>
+                  ${mayClear ? `<button class="btn sm danger" data-clearp="${p.id}" title="${UI.esc(T('stats.clearPlayer'))}" aria-label="${UI.esc(T('stats.clearPlayer') + ' — ' + [p.firstName, p.lastName].filter(Boolean).join(' ').trim())}">${UI.icon('trash', 14)}</button>` : ''}
                 </div>
               </td>
             </tr>`).join('') || `<tr><td colspan="11" class="empty">${T('common.noData')}</td></tr>`}
@@ -66,6 +68,7 @@ Views.statistics = function (mount) {
     ${UI.acc('statSeason', T('stats.season'), cards)}
     ${board ? UI.acc('statBoard', T('stats.leaderboard'), board, {
     actions: UI.shareBar('stats', { exportLabel: T('stats.exportBtn'), importLabel: T('stats.importBtn') })
+      + (mayClear ? `<button class="btn sm danger" id="clearStats">${UI.icon('trash', 14)} ${T('stats.clearAll')}</button>` : '')
       + `<button class="btn sm" id="chatBoard">💬 ${T('chat.title')}</button>`
   }) : ''}`;
 
@@ -149,5 +152,32 @@ Views.statistics = function (mount) {
         + 'Name the two biggest gaps in these numbers, what to train for each, and which drills from our library to use — add the video link for every drill you name.'
         + ' Finish with one measurable target for the next three matches.'
     });
+  });
+
+  // Every number on this page is counted from the logged events, so clearing
+  // the statistics means deleting those rows. The matches they belong to, and
+  // the results they were played to, are left alone.
+  async function clearEvents(list) {
+    for (const e of list) await Store.remove('events', e.id);
+    UI.toast(T('stats.cleared'), 'success');
+    App.render();
+  }
+
+  const clearAll = mount.querySelector('#clearStats');
+  if (clearAll) clearAll.onclick = () => {
+    const ourMatches = new Set(Store.matches().map(m => m.id));
+    const squad = new Set(Store.players(team && team.id).map(p => p.id));
+    const list = Store.all('events').filter(e => ourMatches.has(e.matchId) || squad.has(e.playerId));
+    if (!list.length) return UI.toast(T('stats.nothingToClear'), 'error');
+    UI.confirm(T('stats.clearAllAsk').replace('{0}', list.length), () => clearEvents(list));
+  };
+
+  mount.querySelectorAll('[data-clearp]').forEach(b => b.onclick = () => {
+    const p = Store.find('players', b.dataset.clearp);
+    if (!p) return;
+    const list = Store.all('events').filter(e => e.playerId === p.id);
+    if (!list.length) return UI.toast(T('stats.nothingToClear'), 'error');
+    const name = [p.firstName, p.lastName].filter(Boolean).join(' ').trim();
+    UI.confirm(T('stats.clearPlayerAsk').replace('{0}', list.length).replace('{1}', name), () => clearEvents(list));
   });
 };

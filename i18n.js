@@ -186,6 +186,10 @@ const I18N = (() => {
       'stat.to': 'TO', 'stat.saves': 'Saves', 'stat.rating': 'Rating',
       'stat.metric': 'Metric', 'stat.value': 'Value', 'stat.score': 'Score', 'stat.name': 'Name', 'stat.position': 'Position',
       'stat.mvpRating': 'MVP Rating', 'stat.wins': 'Wins',
+      'stats.clearAll': 'Clear all statistics', 'stats.clearPlayer': 'Clear statistics',
+      'stats.clearAllAsk': 'Delete all {0} logged events for this squad? Every player number, rating and season total goes back to zero. The matches themselves and their results are kept.',
+      'stats.clearPlayerAsk': 'Delete all {0} logged events for {1}? Their goals, assists, saves and rating go back to zero. The matches themselves and their results are kept.',
+      'stats.cleared': 'Statistics cleared', 'stats.nothingToClear': 'Nothing logged to clear',
       'stats.aiPlayer': 'AI training advice', 'stats.aiTrain': 'Train',
       // Tactics
       'tactics.title': 'Tactical Board', 'tactics.subtitle': 'Design plays, shoot the ball, animate & record',
@@ -1220,6 +1224,10 @@ const I18N = (() => {
       'stat.to': 'BT', 'stat.saves': 'Redninger', 'stat.rating': 'Karakter',
       'stat.metric': 'Nøgletal', 'stat.value': 'Værdi', 'stat.score': 'Stilling', 'stat.name': 'Navn', 'stat.position': 'Position',
       'stat.mvpRating': 'MVP-karakter', 'stat.wins': 'Sejre',
+      'stats.clearAll': 'Ryd al statistik', 'stats.clearPlayer': 'Ryd statistik',
+      'stats.clearAllAsk': 'Slet alle {0} registrerede h\u00e6ndelser for denne trup? Alle spillertal, karakterer og s\u00e6sontotaler nulstilles. Selve kampene og deres resultater bevares.',
+      'stats.clearPlayerAsk': 'Slet alle {0} registrerede h\u00e6ndelser for {1}? M\u00e5l, assists, redninger og karakter nulstilles. Selve kampene og deres resultater bevares.',
+      'stats.cleared': 'Statistik ryddet', 'stats.nothingToClear': 'Intet registreret at rydde',
       'stats.aiPlayer': 'AI-træningsråd', 'stats.aiTrain': 'Træn',
       // Tactics
       'tactics.title': 'Taktiktavle', 'tactics.subtitle': 'Design spil, skyd bolden, animér & optag',
