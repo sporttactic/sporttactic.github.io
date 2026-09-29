@@ -412,6 +412,20 @@ const Drive = (() => {
     return (r && Array.isArray(r.parents) && r.parents[0]) || '';
   }
 
+  // What is actually in a folder shared "anyone with the link", read with the
+  // API key alone — the team-code side of listFiles, so a device that never
+  // signed in can still see every area file the folder holds rather than only
+  // the ones the manifest happens to name.
+  async function publicListFolder(folderId, apiKey) {
+    if (!apiKey || !API_KEY_RE.test(apiKey.trim())) throw new Error('bad-api-key');
+    const qs = 'q=' + encodeURIComponent("'" + esc(folderId) + "' in parents and trashed=false") +
+      '&fields=' + encodeURIComponent('files(id,name,modifiedTime)') +
+      '&pageSize=200&_=' + now() +
+      '&key=' + encodeURIComponent(apiKey.trim());
+    const r = await fetchJson('https://www.googleapis.com/drive/v3/files?' + qs);
+    return (r && Array.isArray(r.files)) ? r.files : [];
+  }
+
   // ---- Backup / restore (private appDataFolder) ----
   function buildDump() {
     const dump = {};
@@ -593,7 +607,7 @@ const Drive = (() => {
     setupTeam, coachSend, coachReadAll, findMyChannels, playerSend, playerPushTraining,
     // Low-level helpers, used by cloud.js for the shared team database.
     ensureFolder, findFolder, listTeamFolders, findFile, uploadJson, downloadJson, listFiles, getParent,
-    shareAnyone, unshareAnyone, listPermissions, fileLink, publicDownload, publicGetParent
+    shareAnyone, unshareAnyone, listPermissions, fileLink, publicDownload, publicGetParent, publicListFolder
   };
 })();
 window.Drive = Drive;

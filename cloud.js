@@ -231,6 +231,53 @@ const TeamCloud = (() => {
     return Drive.publicDownload(fileId, c.apiKey);
   }
 
+  // JSON.parse happily produces an own "__proto__" key, and writing one onto a
+  // plain object with = runs the inherited setter instead — a shared file must
+  // not get to choose the prototype of the document it arrives in.
+  const UNSAFE_KEY = k => k === '__proto__' || k === 'constructor' || k === 'prototype';
+
+  // Two files can legitimately hold the same store (a stray area file left
+  // beside the one the manifest names, see readStrayAreas), so the rows are
+  // merged newest-wins instead of one copy simply replacing the other.
+  function mergeInto(data, incoming) {
+    if (!incoming || typeof incoming !== 'object') return;
+    for (const s of Object.keys(incoming)) {
+      if (UNSAFE_KEY(s)) continue;
+      const rows = incoming[s];
+      if (!Array.isArray(rows)) { if (data[s] === undefined) data[s] = rows; continue; }
+      data[s] = Array.isArray(data[s]) ? mergeRows(data[s], rows) : rows;
+    }
+  }
+
+  // Every area file the team folder actually holds, not only the ones the
+  // manifest lists: a push that died between writing an area file and
+  // rewriting the manifest, an older manifest rewritten by a device whose
+  // area list was stale, or a folder reconnected through a legacy single-file
+  // database all leave area files that nothing points at any more. A retrieve
+  // is supposed to bring the whole shared database down, so the folder itself
+  // has the last word on what "all" is.
+  async function readStrayAreas(c, seen, data) {
+    let files = [];
+    try {
+      const folderId = await knownFolderId(c);
+      if (!folderId) return;
+      if (signedIn()) {
+        files = await Drive.listFiles("'" + folderId.replace(/['\\]/g, '') + "' in parents and trashed=false");
+      } else if (c.apiKey && Drive.publicListFolder) {
+        files = await Drive.publicListFolder(folderId, c.apiKey);
+      }
+    } catch (e) { return; /* the folder is not listable here; what the manifest named still landed */ }
+    for (const f of files) {
+      if (!f || !f.id || seen.has(f.id)) continue;
+      if (!/^sporttactic-area-.+\.json$/i.test(String(f.name || ''))) continue;
+      seen.add(f.id);
+      try {
+        const doc = await readOne(f.id);
+        if (doc && doc.data && typeof doc.data === 'object') mergeInto(data, doc.data);
+      } catch (e) { /* one unreadable leftover must not sink the rest of the pull */ }
+    }
+  }
+
   // Reads remote database — supports both new multi-area modular databases in a folder
   // and legacy single-file / part-based team databases.
   // Any signed-in coach/admin can write now, not just the one who created the file, so
@@ -266,6 +313,7 @@ const TeamCloud = (() => {
     }
 
     if (!head.data || typeof head.data !== 'object') head.data = {};
+    const seen = new Set([c.fileId]);
 
     // 1. Modular Multi-Area Database (format 2)
     if (head.areas && typeof head.areas === 'object') {
@@ -273,10 +321,11 @@ const TeamCloud = (() => {
       let firstDenied = null;
       for (const [areaKey, info] of Object.entries(areas)) {
         if (!info || !info.fileId) continue;
+        seen.add(info.fileId);
         try {
           const areaDoc = await readOne(info.fileId);
           if (areaDoc && areaDoc.data && typeof areaDoc.data === 'object') {
-            Object.assign(head.data, areaDoc.data);
+            mergeInto(head.data, areaDoc.data);
           }
         } catch (err) {
           if (!c.apiKey && !signedIn()) throw err;
@@ -288,19 +337,23 @@ const TeamCloud = (() => {
           if (!firstDenied && isForbidden(err) && !c.owner) firstDenied = err;
         }
       }
+      await readStrayAreas(c, seen, head.data);
       if (firstDenied) head._grantNeeded = firstDenied;
       return head;
     }
 
     // 2. Legacy part files (format 1 backward compatibility)
     const parts = (head && Array.isArray(head.parts)) ? head.parts.filter(p => p && p.store && p.fileId) : [];
-    if (!parts.length) return head;
     for (const p of parts) {
+      seen.add(p.fileId);
       const doc = await readOne(p.fileId);
       const rows = (doc && Array.isArray(doc.rows)) ? doc.rows : null;
       if (!rows) throw new Error('part-unreadable');
       head.data[p.store] = (head.data[p.store] || []).concat(rows);
     }
+    // A legacy manifest can sit in a folder that already holds modular area
+    // files — those are part of "everything" too.
+    await readStrayAreas(c, seen, head.data);
     return head;
   }
 
@@ -389,11 +442,22 @@ const TeamCloud = (() => {
           data: areaData
         };
 
-        const res = curFileId
-          ? await Drive.uploadJson('', areaDoc, { fileId: curFileId })
+        // The manifest can have lost track of an area file that is still in
+        // the folder (see readStrayAreas); write to that one rather than
+        // leaving a second copy beside it that every pull then has to merge.
+        let targetId = curFileId;
+        if (!targetId) {
+          try {
+            const found = await Drive.findFile(areaFileName(areaKey), teamFolder);
+            if (found && found.id) targetId = found.id;
+          } catch (e) { /* not listable from here; a fresh file is fine */ }
+        }
+
+        const res = targetId
+          ? await Drive.uploadJson('', areaDoc, { fileId: targetId })
           : await Drive.uploadJson(areaFileName(areaKey), areaDoc, { parent: teamFolder });
 
-        const fileId = (res && res.id) || curFileId;
+        const fileId = (res && res.id) || targetId;
         if (fileId) {
           if (!curFileId) {
             try { await Drive.shareAnyone(fileId, 'reader'); } catch (e) { /* ignore */ }
